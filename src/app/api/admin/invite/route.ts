@@ -61,7 +61,7 @@ export async function POST(request: Request) {
       full_name: name,
       company_name: company,
     },
-    redirectTo: `${appUrl}/auth/callback`,
+    redirectTo: `${appUrl}/auth/callback?type=invite`,
   })
 
   if (inviteError) {
