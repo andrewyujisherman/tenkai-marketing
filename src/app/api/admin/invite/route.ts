@@ -17,7 +17,7 @@ export async function GET() {
 
   const { data: invites, error } = await supabaseAdmin
     .from('clients')
-    .select('id, full_name, email, company_name, tier, created_at')
+    .select('id, name, email, company_name, tier, created_at')
     .eq('status', 'invited')
     .order('created_at', { ascending: false })
 
@@ -41,11 +41,34 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
-  // Create client record
+  // Clean up any existing auth user for this email to avoid conflicts
+  const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers()
+  const existingUser = existingUsers?.users?.find(u => u.email === email)
+  if (existingUser) {
+    await supabaseAdmin.auth.admin.deleteUser(existingUser.id)
+  }
+
+  // Delete any existing client record for this email
+  await supabaseAdmin.from('clients').delete().eq('email', email)
+
+  // Send Supabase invite email FIRST (before creating client record)
+  const { error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
+    data: {
+      full_name: name,
+      company_name: company,
+    },
+    redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
+  })
+
+  if (inviteError) {
+    return NextResponse.json({ error: inviteError.message }, { status: 500 })
+  }
+
+  // Create client record AFTER invite succeeds
   const { data: client, error: clientError } = await supabaseAdmin
     .from('clients')
     .insert({
-      full_name: name,
+      name,
       email,
       company_name: company,
       tier,
@@ -56,20 +79,6 @@ export async function POST(request: Request) {
 
   if (clientError) {
     return NextResponse.json({ error: clientError.message }, { status: 500 })
-  }
-
-  // Send Supabase invite email
-  const { error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
-    data: {
-      full_name: name,
-      company_name: company,
-    },
-  })
-
-  if (inviteError) {
-    // Clean up client record if invite fails
-    await supabaseAdmin.from('clients').delete().eq('id', client.id)
-    return NextResponse.json({ error: inviteError.message }, { status: 500 })
   }
 
   return NextResponse.json({ success: true, clientId: client.id })
