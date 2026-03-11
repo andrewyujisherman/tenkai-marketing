@@ -35,7 +35,8 @@ export default function SignupPage() {
     setError('')
     setLoading(true)
 
-    const { error: authError } = await getSupabase().auth.signUp({
+    const supabase = getSupabase()
+    const { data, error: authError } = await supabase.auth.signUp({
       email: fields.email,
       password: fields.password,
       options: {
@@ -48,7 +49,16 @@ export default function SignupPage() {
     })
 
     if (authError) {
-      setError(authError.message)
+      // If user already exists (from invite), tell them to check invite email instead
+      if (authError.message.toLowerCase().includes('already registered') || authError.message.toLowerCase().includes('already been registered')) {
+        setError('This email was already invited. Please check your email for the invite link, or contact your admin to resend it.')
+      } else {
+        setError(authError.message)
+      }
+      setLoading(false)
+    } else if (data.user?.identities?.length === 0) {
+      // Supabase returns success with empty identities when user already exists
+      setError('An account with this email already exists. Check your email for an invite link, or try signing in instead.')
       setLoading(false)
     } else {
       setSuccess(true)
