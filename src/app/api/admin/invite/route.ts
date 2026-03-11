@@ -41,9 +41,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://tenkai-marketing.vercel.app'
+
   // Clean up any existing auth user for this email to avoid conflicts
   const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers()
-  const existingUser = existingUsers?.users?.find(u => u.email === email)
+  const existingUser = existingUsers?.users?.find(
+    (u) => u.email?.toLowerCase() === email.toLowerCase()
+  )
   if (existingUser) {
     await supabaseAdmin.auth.admin.deleteUser(existingUser.id)
   }
@@ -51,13 +55,13 @@ export async function POST(request: Request) {
   // Delete any existing client record for this email
   await supabaseAdmin.from('clients').delete().eq('email', email)
 
-  // Send Supabase invite email FIRST (before creating client record)
+  // Send Supabase invite email FIRST — redirectTo MUST point to production URL
   const { error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
     data: {
       full_name: name,
       company_name: company,
     },
-    redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
+    redirectTo: `${appUrl}/auth/callback`,
   })
 
   if (inviteError) {

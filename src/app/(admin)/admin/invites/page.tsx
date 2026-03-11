@@ -8,7 +8,7 @@ type Tier = 'starter' | 'growth' | 'pro'
 
 type PendingInvite = {
   id: string
-  full_name?: string | null
+  name?: string | null
   email?: string | null
   company_name?: string | null
   tier?: string | null
@@ -165,7 +165,7 @@ export default function AdminInvitesPage() {
             {invites.map((invite) => (
               <li key={invite.id} className="flex items-center justify-between gap-4 py-2 border-b border-tenkai-border last:border-0">
                 <div>
-                  <p className="text-sm font-medium text-charcoal">{invite.full_name || invite.email}</p>
+                  <p className="text-sm font-medium text-charcoal">{invite.name || invite.email}</p>
                   <p className="text-xs text-warm-gray">
                     {invite.company_name} &middot; {invite.tier} &middot; {invite.email}
                   </p>

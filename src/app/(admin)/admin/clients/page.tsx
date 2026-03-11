@@ -2,7 +2,7 @@ import { supabaseAdmin } from '@/lib/supabase-admin'
 
 type Client = {
   id: string
-  full_name?: string | null
+  name?: string | null
   company_name?: string | null
   email?: string | null
   tier?: string | null
@@ -13,7 +13,7 @@ type Client = {
 export default async function AdminClientsPage() {
   const { data: clients } = await supabaseAdmin
     .from('clients')
-    .select('id, full_name, company_name, email, tier, status, created_at')
+    .select('id, name, company_name, email, tier, status, created_at')
     .order('created_at', { ascending: false })
 
   const rows: Client[] = clients ?? []
@@ -46,9 +46,8 @@ export default async function AdminClientsPage() {
               </tr>
             ) : (
               rows.map((client) => (
-                <div key={client.id}>
-                  <tr className="hover:bg-parchment/30 transition-colors">
-                    <td className="px-4 py-3 text-charcoal font-medium">{client.full_name || '—'}</td>
+                <tr key={client.id} className="hover:bg-parchment/30 transition-colors">
+                    <td className="px-4 py-3 text-charcoal font-medium">{client.name || '—'}</td>
                     <td className="px-4 py-3 text-charcoal">{client.company_name || '—'}</td>
                     <td className="px-4 py-3 text-warm-gray">{client.email || '—'}</td>
                     <td className="px-4 py-3">
@@ -70,8 +69,7 @@ export default async function AdminClientsPage() {
                     <td className="px-4 py-3 text-warm-gray text-xs">
                       {client.created_at ? new Date(client.created_at).toLocaleDateString() : '—'}
                     </td>
-                  </tr>
-                </div>
+                </tr>
               ))
             )}
           </tbody>
