@@ -1,5 +1,5 @@
-@import "tw-animate-css";
-@import "shadcn/tailwind.css";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Serif+JP:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -12,82 +12,86 @@
 
 @layer base {
   :root {
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
-    --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.708 0 0);
-    --chart-1: oklch(0.809 0.105 251.813);
-    --chart-2: oklch(0.623 0.214 259.815);
-    --chart-3: oklch(0.546 0.245 262.881);
-    --chart-4: oklch(0.488 0.243 264.376);
-    --chart-5: oklch(0.424 0.199 265.638);
+    --background: 0 0% 99.6%;
+    --foreground: 15 4% 16%;
+    --card: 0 0% 100%;
+    --card-foreground: 15 4% 16%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 15 4% 16%;
+    --primary: 4 47% 54%;
+    --primary-foreground: 30 67% 98%;
+    --secondary: 30 33% 96%;
+    --secondary-foreground: 15 4% 16%;
+    --muted: 30 17% 94%;
+    --muted-foreground: 25 4% 53%;
+    --accent: 5 47% 92%;
+    --accent-foreground: 15 4% 16%;
+    --destructive: 4 47% 54%;
+    --destructive-foreground: 30 67% 98%;
+    --border: 30 13% 89%;
+    --input: 30 13% 89%;
+    --ring: 4 47% 54%;
     --radius: 0.625rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.708 0 0);
   }
-  .dark {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.205 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
-    --chart-1: oklch(0.809 0.105 251.813);
-    --chart-2: oklch(0.623 0.214 259.815);
-    --chart-3: oklch(0.546 0.245 262.881);
-    --chart-4: oklch(0.488 0.243 264.376);
-    --chart-5: oklch(0.424 0.199 265.638);
-    --sidebar: oklch(0.205 0 0);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.488 0.243 264.376);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.269 0 0);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.556 0 0);
-  }
-  .theme {
-    --font-sans: var(--font-sans);
-  }
+
   * {
-    @apply border-border outline-ring/50;
+    border-color: hsl(var(--border));
   }
+
   body {
-    @apply bg-background text-foreground;
+    @apply bg-ivory text-charcoal font-sans antialiased;
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
   }
+
   html {
-    @apply font-sans;
+    @apply scroll-smooth;
+  }
+
+  h1, h2, h3, h4 {
+    @apply font-serif;
+  }
+}
+
+/* Torii Gate SVG decoration — used as subtle background accent */
+@layer components {
+  .torii-accent {
+    position: relative;
+  }
+
+  .torii-accent::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: -60px;
+    width: 120px;
+    height: 100px;
+    opacity: 0.04;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 100'%3E%3Crect x='10' y='20' width='100' height='8' rx='2' fill='%23C1554D'/%3E%3Crect x='5' y='12' width='110' height='6' rx='2' fill='%23C1554D'/%3E%3Crect x='20' y='28' width='8' height='72' fill='%23C1554D'/%3E%3Crect x='92' y='28' width='8' height='72' fill='%23C1554D'/%3E%3Crect x='20' y='50' width='80' height='5' rx='1' fill='%23C1554D'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-size: contain;
+    pointer-events: none;
+  }
+
+  /* Sakura petal CSS decoration */
+  .sakura-petal {
+    width: 12px;
+    height: 12px;
+    background: radial-gradient(ellipse at center, #F4E4E1 0%, #D4736C22 100%);
+    border-radius: 50% 0 50% 0;
+    transform: rotate(45deg);
+  }
+
+  /* Section divider with subtle pattern */
+  .section-divider {
+    height: 1px;
+    background: linear-gradient(
+      to right,
+      transparent,
+      #E8E4DE 20%,
+      #C1554D22 50%,
+      #E8E4DE 80%,
+      transparent
+    );
   }
 }
