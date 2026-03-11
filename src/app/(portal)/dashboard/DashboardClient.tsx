@@ -94,13 +94,6 @@ interface ClientRecord {
   website_url?: string | null
 }
 
-interface ContentPost {
-  id: string
-  title: string
-  status: string
-  created_at: string
-}
-
 interface Approval {
   id: string
   title?: string | null
@@ -113,10 +106,9 @@ interface DashboardClientProps {
   client: ClientRecord | null
   userName: string | null
   pendingApprovals: Approval[]
-  recentPosts: ContentPost[]
 }
 
-export default function DashboardClient({ client, userName, pendingApprovals, recentPosts }: DashboardClientProps) {
+export default function DashboardClient({ client, userName, pendingApprovals }: DashboardClientProps) {
   const [dateFilter, setDateFilter] = useState<DateFilter>('today')
 
   const displayName = client?.company_name || userName || null

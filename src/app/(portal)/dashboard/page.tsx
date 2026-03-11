@@ -9,7 +9,6 @@ export default async function DashboardPage() {
 
   let clientRecord = null
   let pendingApprovals: { id: string; title?: string | null; type?: string | null; agent_name?: string | null; description?: string | null }[] = []
-  let recentPosts: { id: string; title: string; status: string; created_at: string }[] = []
   let userName: string | null = null
 
   if (user) {
@@ -36,15 +35,6 @@ export default async function DashboardPage() {
 
       pendingApprovals = approvalsData ?? []
 
-      // Fetch recent content posts
-      const { data: postsData } = await supabase
-        .from('content_posts')
-        .select('id, title, status, created_at')
-        .eq('client_id', clientRecord.id)
-        .order('created_at', { ascending: false })
-        .limit(10)
-
-      recentPosts = postsData ?? []
     }
   }
 
@@ -53,7 +43,6 @@ export default async function DashboardPage() {
       client={clientRecord}
       userName={userName}
       pendingApprovals={pendingApprovals}
-      recentPosts={recentPosts}
     />
   )
 }
