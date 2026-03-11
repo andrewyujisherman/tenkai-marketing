@@ -14,11 +14,11 @@ export default async function DashboardPage() {
   if (user) {
     userName = user.user_metadata?.full_name ?? user.email ?? null
 
-    // Fetch client record
+    // Fetch client record by email (email is unique in clients table)
     const { data: clientData } = await supabase
       .from('clients')
       .select('id, company_name, website_url')
-      .eq('user_id', user.id)
+      .eq('email', user.email)
       .single()
 
     clientRecord = clientData ?? null
