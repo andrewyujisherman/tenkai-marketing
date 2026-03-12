@@ -98,14 +98,14 @@ export default async function DashboardPage() {
 
       db
         .from('content_posts')
-        .select('id, title, status, agent_name, content_type, created_at')
+        .select('id, title, status, agent_author, content_type, created_at')
         .eq('client_id', clientId)
         .order('created_at', { ascending: false })
         .limit(10),
 
       db
         .from('audits')
-        .select('score')
+        .select('overall_score')
         .eq('client_id', clientId)
         .order('created_at', { ascending: false })
         .limit(1)
@@ -115,7 +115,7 @@ export default async function DashboardPage() {
     stats = {
       totalContent: totalCount ?? 0,
       pendingApprovals: pendingCount ?? 0,
-      auditScore: auditData?.score ?? null,
+      auditScore: auditData?.overall_score ?? null,
       publishedContent: publishedCount ?? 0,
     }
 
@@ -132,7 +132,7 @@ export default async function DashboardPage() {
       id: p.id,
       title: p.title ?? null,
       status: p.status ?? null,
-      agent_name: p.agent_name ?? null,
+      agent_name: p.agent_author ?? null,
       content_type: p.content_type ?? null,
       created_at: p.created_at,
       needs_approval: p.status === 'draft' || p.status === 'pending_review',

@@ -249,7 +249,9 @@ export default function DashboardClient({
           <div className="flex items-center justify-between">
             <div>
               <h2 className="font-serif text-lg text-charcoal">
-                {displayName ? `What your Tenkai team did today for ${displayName}` : 'What your Tenkai team did today'}
+                {displayName
+                  ? `What your Tenkai team did ${dateFilter === 'today' ? 'today' : dateFilter === 'week' ? 'this week' : 'this month'} for ${displayName}`
+                  : `What your Tenkai team did ${dateFilter === 'today' ? 'today' : dateFilter === 'week' ? 'this week' : 'this month'}`}
               </h2>
               <p className="text-warm-gray text-sm mt-0.5">
                 Real-time updates from your AI SEO team

@@ -110,20 +110,20 @@ INSERT INTO public.audits (id, client_id, url, overall_score, technical_score, c
   72,
   69,
   '[
-    {"severity": "critical", "title": "Missing meta descriptions on 14 pages", "description": "14 pages are missing meta descriptions, which reduces click-through rates from search results.", "agent": "Yuki", "affected_count": 14},
-    {"severity": "critical", "title": "3 broken internal links detected", "description": "Internal links pointing to 404 pages create a poor user experience and waste crawl budget.", "agent": "Yuki", "affected_count": 3},
-    {"severity": "warning", "title": "Images missing alt text", "description": "22 images lack descriptive alt text, hurting both accessibility and image search visibility.", "agent": "Yuki", "affected_count": 22},
-    {"severity": "warning", "title": "Page load speed below 2.5s threshold", "description": "Average page load time is 3.8 seconds. Google recommends under 2.5s for good Core Web Vitals.", "agent": "Yuki"},
-    {"severity": "warning", "title": "Low domain authority (DA 31)", "description": "Domain authority is below the competitive threshold for your target keywords. Link building campaign recommended.", "agent": "Yuki"},
-    {"severity": "passed", "title": "SSL certificate valid", "description": "HTTPS is properly configured with a valid certificate.", "agent": "Yuki"},
-    {"severity": "passed", "title": "XML sitemap present and valid", "description": "Sitemap is accessible and contains 47 URLs.", "agent": "Yuki"},
-    {"severity": "passed", "title": "Mobile-friendly design", "description": "Site passes Google Mobile-Friendly Test with no issues.", "agent": "Yuki"},
-    {"severity": "passed", "title": "Robots.txt configured correctly", "description": "No critical pages are being blocked by robots.txt.", "agent": "Yuki"}
+    {"severity": "critical", "title": "Missing meta descriptions on 14 pages", "description": "14 pages are missing meta descriptions, which reduces click-through rates from search results.", "agent": "Kenji", "affected_count": 14},
+    {"severity": "critical", "title": "3 broken internal links detected", "description": "Internal links pointing to 404 pages create a poor user experience and waste crawl budget.", "agent": "Kenji", "affected_count": 3},
+    {"severity": "warning", "title": "Images missing alt text", "description": "22 images lack descriptive alt text, hurting both accessibility and image search visibility.", "agent": "Kenji", "affected_count": 22},
+    {"severity": "warning", "title": "Page load speed below 2.5s threshold", "description": "Average page load time is 3.8 seconds. Google recommends under 2.5s for good Core Web Vitals.", "agent": "Kenji"},
+    {"severity": "warning", "title": "Low domain authority (DA 31)", "description": "Domain authority is below the competitive threshold for your target keywords. Link building campaign recommended.", "agent": "Kenji"},
+    {"severity": "passed", "title": "SSL certificate valid", "description": "HTTPS is properly configured with a valid certificate.", "agent": "Kenji"},
+    {"severity": "passed", "title": "XML sitemap present and valid", "description": "Sitemap is accessible and contains 47 URLs.", "agent": "Kenji"},
+    {"severity": "passed", "title": "Mobile-friendly design", "description": "Site passes Google Mobile-Friendly Test with no issues.", "agent": "Kenji"},
+    {"severity": "passed", "title": "Robots.txt configured correctly", "description": "No critical pages are being blocked by robots.txt.", "agent": "Kenji"}
   ]'::jsonb,
   '[
-    {"priority": "high", "title": "Fix broken internal links", "description": "Update or remove the 3 broken internal links immediately to restore crawl flow.", "agent": "Yuki"},
+    {"priority": "high", "title": "Fix broken internal links", "description": "Update or remove the 3 broken internal links immediately to restore crawl flow.", "agent": "Kenji"},
     {"priority": "high", "title": "Add meta descriptions to priority pages", "description": "Focus on top 5 trafficked pages first. Target 150-160 characters with primary keyword inclusion.", "agent": "Sakura"},
-    {"priority": "medium", "title": "Image optimization sprint", "description": "Add descriptive alt text to all 22 flagged images. Compress images to reduce load time.", "agent": "Yuki"},
+    {"priority": "medium", "title": "Image optimization sprint", "description": "Add descriptive alt text to all 22 flagged images. Compress images to reduce load time.", "agent": "Kenji"},
     {"priority": "medium", "title": "Launch targeted link-building campaign", "description": "Secure 5-8 high-quality backlinks from industry publications to raise DA above 40.", "agent": "Kenji"}
   ]'::jsonb,
   'complete',
