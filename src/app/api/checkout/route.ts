@@ -8,30 +8,36 @@ const tierPriceEnvMap: Record<string, string> = {
 }
 
 export async function POST(request: NextRequest) {
-  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    apiVersion: '2026-02-25.clover',
-  })
+  try {
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+      apiVersion: '2026-02-25.clover',
+    })
 
-  const { priceId, tier } = await request.json()
+    const { priceId, tier } = await request.json()
 
-  const resolvedPriceId =
-    priceId ?? process.env[tierPriceEnvMap[tier?.toLowerCase() ?? '']]
+    const resolvedPriceId =
+      priceId ?? process.env[tierPriceEnvMap[tier?.toLowerCase() ?? '']]
 
-  if (!resolvedPriceId) {
-    return NextResponse.json({ error: 'Invalid tier or price ID' }, { status: 400 })
+    if (!resolvedPriceId) {
+      return NextResponse.json({ error: 'Invalid tier or price ID' }, { status: 400 })
+    }
+
+    const origin =
+      request.headers.get('origin') ??
+      process.env.NEXT_PUBLIC_APP_URL ??
+      'https://tenkai-marketing.vercel.app'
+
+    const session = await stripe.checkout.sessions.create({
+      mode: 'subscription',
+      line_items: [{ price: resolvedPriceId, quantity: 1 }],
+      success_url: `${origin}/dashboard?welcome=true`,
+      cancel_url: `${origin}/?canceled=true`,
+    })
+
+    return NextResponse.json({ url: session.url })
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unknown error'
+    console.error('Checkout error:', message)
+    return NextResponse.json({ error: message }, { status: 500 })
   }
-
-  const origin =
-    request.headers.get('origin') ??
-    process.env.NEXT_PUBLIC_SITE_URL ??
-    'http://localhost:3000'
-
-  const session = await stripe.checkout.sessions.create({
-    mode: 'subscription',
-    line_items: [{ price: resolvedPriceId, quantity: 1 }],
-    success_url: `${origin}/dashboard?welcome=true`,
-    cancel_url: `${origin}/?canceled=true`,
-  })
-
-  return NextResponse.json({ url: session.url })
 }

@@ -1,14 +1,20 @@
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { supabaseAdmin } from '@/lib/supabase-admin'
+import { isDemoMode } from '@/lib/demo'
 
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = await createServerClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const demo = await isDemoMode()
+  let userEmail = 'demo@tenkai.com'
 
-  if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!demo) {
+    const supabase = await createServerClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    userEmail = user.email ?? 'client'
   }
 
   const { error: updateError } = await supabaseAdmin
@@ -33,7 +39,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
       type: 'content',
       status: 'approved',
       title: post.title,
-      agent_name: user.email ?? 'client',
+      agent_name: userEmail,
       resolved_at: new Date().toISOString(),
     })
   }

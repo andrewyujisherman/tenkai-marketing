@@ -197,10 +197,12 @@ function ReportView({ report }: { report: ReportData }) {
             Weekly reports, revenue attribution, and exportable data
           </p>
         </div>
-        <Button className="bg-torii text-white hover:bg-torii-dark rounded-tenkai text-sm gap-1.5 flex-shrink-0">
-          Upgrade to Pro
-          <ArrowUpRight className="size-3.5" />
-        </Button>
+        <a href="/settings?tab=billing">
+          <Button className="bg-torii text-white hover:bg-torii-dark rounded-tenkai text-sm gap-1.5 flex-shrink-0">
+            Upgrade to Pro
+            <ArrowUpRight className="size-3.5" />
+          </Button>
+        </a>
       </div>
     </div>
   )

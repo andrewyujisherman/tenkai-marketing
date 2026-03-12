@@ -1,5 +1,6 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Lightbulb, ArrowRight } from 'lucide-react'
@@ -14,6 +15,14 @@ interface InsightCardProps {
   className?: string
 }
 
+function guessRoute(rec: string): string {
+  const lower = rec.toLowerCase()
+  if (lower.includes('content') || lower.includes('blog') || lower.includes('publish') || lower.includes('article') || lower.includes('cluster') || lower.includes('topic')) return '/content'
+  if (lower.includes('audit') || lower.includes('crawl') || lower.includes('seo score') || lower.includes('meta') || lower.includes('broken link')) return '/audit'
+  if (lower.includes('report') || lower.includes('traffic') || lower.includes('ranking') || lower.includes('keyword')) return '/reports'
+  return '/content'
+}
+
 export function InsightCard({
   agentName,
   agentIcon,
@@ -23,6 +32,16 @@ export function InsightCard({
   onRecommendationClick,
   className,
 }: InsightCardProps) {
+  const router = useRouter()
+
+  function handleRecClick(rec: string) {
+    if (onRecommendationClick) {
+      onRecommendationClick(rec)
+    } else {
+      router.push(guessRoute(rec))
+    }
+  }
+
   return (
     <div
       className={cn(
@@ -67,7 +86,7 @@ export function InsightCard({
                 variant="outline"
                 size="sm"
                 className="text-xs border-tenkai-border hover:bg-torii-subtle hover:text-torii hover:border-torii/30 rounded-tenkai gap-1.5"
-                onClick={() => onRecommendationClick?.(rec)}
+                onClick={() => handleRecClick(rec)}
               >
                 {rec}
                 <ArrowRight className="size-3" />

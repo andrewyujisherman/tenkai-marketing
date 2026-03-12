@@ -133,9 +133,11 @@ export function PortalSidebar({ isAdmin = false }: { isAdmin?: boolean }) {
         if (data.client) {
           const name = data.client.name || data.client.company_name || data.email || 'User'
           setUserName(name)
-          const tier = data.client.plan as Tier
-          if (tier && ['Starter', 'Growth', 'Pro'].includes(tier)) {
-            setUserTier(tier)
+          const rawTier = (data.client.tier || data.client.plan || '') as string
+          const tierMap: Record<string, Tier> = { starter: 'Starter', growth: 'Growth', pro: 'Pro' }
+          const mapped = tierMap[rawTier.toLowerCase()] ?? (rawTier as Tier)
+          if (mapped && ['Starter', 'Growth', 'Pro'].includes(mapped)) {
+            setUserTier(mapped)
           }
         } else if (data.email) {
           setUserName(data.email)

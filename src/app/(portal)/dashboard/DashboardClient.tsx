@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback } from 'react'
 import { agents } from '@/lib/design-system'
 import { StatCard } from '@/components/portal/StatCard'
 import { ActivityItem } from '@/components/portal/ActivityItem'

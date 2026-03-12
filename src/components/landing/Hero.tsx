@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ArrowRight, Zap, Clock, Shield } from 'lucide-react'
@@ -54,9 +55,17 @@ function MockDashboard() {
 
 export function Hero() {
   const [url, setUrl] = useState('')
+  const router = useRouter()
+
+  function handleAnalyze() {
+    const dest = url.trim()
+      ? `/onboarding?url=${encodeURIComponent(url.trim())}`
+      : '/onboarding'
+    router.push(dest)
+  }
 
   return (
-    <section className="relative min-h-screen flex items-center pt-[72px] overflow-hidden">
+    <section id="hero" className="relative min-h-screen flex items-center pt-[72px] overflow-hidden">
       {/* Sakura petals */}
       <SakuraPetal className="top-[15%] left-[10%]" />
       <SakuraPetal className="top-[30%] right-[15%]" style={{ animationDelay: '3s' } as React.CSSProperties} />
@@ -95,7 +104,10 @@ export function Hero() {
                   onChange={(e) => setUrl(e.target.value)}
                   className="h-12 px-4 text-base bg-white border-tenkai-border rounded-xl focus-visible:border-torii focus-visible:ring-torii/20"
                 />
-                <Button className="bg-torii hover:bg-torii-dark text-white h-12 px-6 text-base font-medium rounded-xl gap-2 shrink-0">
+                <Button
+                  onClick={handleAnalyze}
+                  className="bg-torii hover:bg-torii-dark text-white h-12 px-6 text-base font-medium rounded-xl gap-2 shrink-0"
+                >
                   Analyze My Site
                   <ArrowRight className="size-4" />
                 </Button>
@@ -109,6 +121,17 @@ export function Hero() {
                   <Clock className="size-3.5" />
                   Results in 60 seconds
                 </span>
+              </p>
+              <p className="text-sm text-muted-gray mt-2">
+                or{' '}
+                <a
+                  href="https://cal.com/alegius/tenkai-demo"
+                  target="_blank"
+                  rel="noopener"
+                  className="text-torii hover:text-torii-dark underline underline-offset-2 transition-colors"
+                >
+                  Schedule a Live Demo →
+                </a>
               </p>
             </div>
 

@@ -71,6 +71,16 @@ export function Footer() {
               <ArrowRight className="size-4" />
             </Button>
           </div>
+          <div className="mt-4">
+            <a
+              href="https://cal.com/alegius/tenkai-demo"
+              target="_blank"
+              rel="noopener"
+              className="inline-flex items-center h-11 px-6 text-sm font-medium rounded-xl border border-torii text-torii hover:bg-torii hover:text-white transition-colors"
+            >
+              Book a Live Demo
+            </a>
+          </div>
         </div>
       </div>
 

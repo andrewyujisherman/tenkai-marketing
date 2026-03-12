@@ -141,10 +141,21 @@ export function PricingSection() {
             <span className="font-medium text-charcoal">All plans include:</span>{' '}
             Multi-stage content approval · Plain English reporting · Named AI team · Dashboard access
           </p>
-          <div className="flex items-center justify-center gap-2 text-sm text-warm-gray">
+          <div className="flex items-center justify-center gap-2 text-sm text-warm-gray mb-4">
             <Lock className="size-3.5" />
             <span>No contracts · Cancel anytime · 14-day money-back</span>
           </div>
+          <p className="text-sm text-warm-gray">
+            Not sure which plan?{' '}
+            <a
+              href="https://cal.com/alegius/tenkai-demo"
+              target="_blank"
+              rel="noopener"
+              className="text-torii hover:text-torii-dark underline underline-offset-2 transition-colors"
+            >
+              Schedule a demo
+            </a>
+          </p>
         </div>
       </div>
     </section>

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { supabaseAdmin } from '@/lib/supabase-admin'
+import { getAgentForRequest } from '@/lib/agents'
 
 export async function POST(request: Request) {
   const supabase = await createServerClient()
@@ -17,7 +18,7 @@ export async function POST(request: Request) {
   let client = null
   const { data: byId } = await supabaseAdmin
     .from('clients')
-    .select('id, status')
+    .select('id, status, website_url')
     .eq('auth_user_id', user.id)
     .single()
 
@@ -26,7 +27,7 @@ export async function POST(request: Request) {
   } else {
     const { data: byEmail } = await supabaseAdmin
       .from('clients')
-      .select('id, status')
+      .select('id, status, website_url')
       .eq('email', (user.email ?? '').toLowerCase())
       .single()
     client = byEmail
@@ -43,6 +44,37 @@ export async function POST(request: Request) {
 
   if (updateError) {
     return NextResponse.json({ error: updateError.message }, { status: 500 })
+  }
+
+  // Auto-create a site_audit service request so the client gets an
+  // immediate deliverable. Use the URL from onboarding answers or the
+  // client's stored website_url.
+  const websiteUrl =
+    (onboarding_data?.business?.url as string | undefined) ??
+    client.website_url
+
+  if (websiteUrl) {
+    const agentId = getAgentForRequest('site_audit')
+    await supabaseAdmin
+      .from('service_requests')
+      .insert({
+        client_id: client.id,
+        request_type: 'site_audit',
+        target_url: websiteUrl,
+        parameters: {
+          source: 'onboarding',
+          industry: onboarding_data?.industry ?? null,
+          competitors: onboarding_data?.competitors ?? null,
+        },
+        assigned_agent: agentId,
+        priority: 8, // High priority — first impression matters
+      })
+      // Fire and forget — don't block onboarding on queue insert
+      .then(({ error }) => {
+        if (error) {
+          console.error('[onboarding] Failed to create initial site_audit request:', error.message)
+        }
+      })
   }
 
   return NextResponse.json({ success: true })

@@ -57,7 +57,21 @@ export function Navbar() {
               {link.label}
             </a>
           ))}
-          <Button className="bg-torii hover:bg-torii-dark text-white px-5 h-9 text-sm font-medium">
+          <a
+            href="https://cal.com/alegius/tenkai-demo"
+            target="_blank"
+            rel="noopener"
+            className="inline-flex items-center h-9 px-5 text-sm font-medium rounded-md border border-torii text-torii hover:bg-torii hover:text-white transition-colors"
+          >
+            Book a Demo
+          </a>
+          <Button
+            className="bg-torii hover:bg-torii-dark text-white px-5 h-9 text-sm font-medium"
+            onClick={() => {
+              const hero = document.getElementById('hero')
+              if (hero) { hero.scrollIntoView({ behavior: 'smooth' }) } else { window.location.href = '#hero' }
+            }}
+          >
             Get Free Audit
           </Button>
         </div>
@@ -84,7 +98,21 @@ export function Navbar() {
                     {link.label}
                   </a>
                 ))}
-                <Button className="bg-torii hover:bg-torii-dark text-white w-full h-10 mt-2">
+                <a
+                  href="https://cal.com/alegius/tenkai-demo"
+                  target="_blank"
+                  rel="noopener"
+                  className="flex items-center justify-center w-full h-10 text-sm font-medium rounded-md border border-torii text-torii hover:bg-torii hover:text-white transition-colors"
+                >
+                  Book a Demo
+                </a>
+                <Button
+                  className="bg-torii hover:bg-torii-dark text-white w-full h-10"
+                  onClick={() => {
+                    const hero = document.getElementById('hero')
+                    if (hero) { hero.scrollIntoView({ behavior: 'smooth' }) } else { window.location.href = '#hero' }
+                  }}
+                >
                   Get Free Audit
                 </Button>
               </div>

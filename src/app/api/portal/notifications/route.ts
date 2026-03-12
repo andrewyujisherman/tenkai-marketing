@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { createServerClient } from '@/lib/supabase'
+import { isDemoMode, DEMO_CLIENT_ID } from '@/lib/demo'
 
 async function findClientForUser(userId: string, email: string) {
   const { data: byId } = await supabaseAdmin
@@ -20,7 +21,28 @@ async function findClientForUser(userId: string, email: string) {
   return byEmail
 }
 
+const DEFAULTS = {
+  content_ready: true,
+  weekly_report: true,
+  strategy_updates: true,
+  billing_alerts: true,
+  audit_findings: false,
+}
+
 export async function GET() {
+  const demo = await isDemoMode()
+
+  if (demo) {
+    const { data: client } = await supabaseAdmin
+      .from('clients')
+      .select('notification_preferences')
+      .eq('id', DEMO_CLIENT_ID)
+      .single()
+    return NextResponse.json({
+      preferences: { ...DEFAULTS, ...(client?.notification_preferences ?? {}) },
+    })
+  }
+
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -29,26 +51,24 @@ export async function GET() {
   const client = await findClientForUser(user.id, user.email ?? '')
   if (!client) return NextResponse.json({ error: 'Client not found' }, { status: 404 })
 
-  const defaults = {
-    content_ready: true,
-    weekly_report: true,
-    strategy_updates: true,
-    billing_alerts: true,
-    audit_findings: false,
-  }
-
   return NextResponse.json({
-    preferences: { ...defaults, ...(client.notification_preferences ?? {}) },
+    preferences: { ...DEFAULTS, ...(client.notification_preferences ?? {}) },
   })
 }
 
 export async function PATCH(request: Request) {
+  const demo = await isDemoMode()
+  const body = await request.json()
+
+  if (demo) {
+    return NextResponse.json({ success: true })
+  }
+
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const body = await request.json()
   const allowed = ['content_ready', 'weekly_report', 'strategy_updates', 'billing_alerts', 'audit_findings']
   const safePrefs: Record<string, boolean> = {}
   for (const key of allowed) {

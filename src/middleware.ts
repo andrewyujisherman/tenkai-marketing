@@ -44,11 +44,12 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // Protected routes — redirect to login if not authenticated
+  // Protected routes — redirect to login if not authenticated (demo mode bypasses)
   const protectedPaths = ['/dashboard', '/content', '/audit', '/reports', '/settings', '/onboarding']
   const isProtected = protectedPaths.some(path => request.nextUrl.pathname.startsWith(path))
+  const isDemo = request.cookies.get('demo_mode')?.value === 'true'
 
-  if (isProtected && !user) {
+  if (isProtected && !user && !isDemo) {
     const url = request.nextUrl.clone()
     url.pathname = '/auth/login'
     url.searchParams.set('redirect', request.nextUrl.pathname)

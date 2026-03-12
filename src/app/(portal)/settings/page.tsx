@@ -77,7 +77,7 @@ function ProfileTab() {
         if (data.client) {
           setCompanyName(data.client.company_name || '')
           setWebsite(data.client.website_url || '')
-          setIndustry(data.client.industry || '')
+          setIndustry(data.client.onboarding_data?.industry || data.client.industry || '')
         }
         if (data.email) setEmail(data.email)
       })
@@ -95,6 +95,7 @@ function ProfileTab() {
         body: JSON.stringify({
           company_name: companyName,
           website_url: website,
+          industry,
         }),
       })
       const data = await res.json()

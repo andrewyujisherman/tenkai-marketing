@@ -42,8 +42,7 @@ export function PortalHeader() {
           className="relative p-2 rounded-tenkai hover:bg-parchment transition-colors group"
         >
           <Bell className="size-[18px] text-warm-gray group-hover:text-charcoal transition-colors" />
-          {/* Notification dot */}
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-torii rounded-full" />
+          {/* Notification dot — hidden until we have real unread count */}
         </button>
 
         {/* User dropdown */}

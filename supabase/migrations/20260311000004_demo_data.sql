@@ -13,6 +13,7 @@ INSERT INTO public.clients (
   website_url,
   tier,
   status,
+  onboarding_data,
   created_at
 ) VALUES (
   '00000000-0000-0000-0000-000000000001',
@@ -22,6 +23,7 @@ INSERT INTO public.clients (
   'https://premierplumbing.com',
   'pro',
   'demo',
+  '{"industry": "Home Services / Plumbing"}'::jsonb,
   NOW() - INTERVAL '90 days'
 ) ON CONFLICT (id) DO NOTHING;
 

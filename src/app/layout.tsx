@@ -15,8 +15,19 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Tenkai Marketing — Your Heavenly SEO Team",
-  description: "AI-powered SEO experts working 24/7. From $150/mo — no contracts, no jargon, no autopilot.",
+  title: "Tenkai — AI-Powered Digital Marketing",
+  description: "Your dedicated team of AI marketing agents. SEO, content, social media — working 24/7.",
+  openGraph: {
+    title: "Tenkai — AI-Powered Digital Marketing",
+    description: "Your dedicated team of AI marketing agents. SEO, content, social media — working 24/7.",
+    siteName: "Tenkai",
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: "Tenkai — AI-Powered Digital Marketing",
+    description: "Your dedicated team of AI marketing agents. SEO, content, social media — working 24/7.",
+  },
 };
 
 export default function RootLayout({
