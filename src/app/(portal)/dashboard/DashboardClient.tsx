@@ -5,20 +5,28 @@ import { agents } from '@/lib/design-system'
 import { StatCard } from '@/components/portal/StatCard'
 import { ActivityItem } from '@/components/portal/ActivityItem'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import {
   Search,
   FileText,
   Target,
   TrendingUp,
+  Zap,
+  Eye,
+  CheckCircle2,
+  Clock,
+  AlertCircle,
+  Loader2,
 } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
-import type { ActivityPost, PendingApproval, DashboardStats } from './page'
+import type { ActivityPost, PendingApproval, DashboardStats, Deliverable } from './page'
 
 const agentMap = Object.fromEntries(agents.map((a) => [a.name, a]))
 
@@ -39,6 +47,41 @@ interface DashboardClientProps {
   pendingApprovals: PendingApproval[]
   activityPosts: ActivityPost[]
   stats: DashboardStats
+  recentDeliverables: Deliverable[]
+}
+
+const SERVICE_TYPES = [
+  { key: 'site_audit', label: 'Run SEO Audit', icon: '🔍', description: 'Full technical SEO audit of your website' },
+  { key: 'keyword_research', label: 'Keyword Research', icon: '🎯', description: 'Discover high-value keyword opportunities' },
+  { key: 'content_brief', label: 'Content Brief', icon: '✍️', description: 'Generate an optimized content brief' },
+  { key: 'technical_audit', label: 'Technical Audit', icon: '🔧', description: 'Deep technical health check' },
+  { key: 'link_analysis', label: 'Link Analysis', icon: '🔗', description: 'Analyze your backlink profile' },
+  { key: 'social_strategy', label: 'Social Strategy', icon: '📱', description: 'Social media optimization plan' },
+  { key: 'analytics_audit', label: 'Analytics Audit', icon: '📊', description: 'Review your analytics setup' },
+] as const
+
+function deliverableStatusIcon(status: string | null) {
+  switch (status) {
+    case 'completed':
+      return <CheckCircle2 className="size-4 text-[#4A7C59]" />
+    case 'pending':
+    case 'in_progress':
+      return <Clock className="size-4 text-[#C49A3C]" />
+    case 'failed':
+      return <AlertCircle className="size-4 text-torii" />
+    default:
+      return <Clock className="size-4 text-warm-gray" />
+  }
+}
+
+function deliverableStatusLabel(status: string | null) {
+  switch (status) {
+    case 'completed': return 'Completed'
+    case 'pending': return 'Pending'
+    case 'in_progress': return 'In Progress'
+    case 'failed': return 'Failed'
+    default: return status ?? 'Unknown'
+  }
 }
 
 function getDateThreshold(filter: DateFilter): Date {
@@ -96,6 +139,7 @@ export default function DashboardClient({
   pendingApprovals,
   activityPosts,
   stats,
+  recentDeliverables,
 }: DashboardClientProps) {
   const [dateFilter, setDateFilter] = useState<DateFilter>('today')
   // Track which approvals have been acted on (optimistic UI)
@@ -106,6 +150,18 @@ export default function DashboardClient({
   const [feedbackTarget, setFeedbackTarget] = useState<{ id: string; title: string } | null>(null)
   const [feedbackText, setFeedbackText] = useState('')
   const [feedbackLoading, setFeedbackLoading] = useState(false)
+
+  // Service request dialog state
+  const [serviceDialog, setServiceDialog] = useState<{ key: string; label: string } | null>(null)
+  const [serviceUrl, setServiceUrl] = useState(client?.website_url ?? '')
+  const [serviceLoading, setServiceLoading] = useState(false)
+  const [serviceSuccess, setServiceSuccess] = useState<string | null>(null)
+
+  // Deliverable detail dialog
+  const [selectedDeliverable, setSelectedDeliverable] = useState<Deliverable | null>(null)
+
+  // Deliverables list (supports refresh after new request)
+  const [deliverables, setDeliverables] = useState<Deliverable[]>(recentDeliverables)
 
   const displayName = client?.company_name || userName || null
 
@@ -224,6 +280,47 @@ export default function DashboardClient({
       setFeedbackTarget(null)
     }
   }, [feedbackTarget, feedbackText])
+
+  const refreshDeliverables = useCallback(async () => {
+    try {
+      const res = await fetch('/api/services/deliverables?limit=10')
+      if (res.ok) {
+        const data = await res.json()
+        setDeliverables(data.deliverables ?? [])
+      }
+    } catch {
+      // silent fail — deliverables will refresh on next page load
+    }
+  }, [])
+
+  const handleServiceRequest = useCallback(async () => {
+    if (!serviceDialog || !serviceUrl.trim()) return
+    setServiceLoading(true)
+    try {
+      const res = await fetch('/api/services/request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          request_type: serviceDialog.key,
+          target_url: serviceUrl.trim(),
+        }),
+      })
+      if (res.ok) {
+        setServiceSuccess(`${serviceDialog.label} request submitted successfully!`)
+        setServiceDialog(null)
+        setServiceUrl(client?.website_url ?? '')
+        // Auto-refresh deliverables after a short delay
+        setTimeout(() => refreshDeliverables(), 2000)
+      } else {
+        const err = await res.json().catch(() => ({ error: 'Request failed' }))
+        setServiceSuccess(`Error: ${err.error ?? 'Request failed'}`)
+      }
+    } catch {
+      setServiceSuccess('Error: Network request failed')
+    } finally {
+      setServiceLoading(false)
+    }
+  }, [serviceDialog, serviceUrl, client?.website_url, refreshDeliverables])
 
   const visibleApprovals = pendingApprovals.filter((a) => !resolvedApprovals.has(a.id))
 
@@ -406,6 +503,125 @@ export default function DashboardClient({
         </section>
       </div>
 
+      {/* ─── Request a Service ────────────────────────────────── */}
+      <section className="space-y-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <Zap className="size-5 text-torii" />
+            <h2 className="font-serif text-lg text-charcoal">Request a Service</h2>
+          </div>
+          <p className="text-warm-gray text-sm mt-0.5">
+            Kick off a new task for your Tenkai team
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+          {SERVICE_TYPES.map((svc) => (
+            <button
+              key={svc.key}
+              onClick={() => {
+                setServiceDialog({ key: svc.key, label: svc.label })
+                setServiceUrl(client?.website_url ?? '')
+              }}
+              className="flex flex-col items-center gap-2 rounded-tenkai border border-tenkai-border bg-white p-4 text-center hover:border-torii/40 hover:shadow-sm transition-all group"
+            >
+              <span className="text-2xl">{svc.icon}</span>
+              <span className="text-xs font-medium text-charcoal group-hover:text-torii transition-colors">
+                {svc.label}
+              </span>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {/* ─── Recent Deliverables ──────────────────────────────── */}
+      <section className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-serif text-lg text-charcoal">Recent Deliverables</h2>
+            <p className="text-warm-gray text-sm mt-0.5">
+              Latest results from your Tenkai team
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={refreshDeliverables}
+            className="text-xs border-tenkai-border text-warm-gray hover:text-charcoal rounded-tenkai"
+          >
+            Refresh
+          </Button>
+        </div>
+
+        {deliverables.length === 0 ? (
+          <div className="bg-cream rounded-tenkai border border-tenkai-border p-8 text-center">
+            <p className="text-warm-gray text-sm">No deliverables yet. Request a service above to get started.</p>
+          </div>
+        ) : (
+          <div className="rounded-tenkai border border-tenkai-border bg-white overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-tenkai-border bg-parchment/50">
+                  <th className="text-left py-3 px-4 font-medium text-warm-gray">Title</th>
+                  <th className="text-left py-3 px-4 font-medium text-warm-gray hidden sm:table-cell">Agent</th>
+                  <th className="text-left py-3 px-4 font-medium text-warm-gray hidden md:table-cell">Type</th>
+                  <th className="text-right py-3 px-4 font-medium text-warm-gray">Score</th>
+                  <th className="text-right py-3 px-4 font-medium text-warm-gray">Status</th>
+                  <th className="text-right py-3 px-4 font-medium text-warm-gray"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {deliverables.map((d) => (
+                  <tr key={d.id} className="border-b border-tenkai-border-light last:border-none hover:bg-parchment/30 transition-colors">
+                    <td className="py-3 px-4 font-medium text-charcoal">
+                      {d.title ?? 'Untitled'}
+                    </td>
+                    <td className="py-3 px-4 text-warm-gray hidden sm:table-cell">
+                      {d.agent_name ?? '—'}
+                    </td>
+                    <td className="py-3 px-4 text-warm-gray hidden md:table-cell">
+                      <span className="inline-flex rounded-full bg-parchment px-2 py-0.5 text-[10px] font-medium text-charcoal">
+                        {(d.deliverable_type ?? 'other').replace(/_/g, ' ')}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      {d.score != null ? (
+                        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+                          d.score >= 80
+                            ? 'bg-[#4A7C59]/10 text-[#4A7C59]'
+                            : d.score >= 50
+                              ? 'bg-[#C49A3C]/10 text-[#C49A3C]'
+                              : 'bg-torii/10 text-torii'
+                        }`}>
+                          {d.score}/100
+                        </span>
+                      ) : (
+                        <span className="text-muted-gray text-xs">—</span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      <span className="inline-flex items-center gap-1.5">
+                        {deliverableStatusIcon(d.status)}
+                        <span className="text-xs text-warm-gray">{deliverableStatusLabel(d.status)}</span>
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      <button
+                        onClick={() => setSelectedDeliverable(d)}
+                        className="inline-flex items-center gap-1 text-xs text-torii hover:text-torii-dark transition-colors"
+                      >
+                        <Eye className="size-3.5" />
+                        View
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
       {/* Feedback dialog */}
       <Dialog open={feedbackTarget !== null} onOpenChange={(o) => { if (!o) { setFeedbackTarget(null); setFeedbackText('') } }}>
         <DialogContent className="sm:max-w-md">
@@ -433,6 +649,114 @@ export default function DashboardClient({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Service request dialog */}
+      <Dialog open={serviceDialog !== null} onOpenChange={(o) => { if (!o) { setServiceDialog(null); setServiceLoading(false) } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-serif text-charcoal">
+              {serviceDialog?.label}
+            </DialogTitle>
+            <DialogDescription>
+              Enter the target URL for this service request.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <label className="text-sm font-medium text-charcoal">Target URL</label>
+            <Input
+              value={serviceUrl}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setServiceUrl(e.target.value)}
+              placeholder="https://example.com"
+              className="border-tenkai-border rounded-tenkai"
+            />
+          </div>
+          <DialogFooter showCloseButton>
+            <Button
+              onClick={handleServiceRequest}
+              disabled={serviceLoading || !serviceUrl.trim()}
+              className="bg-torii text-white hover:bg-torii-dark rounded-tenkai"
+            >
+              {serviceLoading ? (
+                <>
+                  <Loader2 className="size-4 animate-spin mr-1.5" />
+                  Submitting...
+                </>
+              ) : (
+                'Submit Request'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Deliverable detail dialog */}
+      <Dialog open={selectedDeliverable !== null} onOpenChange={(o) => { if (!o) setSelectedDeliverable(null) }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="font-serif text-charcoal">
+              {selectedDeliverable?.title ?? 'Deliverable Details'}
+            </DialogTitle>
+          </DialogHeader>
+          {selectedDeliverable && (
+            <div className="space-y-4 text-sm">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <span className="text-warm-gray text-xs">Agent</span>
+                  <p className="font-medium text-charcoal">{selectedDeliverable.agent_name ?? '—'}</p>
+                </div>
+                <div>
+                  <span className="text-warm-gray text-xs">Type</span>
+                  <p className="font-medium text-charcoal">{(selectedDeliverable.deliverable_type ?? 'other').replace(/_/g, ' ')}</p>
+                </div>
+                <div>
+                  <span className="text-warm-gray text-xs">Score</span>
+                  <p className="font-medium text-charcoal">{selectedDeliverable.score != null ? `${selectedDeliverable.score}/100` : '—'}</p>
+                </div>
+                <div>
+                  <span className="text-warm-gray text-xs">Status</span>
+                  <p className="font-medium text-charcoal flex items-center gap-1.5">
+                    {deliverableStatusIcon(selectedDeliverable.status)}
+                    {deliverableStatusLabel(selectedDeliverable.status)}
+                  </p>
+                </div>
+              </div>
+              {selectedDeliverable.summary && (
+                <div>
+                  <span className="text-warm-gray text-xs">Summary</span>
+                  <p className="text-charcoal leading-relaxed mt-1">{selectedDeliverable.summary}</p>
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter showCloseButton>
+            <span />
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Success/error notification */}
+      {serviceSuccess && (
+        <div className="fixed bottom-6 right-6 z-50 animate-in slide-in-from-bottom-4 fade-in">
+          <div className={`rounded-tenkai border px-4 py-3 shadow-lg text-sm font-medium flex items-center gap-2 ${
+            serviceSuccess.startsWith('Error')
+              ? 'bg-torii/10 border-torii/30 text-torii'
+              : 'bg-[#4A7C59]/10 border-[#4A7C59]/30 text-[#4A7C59]'
+          }`}>
+            {serviceSuccess.startsWith('Error') ? (
+              <AlertCircle className="size-4" />
+            ) : (
+              <CheckCircle2 className="size-4" />
+            )}
+            {serviceSuccess}
+            <button
+              onClick={() => setServiceSuccess(null)}
+              className="ml-2 text-current opacity-60 hover:opacity-100"
+            >
+              &times;
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

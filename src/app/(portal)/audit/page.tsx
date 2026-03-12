@@ -19,6 +19,17 @@ interface DbRecommendation {
   agent?: string
 }
 
+export interface AuditDeliverable {
+  id: string
+  agent_name: string | null
+  deliverable_type: string | null
+  title: string | null
+  summary: string | null
+  score: number | null
+  status: string | null
+  created_at: string
+}
+
 export default async function AuditPage() {
   const supabase = await createServerClient()
   const demo = await isDemoMode()
@@ -51,18 +62,38 @@ export default async function AuditPage() {
 
   const db = demo ? supabaseAdmin : supabase
 
-  const { data: audit } = await db
-    .from('audits')
-    .select('*')
-    .eq('client_id', clientId)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
+  const [{ data: audit }, { data: auditDeliverablesData }] = await Promise.all([
+    db
+      .from('audits')
+      .select('*')
+      .eq('client_id', clientId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    db
+      .from('deliverables')
+      .select('id, agent_name, deliverable_type, title, summary, score, status, created_at')
+      .eq('client_id', clientId)
+      .in('deliverable_type', ['audit_report', 'technical_report'])
+      .order('created_at', { ascending: false })
+      .limit(10),
+  ])
 
-  if (!audit) return <AuditEmptyState />
+  const auditDeliverables: AuditDeliverable[] = (auditDeliverablesData ?? []).map((d) => ({
+    id: d.id,
+    agent_name: d.agent_name ?? null,
+    deliverable_type: d.deliverable_type ?? null,
+    title: d.title ?? null,
+    summary: d.summary ?? null,
+    score: d.score ?? null,
+    status: d.status ?? null,
+    created_at: d.created_at,
+  }))
 
-  const overallScore: number = audit.overall_score ?? 0
-  const categoryScores = [
+  if (!audit && auditDeliverables.length === 0) return <AuditEmptyState />
+
+  const overallScore: number = audit?.overall_score ?? 0
+  const categoryScores = audit ? [
     { label: 'Technical', score: audit.technical_score ?? 0 },
     { label: 'Content', score: audit.content_score ?? 0 },
     {
@@ -70,9 +101,9 @@ export default async function AuditPage() {
       score: Math.round(((audit.technical_score ?? 0) + (audit.content_score ?? 0)) / 2),
     },
     { label: 'Off-Page', score: audit.authority_score ?? 0 },
-  ]
+  ] : []
 
-  const allIssues: DbIssue[] = Array.isArray(audit.issues) ? audit.issues : []
+  const allIssues: DbIssue[] = audit && Array.isArray(audit.issues) ? audit.issues : []
 
   const toIssueCard = (issue: DbIssue): IssueCardProps => ({
     severity: issue.severity,
@@ -92,7 +123,7 @@ export default async function AuditPage() {
   const warningIssues = allIssues.filter((i) => i.severity === 'warning').map(toIssueCard)
   const passedIssues = allIssues.filter((i) => i.severity === 'passed').map(toIssueCard)
 
-  const recommendations: DbRecommendation[] = Array.isArray(audit.recommendations)
+  const recommendations: DbRecommendation[] = audit && Array.isArray(audit.recommendations)
     ? audit.recommendations
     : []
 
@@ -104,6 +135,7 @@ export default async function AuditPage() {
       warningIssues={warningIssues}
       passedIssues={passedIssues}
       recommendations={recommendations}
+      auditDeliverables={auditDeliverables}
     />
   )
 }

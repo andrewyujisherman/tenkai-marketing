@@ -10,12 +10,12 @@
 //   GEMINI_API_KEY             — required
 //   NEXT_PUBLIC_SUPABASE_URL   — required
 //   SUPABASE_SERVICE_ROLE_KEY  — required
-//   QUEUE_POLL_INTERVAL_MS     — optional, default 60000 (60s)
+//   QUEUE_POLL_INTERVAL_MS     — optional, default 10000 (10s)
 //   QUEUE_WORKER_LOG_LEVEL     — optional, 'debug' | 'info' | 'warn' | 'error'
 //
 // Model routing:
 //   Research tasks  (keyword_research, link_analysis):           gemini-2.5-flash
-//   Customer-facing (site_audit, content_brief, technical_audit, social_strategy): gemini-3-flash-preview
+//   Customer-facing (site_audit, analytics_audit, content_brief, technical_audit, social_strategy): gemini-2.5-pro
 //
 // The worker uses the Supabase service_role key to bypass RLS.
 // ============================================================
@@ -28,15 +28,14 @@ import type { AgentId } from '../lib/agents/index'
 
 // --------------- Config ---------------
 
-const POLL_INTERVAL = parseInt(process.env.QUEUE_POLL_INTERVAL_MS ?? '60000', 10)
+const POLL_INTERVAL = parseInt(process.env.QUEUE_POLL_INTERVAL_MS ?? '10000', 10)
 const LOG_LEVEL = (process.env.QUEUE_WORKER_LOG_LEVEL ?? 'info') as 'debug' | 'info' | 'warn' | 'error'
-const MAX_TOKENS = 4096
 const REQUEST_TIMEOUT_MS = 120_000 // 2 min timeout for AI calls
 
 // Model routing
 const RESEARCH_TASKS = new Set(['keyword_research', 'link_analysis'])
 const MODEL_RESEARCH = 'gemini-2.5-flash'
-const MODEL_CUSTOMER_FACING = 'gemini-3-flash-preview'
+const MODEL_CUSTOMER_FACING = 'gemini-2.5-pro'
 
 function getModelForRequestType(requestType: string): string {
   return RESEARCH_TASKS.has(requestType) ? MODEL_RESEARCH : MODEL_CUSTOMER_FACING
@@ -180,7 +179,6 @@ async function processRequest(request: ServiceRequest): Promise<void> {
 
     const result = await geminiModel.generateContent({
       contents: [{ role: 'user', parts: [{ text: taskMessage }] }],
-      generationConfig: { maxOutputTokens: MAX_TOKENS },
     })
 
     responseText = result.response.text()
@@ -211,6 +209,7 @@ async function processRequest(request: ServiceRequest): Promise<void> {
   // Generate a human-readable title for the deliverable
   const titleMap: Record<string, string> = {
     site_audit: `SEO Site Audit: ${request.target_url ?? 'Website'}`,
+    analytics_audit: `Analytics Audit: ${request.target_url ?? 'Website'}`,
     content_brief: `Content Brief: ${(request.parameters as Record<string, string>).keyword ?? request.target_url ?? 'Topic'}`,
     keyword_research: `Keyword Research: ${request.target_url ?? 'Website'}`,
     technical_audit: `Technical SEO Audit: ${request.target_url ?? 'Website'}`,
@@ -316,6 +315,14 @@ function generateSummary(requestType: string, content: Record<string, unknown>):
         if (quickWins?.length) parts.push(`${quickWins.length} quick wins available.`)
         return parts.join(' ')
       }
+      case 'analytics_audit': {
+        const score = content.analytics_score as number | undefined
+        const opportunities = content.keyword_performance as Record<string, unknown> | undefined
+        const parts = [`Analytics score: ${score ?? 'N/A'}/100.`]
+        const opps = opportunities?.keyword_opportunities as unknown[] | undefined
+        if (opps?.length) parts.push(`${opps.length} keyword opportunities identified.`)
+        return parts.join(' ')
+      }
       case 'content_brief': {
         const brief = content.brief as Record<string, unknown> | undefined
         if (brief) {
@@ -353,21 +360,30 @@ function generateSummary(requestType: string, content: Record<string, unknown>):
 
 function extractScore(requestType: string, content: Record<string, unknown>): number | null {
   try {
-    const scoreKeys: Record<string, string> = {
-      site_audit: 'overall_score',
-      content_brief: 'seo_score',
-      keyword_research: 'keyword_quality_score',
-      technical_audit: 'technical_score',
-      link_analysis: 'link_profile_score',
-      social_strategy: 'social_strategy_score',
+    // Primary keys per request type
+    const scoreKeys: Record<string, string[]> = {
+      site_audit: ['overall_score'],
+      analytics_audit: ['analytics_score'],
+      content_brief: ['seo_score', 'brief.seo_score', 'content_score'],
+      keyword_research: ['keyword_quality_score', 'quality_score', 'overall_score'],
+      technical_audit: ['technical_score'],
+      link_analysis: ['link_profile_score'],
+      social_strategy: ['social_strategy_score'],
     }
-    const key = scoreKeys[requestType]
-    if (key && typeof content[key] === 'number') {
-      return content[key] as number
-    }
-    // Fallback: check analytics_score for Yumi's site_audit
-    if (requestType === 'site_audit' && typeof content.analytics_score === 'number') {
-      return content.analytics_score as number
+    const keys = scoreKeys[requestType] ?? []
+    for (const key of keys) {
+      // Support dot-notation traversal (e.g., 'brief.seo_score')
+      const parts = key.split('.')
+      let val: unknown = content
+      for (const part of parts) {
+        if (val && typeof val === 'object' && part in (val as Record<string, unknown>)) {
+          val = (val as Record<string, unknown>)[part]
+        } else {
+          val = undefined
+          break
+        }
+      }
+      if (typeof val === 'number') return val
     }
     return null
   } catch {

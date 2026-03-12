@@ -9,6 +9,17 @@ type TopicItem = Omit<TopicCardProps, 'onApprove' | 'onEdit' | 'onDeny'> & { id:
 type DraftItem = Omit<DraftCardProps, 'onApprove' | 'onRequestEdit' | 'onDeny'> & { id: string }
 type PublishedItem = { id: string; title: string; date: string; seoScore: number | null; status: string; published_url: string | null }
 
+export interface ContentDeliverable {
+  id: string
+  agent_name: string | null
+  deliverable_type: string | null
+  title: string | null
+  summary: string | null
+  score: number | null
+  status: string | null
+  created_at: string
+}
+
 async function getClientId(userId: string, email: string): Promise<string | null> {
   const { data: byId } = await supabaseAdmin
     .from('clients')
@@ -52,7 +63,7 @@ export default async function ContentPage() {
     }
   }
 
-  const [topicsRes, draftsRes, publishedRes] = await Promise.all([
+  const [topicsRes, draftsRes, publishedRes, contentDeliverablesRes] = await Promise.all([
     supabaseAdmin
       .from('content_posts')
       .select('id, title, keywords, created_at')
@@ -71,6 +82,13 @@ export default async function ContentPage() {
       .eq('client_id', clientId)
       .in('status', ['approved', 'published'])
       .order('created_at', { ascending: false }),
+    supabaseAdmin
+      .from('deliverables')
+      .select('id, agent_name, deliverable_type, title, summary, score, status, created_at')
+      .eq('client_id', clientId)
+      .in('deliverable_type', ['content_draft', 'keyword_list'])
+      .order('created_at', { ascending: false })
+      .limit(20),
   ])
 
   const topics: TopicItem[] = (topicsRes.data ?? []).map((p) => ({
@@ -108,11 +126,23 @@ export default async function ContentPage() {
     published_url: p.published_url as string | null,
   }))
 
+  const contentDeliverables: ContentDeliverable[] = (contentDeliverablesRes.data ?? []).map((d) => ({
+    id: d.id,
+    agent_name: d.agent_name ?? null,
+    deliverable_type: d.deliverable_type ?? null,
+    title: d.title ?? null,
+    summary: d.summary ?? null,
+    score: d.score ?? null,
+    status: d.status ?? null,
+    created_at: d.created_at,
+  }))
+
   return (
     <ContentClient
       initialTopics={topics}
       initialDrafts={drafts}
       publishedPosts={published}
+      contentDeliverables={contentDeliverables}
     />
   )
 }

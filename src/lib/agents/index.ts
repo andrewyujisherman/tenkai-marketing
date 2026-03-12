@@ -33,7 +33,7 @@ export const TENKAI_AGENTS = {
     name: 'Yumi',
     kanji: '\u7531\u7F8E',
     role: 'Analytics',
-    handles: ['site_audit'],
+    handles: ['analytics_audit'],
   },
   takeshi: {
     name: 'Takeshi',
@@ -53,6 +53,7 @@ export type AgentId = keyof typeof TENKAI_AGENTS
 
 export const REQUEST_TYPES = [
   'site_audit',
+  'analytics_audit',
   'content_brief',
   'keyword_research',
   'technical_audit',
@@ -81,6 +82,7 @@ export function getAgentForRequest(requestType: string): AgentId {
 export function getDeliverableType(requestType: string): string {
   const map: Record<string, string> = {
     site_audit: 'audit_report',
+    analytics_audit: 'audit_report',
     content_brief: 'content_draft',
     keyword_research: 'keyword_list',
     technical_audit: 'technical_report',

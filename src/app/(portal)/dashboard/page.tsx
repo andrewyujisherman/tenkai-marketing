@@ -22,6 +22,18 @@ export interface PendingApproval {
   description: string | null
 }
 
+export interface Deliverable {
+  id: string
+  request_id: string | null
+  agent_name: string | null
+  deliverable_type: string | null
+  title: string | null
+  summary: string | null
+  score: number | null
+  status: string | null
+  created_at: string
+}
+
 export interface DashboardStats {
   totalContent: number
   pendingApprovals: number
@@ -38,6 +50,7 @@ export default async function DashboardPage() {
   let clientRecord: { id: string; company_name?: string | null; website_url?: string | null } | null = null
   let pendingApprovals: PendingApproval[] = []
   let activityPosts: ActivityPost[] = []
+  let recentDeliverables: Deliverable[] = []
   let stats: DashboardStats = {
     totalContent: 0,
     pendingApprovals: 0,
@@ -76,6 +89,7 @@ export default async function DashboardPage() {
       { data: approvalsData, count: pendingCount },
       { data: postsData },
       { data: auditData },
+      { data: deliverablesData },
     ] = await Promise.all([
       db
         .from('content_posts')
@@ -110,6 +124,13 @@ export default async function DashboardPage() {
         .order('created_at', { ascending: false })
         .limit(1)
         .single(),
+
+      db
+        .from('deliverables')
+        .select('id, request_id, agent_name, deliverable_type, title, summary, score, status, created_at')
+        .eq('client_id', clientId)
+        .order('created_at', { ascending: false })
+        .limit(10),
     ])
 
     stats = {
@@ -137,6 +158,18 @@ export default async function DashboardPage() {
       created_at: p.created_at,
       needs_approval: p.status === 'draft' || p.status === 'pending_review',
     }))
+
+    recentDeliverables = (deliverablesData ?? []).map((d) => ({
+      id: d.id,
+      request_id: d.request_id ?? null,
+      agent_name: d.agent_name ?? null,
+      deliverable_type: d.deliverable_type ?? null,
+      title: d.title ?? null,
+      summary: d.summary ?? null,
+      score: d.score ?? null,
+      status: d.status ?? null,
+      created_at: d.created_at,
+    }))
   }
 
   return (
@@ -146,6 +179,7 @@ export default async function DashboardPage() {
       pendingApprovals={pendingApprovals}
       activityPosts={activityPosts}
       stats={stats}
+      recentDeliverables={recentDeliverables}
     />
   )
 }

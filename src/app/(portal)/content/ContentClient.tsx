@@ -12,7 +12,8 @@ import {
 } from '@/components/ui/dialog'
 import { TopicCard, type TopicCardProps } from '@/components/portal/TopicCard'
 import { DraftCard, type DraftCardProps } from '@/components/portal/DraftCard'
-import { CheckCircle2, FileText, Globe } from 'lucide-react'
+import { CheckCircle2, FileText, Globe, Lightbulb, Clock } from 'lucide-react'
+import type { ContentDeliverable } from './page'
 
 interface FeedbackDialogProps {
   open: boolean
@@ -70,9 +71,10 @@ interface ContentClientProps {
   initialTopics: TopicItem[]
   initialDrafts: DraftItem[]
   publishedPosts: PublishedItem[]
+  contentDeliverables: ContentDeliverable[]
 }
 
-export default function ContentClient({ initialTopics, initialDrafts, publishedPosts }: ContentClientProps) {
+export default function ContentClient({ initialTopics, initialDrafts, publishedPosts, contentDeliverables }: ContentClientProps) {
   const [topics, setTopics] = useState(initialTopics)
   const [drafts, setDrafts] = useState(initialDrafts)
   const [topicFeedbackId, setTopicFeedbackId] = useState<string | null>(null)
@@ -147,6 +149,15 @@ export default function ContentClient({ initialTopics, initialDrafts, publishedP
           <TabsTrigger value="published" className="gap-1.5">
             <Globe className="size-3.5" />
             Published
+          </TabsTrigger>
+          <TabsTrigger value="briefs" className="gap-1.5">
+            <Lightbulb className="size-3.5" />
+            Briefs &amp; Research
+            {contentDeliverables.length > 0 && (
+              <span className="ml-1 rounded-full bg-[#5B7B9A]/10 px-1.5 py-0.5 text-[10px] font-semibold text-[#5B7B9A]">
+                {contentDeliverables.length}
+              </span>
+            )}
           </TabsTrigger>
         </TabsList>
 
@@ -313,6 +324,76 @@ export default function ContentClient({ initialTopics, initialDrafts, publishedP
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+          </div>
+        </TabsContent>
+        {/* ─── Briefs & Research Tab ───────────────────────────── */}
+        <TabsContent value="briefs">
+          <div className="space-y-4">
+            <div>
+              <h2 className="font-serif text-lg font-medium text-charcoal">
+                Briefs &amp; Research
+              </h2>
+              <p className="text-sm text-warm-gray mt-0.5">
+                Content briefs, keyword research, and other deliverables from your Tenkai team
+              </p>
+            </div>
+
+            {contentDeliverables.length === 0 ? (
+              <div className="rounded-tenkai border border-tenkai-border bg-parchment/30 py-16 text-center">
+                <Lightbulb className="size-8 text-muted-gray mx-auto mb-3" />
+                <p className="font-serif text-base font-medium text-charcoal mb-1">No briefs or research yet</p>
+                <p className="text-sm text-warm-gray max-w-sm mx-auto">
+                  Request a content brief or keyword research from the dashboard to get started.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {contentDeliverables.map((d) => (
+                  <div
+                    key={d.id}
+                    className="flex items-start gap-4 rounded-tenkai border border-tenkai-border bg-white p-4"
+                  >
+                    <div className="flex items-center justify-center size-8 rounded-full bg-parchment shrink-0">
+                      {d.status === 'completed' ? (
+                        <CheckCircle2 className="size-4 text-[#4A7C59]" />
+                      ) : (
+                        <Clock className="size-4 text-[#C49A3C]" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-medium text-charcoal">{d.title ?? 'Untitled'}</span>
+                        <span className="rounded-full bg-parchment px-2 py-0.5 text-[10px] font-medium text-charcoal">
+                          {(d.deliverable_type ?? 'other').replace(/_/g, ' ')}
+                        </span>
+                        {d.score != null && (
+                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                            d.score >= 80
+                              ? 'bg-[#4A7C59]/10 text-[#4A7C59]'
+                              : d.score >= 50
+                                ? 'bg-[#C49A3C]/10 text-[#C49A3C]'
+                                : 'bg-torii/10 text-torii'
+                          }`}>
+                            Score: {d.score}/100
+                          </span>
+                        )}
+                      </div>
+                      {d.summary && (
+                        <p className="text-sm text-warm-gray leading-relaxed">{d.summary}</p>
+                      )}
+                      <div className="flex items-center gap-3 mt-2">
+                        {d.agent_name && (
+                          <span className="text-xs text-muted-gray">By {d.agent_name}</span>
+                        )}
+                        <span className="text-xs text-muted-gray">
+                          {new Date(d.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
