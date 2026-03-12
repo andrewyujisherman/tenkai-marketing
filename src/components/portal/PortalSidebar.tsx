@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
@@ -12,6 +12,7 @@ import {
   Settings,
   Menu,
   ChevronDown,
+  Shield,
 } from 'lucide-react'
 import {
   Sheet,
@@ -36,15 +37,14 @@ const tierColors: Record<Tier, string> = {
   Pro: 'bg-[#C49A3C]/10 text-[#C49A3C] border-[#C49A3C]/20',
 }
 
-interface PortalSidebarProps {
-  userName?: string
-  userTier?: Tier
-}
+function SidebarNav({ pathname, isAdmin }: { pathname: string; isAdmin: boolean }) {
+  const allItems = isAdmin
+    ? [...navItems, { label: 'Admin', href: '/admin', icon: Shield }]
+    : navItems
 
-function SidebarNav({ pathname }: { pathname: string }) {
   return (
     <nav className="flex flex-col gap-1 px-3">
-      {navItems.map((item) => {
+      {allItems.map((item) => {
         const isActive = pathname === item.href
         const Icon = item.icon
         return (
@@ -71,10 +71,12 @@ function SidebarContent({
   pathname,
   userName,
   userTier,
+  isAdmin,
 }: {
   pathname: string
   userName: string
   userTier: Tier
+  isAdmin: boolean
 }) {
   return (
     <div className="flex flex-col h-full">
@@ -87,7 +89,7 @@ function SidebarContent({
       </div>
 
       {/* Navigation */}
-      <SidebarNav pathname={pathname} />
+      <SidebarNav pathname={pathname} isAdmin={isAdmin} />
 
       {/* Spacer */}
       <div className="flex-1" />
@@ -118,18 +120,37 @@ function SidebarContent({
   )
 }
 
-export function PortalSidebar({
-  userName = 'Sarah Chen',
-  userTier = 'Growth',
-}: PortalSidebarProps) {
+export function PortalSidebar({ isAdmin = false }: { isAdmin?: boolean }) {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [userName, setUserName] = useState('')
+  const [userTier, setUserTier] = useState<Tier>('Starter')
+
+  useEffect(() => {
+    fetch('/api/portal/profile')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.client) {
+          const name = data.client.name || data.client.company_name || data.email || 'User'
+          setUserName(name)
+          const tier = data.client.plan as Tier
+          if (tier && ['Starter', 'Growth', 'Pro'].includes(tier)) {
+            setUserTier(tier)
+          }
+        } else if (data.email) {
+          setUserName(data.email)
+        }
+      })
+      .catch(() => {/* silently fail — keep defaults */})
+  }, [])
+
+  const displayName = userName || 'User'
 
   return (
     <>
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex fixed left-0 top-0 bottom-0 w-sidebar bg-cream border-r border-tenkai-border flex-col z-30">
-        <SidebarContent pathname={pathname} userName={userName} userTier={userTier} />
+        <SidebarContent pathname={pathname} userName={displayName} userTier={userTier} isAdmin={isAdmin} />
       </aside>
 
       {/* Mobile hamburger */}
@@ -144,7 +165,7 @@ export function PortalSidebar({
           </SheetTrigger>
           <SheetContent side="left" className="w-sidebar p-0 bg-cream border-r-tenkai-border">
             <SheetTitle className="sr-only">Navigation</SheetTitle>
-            <SidebarContent pathname={pathname} userName={userName} userTier={userTier} />
+            <SidebarContent pathname={pathname} userName={displayName} userTier={userTier} isAdmin={isAdmin} />
           </SheetContent>
         </Sheet>
       </div>

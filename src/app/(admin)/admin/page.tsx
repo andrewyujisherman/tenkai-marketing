@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase-admin'
+import { DemoModeToggle } from '@/components/admin/DemoModeToggle'
 import { Users, CreditCard, Clock, FileText } from 'lucide-react'
 
 async function getStats() {
@@ -50,7 +51,10 @@ function StatCard({ label, value, icon }: { label: string; value: number; icon: 
 }
 
 export default async function AdminOverviewPage() {
-  const [stats, activity] = await Promise.all([getStats(), getRecentActivity()])
+  const [stats, activity] = await Promise.all([
+    getStats(),
+    getRecentActivity(),
+  ])
 
   return (
     <div className="max-w-5xl mx-auto space-y-8">
@@ -58,6 +62,9 @@ export default async function AdminOverviewPage() {
         <h1 className="font-serif text-2xl text-charcoal">Overview</h1>
         <p className="text-warm-gray text-sm mt-1">Agency-wide metrics across all clients</p>
       </div>
+
+      {/* Demo Mode Toggle */}
+      <DemoModeToggle />
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

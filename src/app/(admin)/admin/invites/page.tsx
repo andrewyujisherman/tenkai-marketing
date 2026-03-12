@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { RefreshCw, Send, X } from 'lucide-react'
 
 type Tier = 'starter' | 'growth' | 'pro'
 
@@ -25,6 +26,9 @@ export default function AdminInvitesPage() {
   const [success, setSuccess] = useState(false)
   const [invites, setInvites] = useState<PendingInvite[]>([])
   const [invitesLoading, setInvitesLoading] = useState(true)
+  const [resending, setResending] = useState<string | null>(null)
+  const [cancelling, setCancelling] = useState<string | null>(null)
+  const [actionMsg, setActionMsg] = useState<string | null>(null)
 
   async function fetchInvites() {
     setInvitesLoading(true)
@@ -71,6 +75,34 @@ export default function AdminInvitesPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  async function handleResend(invite: PendingInvite) {
+    setResending(invite.id)
+    setActionMsg(null)
+    const res = await fetch(`/api/admin/invite/${invite.id}`, { method: 'POST' })
+    if (res.ok) {
+      setActionMsg(`Invite resent to ${invite.email}`)
+    } else {
+      const data = await res.json()
+      setActionMsg(`Error: ${data.error}`)
+    }
+    setResending(null)
+  }
+
+  async function handleCancel(invite: PendingInvite) {
+    if (!confirm(`Cancel invite for ${invite.email}?`)) return
+    setCancelling(invite.id)
+    setActionMsg(null)
+    const res = await fetch(`/api/admin/invite/${invite.id}`, { method: 'DELETE' })
+    if (res.ok) {
+      setActionMsg(`Invite cancelled for ${invite.email}`)
+      fetchInvites()
+    } else {
+      const data = await res.json()
+      setActionMsg(`Error: ${data.error}`)
+    }
+    setCancelling(null)
   }
 
   return (
@@ -155,7 +187,17 @@ export default function AdminInvitesPage() {
 
       {/* Pending invites list */}
       <div className="bg-white rounded-tenkai border border-tenkai-border p-6">
-        <h2 className="font-serif text-base text-charcoal mb-4">Pending Invites</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-serif text-base text-charcoal">Pending Invites</h2>
+          <button onClick={fetchInvites} className="text-warm-gray hover:text-charcoal transition-colors">
+            <RefreshCw className="size-4" />
+          </button>
+        </div>
+
+        {actionMsg && (
+          <p className="text-sm text-charcoal bg-parchment rounded-tenkai px-3 py-2 mb-4">{actionMsg}</p>
+        )}
+
         {invitesLoading ? (
           <p className="text-warm-gray text-sm">Loading...</p>
         ) : invites.length === 0 ? (
@@ -175,6 +217,22 @@ export default function AdminInvitesPage() {
                   {invite.created_at && (
                     <span className="text-xs text-warm-gray">{new Date(invite.created_at).toLocaleDateString()}</span>
                   )}
+                  <button
+                    onClick={() => handleResend(invite)}
+                    disabled={resending === invite.id}
+                    title="Resend invite"
+                    className="text-warm-gray hover:text-torii transition-colors disabled:opacity-40 p-1"
+                  >
+                    <Send className="size-3.5" />
+                  </button>
+                  <button
+                    onClick={() => handleCancel(invite)}
+                    disabled={cancelling === invite.id}
+                    title="Cancel invite"
+                    className="text-warm-gray hover:text-torii transition-colors disabled:opacity-40 p-1"
+                  >
+                    <X className="size-3.5" />
+                  </button>
                 </div>
               </li>
             ))}

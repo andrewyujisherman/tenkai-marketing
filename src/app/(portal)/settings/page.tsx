@@ -1,27 +1,14 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import {
-  Dialog,
-  DialogTrigger,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-  DialogClose,
-} from '@/components/ui/dialog'
-import {
   CreditCard,
-  Download,
-  UserPlus,
-  Trash2,
-  ShieldCheck,
-  Crown,
+  Check,
 } from 'lucide-react'
 
 // --- Toggle Switch ---
@@ -73,6 +60,67 @@ function FormField({
 // --- Profile Tab ---
 
 function ProfileTab() {
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [error, setError] = useState('')
+
+  const [companyName, setCompanyName] = useState('')
+  const [website, setWebsite] = useState('')
+  const [industry, setIndustry] = useState('')
+  const [email, setEmail] = useState('')
+
+  useEffect(() => {
+    fetch('/api/portal/profile')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.client) {
+          setCompanyName(data.client.company_name || '')
+          setWebsite(data.client.website_url || '')
+          setIndustry(data.client.industry || '')
+        }
+        if (data.email) setEmail(data.email)
+      })
+      .catch(() => setError('Failed to load profile'))
+      .finally(() => setLoading(false))
+  }, [])
+
+  async function handleSave() {
+    setSaving(true)
+    setError('')
+    try {
+      const res = await fetch('/api/portal/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          company_name: companyName,
+          website_url: website,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Save failed')
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2500)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Save failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="bg-white rounded-tenkai border border-tenkai-border p-6 max-w-xl">
+        <div className="animate-pulse space-y-4">
+          <div className="h-4 bg-parchment rounded w-1/3" />
+          <div className="h-8 bg-parchment rounded" />
+          <div className="h-8 bg-parchment rounded" />
+          <div className="h-8 bg-parchment rounded" />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="bg-white rounded-tenkai border border-tenkai-border p-6 space-y-6 max-w-xl">
       <div>
@@ -84,168 +132,69 @@ function ProfileTab() {
       <div className="space-y-4">
         <FormField label="Business Name">
           <Input
-            defaultValue="Premier Plumbing Co."
+            value={companyName}
+            onChange={(e) => setCompanyName((e.target as HTMLInputElement).value)}
             className="border-tenkai-border rounded-tenkai focus-visible:border-torii focus-visible:ring-torii/20"
           />
         </FormField>
         <FormField label="Website URL">
           <Input
-            defaultValue="https://premierplumbing.com"
+            value={website}
+            onChange={(e) => setWebsite((e.target as HTMLInputElement).value)}
             className="border-tenkai-border rounded-tenkai focus-visible:border-torii focus-visible:ring-torii/20"
           />
         </FormField>
         <FormField label="Industry">
           <Input
-            defaultValue="Home Services / Plumbing"
+            value={industry}
+            onChange={(e) => setIndustry((e.target as HTMLInputElement).value)}
             className="border-tenkai-border rounded-tenkai focus-visible:border-torii focus-visible:ring-torii/20"
+            placeholder="e.g. Home Services / Plumbing"
           />
         </FormField>
         <FormField label="Contact Email">
           <Input
-            defaultValue="sarah@premierplumbing.com"
-            className="border-tenkai-border rounded-tenkai focus-visible:border-torii focus-visible:ring-torii/20"
+            value={email}
+            disabled
+            className="border-tenkai-border rounded-tenkai bg-parchment/40 text-warm-gray cursor-not-allowed"
           />
         </FormField>
       </div>
-      <Button className="bg-torii text-white hover:bg-torii-dark rounded-tenkai">
-        Save Changes
-      </Button>
+      {error && <p className="text-sm text-red-500">{error}</p>}
+      <div className="flex items-center gap-3">
+        <Button
+          onClick={handleSave}
+          disabled={saving}
+          className="bg-torii text-white hover:bg-torii-dark rounded-tenkai"
+        >
+          {saving ? 'Saving…' : 'Save Changes'}
+        </Button>
+        {saved && (
+          <span className="text-sm text-green-600 flex items-center gap-1">
+            <Check className="size-3.5" /> Saved
+          </span>
+        )}
+      </div>
     </div>
   )
 }
 
 // --- Billing Tab ---
 
-const billingHistory = [
-  { date: 'Mar 1, 2026', amount: '$149.00', status: 'Paid', invoice: '#INV-2026-003' },
-  { date: 'Feb 1, 2026', amount: '$149.00', status: 'Paid', invoice: '#INV-2026-002' },
-  { date: 'Jan 1, 2026', amount: '$149.00', status: 'Paid', invoice: '#INV-2026-001' },
-  { date: 'Dec 1, 2025', amount: '$149.00', status: 'Paid', invoice: '#INV-2025-012' },
-]
-
 function BillingTab() {
   return (
-    <div className="space-y-6 max-w-2xl">
-      {/* Current Plan */}
-      <div className="bg-white rounded-tenkai border border-tenkai-border p-6">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-torii/10 flex items-center justify-center">
-              <Crown className="size-5 text-torii" />
-            </div>
-            <div>
-              <h3 className="font-serif text-lg text-charcoal">Growth Plan</h3>
-              <p className="text-warm-gray text-sm">$149/month &middot; Renews Apr 1, 2026</p>
-            </div>
-          </div>
-          <Button
-            variant="outline"
-            className="border-tenkai-border text-charcoal hover:bg-parchment rounded-tenkai text-sm"
-          >
-            Change Plan
-          </Button>
+    <div className="max-w-xl">
+      <div className="bg-white rounded-tenkai border border-tenkai-border p-10 flex flex-col items-center text-center gap-4">
+        <div className="w-12 h-12 rounded-full bg-parchment/60 flex items-center justify-center">
+          <CreditCard className="size-6 text-warm-gray" />
         </div>
-      </div>
-
-      {/* Payment Method */}
-      <div className="bg-white rounded-tenkai border border-tenkai-border p-6">
-        <h3 className="font-medium text-charcoal mb-3">Payment Method</h3>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-tenkai bg-parchment/60 flex items-center justify-center">
-              <CreditCard className="size-5 text-warm-gray" />
-            </div>
-            <div>
-              <p className="text-sm text-charcoal font-medium">Visa ending in 4242</p>
-              <p className="text-xs text-warm-gray">Expires 12/2027</p>
-            </div>
-          </div>
-          <button className="text-sm text-torii hover:text-torii-dark font-medium">
-            Update
-          </button>
+        <div>
+          <h3 className="font-serif text-lg text-charcoal">Billing coming soon</h3>
+          <p className="text-warm-gray text-sm mt-1 max-w-sm">
+            Subscription management and invoice history will be available here.
+            For billing questions, contact your Tenkai account manager.
+          </p>
         </div>
-      </div>
-
-      {/* Billing History */}
-      <div className="bg-white rounded-tenkai border border-tenkai-border overflow-hidden">
-        <div className="px-6 py-4 border-b border-tenkai-border">
-          <h3 className="font-medium text-charcoal">Billing History</h3>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-tenkai-border bg-cream/50">
-                <th className="text-left px-6 py-3 font-medium text-warm-gray">Date</th>
-                <th className="text-left px-6 py-3 font-medium text-warm-gray">Amount</th>
-                <th className="text-left px-6 py-3 font-medium text-warm-gray hidden sm:table-cell">Status</th>
-                <th className="text-right px-6 py-3 font-medium text-warm-gray">Invoice</th>
-              </tr>
-            </thead>
-            <tbody>
-              {billingHistory.map((row, i) => (
-                <tr
-                  key={i}
-                  className="border-b border-tenkai-border/50 last:border-0"
-                >
-                  <td className="px-6 py-3 text-charcoal">{row.date}</td>
-                  <td className="px-6 py-3 text-charcoal font-medium tabular-nums">{row.amount}</td>
-                  <td className="px-6 py-3 hidden sm:table-cell">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-[#4A7C59]/10 text-[#4A7C59]">
-                      {row.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-3 text-right">
-                    <button className="text-torii hover:text-torii-dark text-sm font-medium inline-flex items-center gap-1">
-                      <Download className="size-3.5" />
-                      {row.invoice}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Cancel */}
-      <div className="flex items-center justify-between pt-2">
-        <div className="flex items-center gap-2 text-xs text-warm-gray">
-          <ShieldCheck className="size-4" />
-          14-day money-back guarantee
-        </div>
-        <Dialog>
-          <DialogTrigger
-            render={
-              <button className="text-sm text-warm-gray hover:text-torii transition-colors" />
-            }
-          >
-            Cancel subscription
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-md bg-ivory">
-            <DialogHeader>
-              <DialogTitle className="font-serif text-charcoal">Cancel your subscription?</DialogTitle>
-              <DialogDescription>
-                Your team will lose access to all Tenkai features at the end of the current billing
-                period. Any in-progress content will be paused.
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <DialogClose
-                render={
-                  <Button
-                    variant="outline"
-                    className="border-tenkai-border rounded-tenkai"
-                  />
-                }
-              >
-                Keep my plan
-              </DialogClose>
-              <Button className="bg-torii text-white hover:bg-torii-dark rounded-tenkai">
-                Yes, cancel
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </div>
     </div>
   )
@@ -253,85 +202,20 @@ function BillingTab() {
 
 // --- Team Tab ---
 
-const teamMembers = [
-  { name: 'Sarah Chen', email: 'sarah@premierplumbing.com', role: 'Admin', initials: 'SC' },
-  { name: 'Mike Rodriguez', email: 'mike@premierplumbing.com', role: 'Editor', initials: 'MR' },
-  { name: 'Lisa Park', email: 'lisa@premierplumbing.com', role: 'Viewer', initials: 'LP' },
-]
-
 function TeamTab() {
-  const [inviteEmail, setInviteEmail] = useState('')
-  const [inviteRole, setInviteRole] = useState('Viewer')
-
   return (
-    <div className="space-y-6 max-w-2xl">
-      {/* Members List */}
-      <div className="bg-white rounded-tenkai border border-tenkai-border overflow-hidden">
-        <div className="px-6 py-4 border-b border-tenkai-border">
-          <h3 className="font-medium text-charcoal">Team Members</h3>
+    <div className="max-w-xl">
+      <div className="bg-white rounded-tenkai border border-tenkai-border p-10 flex flex-col items-center text-center gap-4">
+        <div className="w-12 h-12 rounded-full bg-parchment/60 flex items-center justify-center">
+          <svg className="size-6 text-warm-gray" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0" />
+          </svg>
         </div>
-        <div className="divide-y divide-tenkai-border/50">
-          {teamMembers.map((member) => (
-            <div
-              key={member.email}
-              className="px-6 py-4 flex items-center justify-between gap-4"
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-9 h-9 rounded-full bg-torii-subtle flex items-center justify-center flex-shrink-0">
-                  <span className="text-torii text-xs font-semibold">{member.initials}</span>
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-charcoal truncate">{member.name}</p>
-                  <p className="text-xs text-warm-gray truncate">{member.email}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 flex-shrink-0">
-                <span
-                  className={cn(
-                    'inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider border',
-                    member.role === 'Admin'
-                      ? 'bg-torii/10 text-torii border-torii/20'
-                      : member.role === 'Editor'
-                        ? 'bg-[#C49A3C]/10 text-[#C49A3C] border-[#C49A3C]/20'
-                        : 'bg-warm-gray/10 text-warm-gray border-warm-gray/20'
-                  )}
-                >
-                  {member.role}
-                </span>
-                {member.role !== 'Admin' && (
-                  <button className="text-warm-gray hover:text-torii transition-colors">
-                    <Trash2 className="size-4" />
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Invite */}
-      <div className="bg-white rounded-tenkai border border-tenkai-border p-6 space-y-4">
-        <h3 className="font-medium text-charcoal">Invite Team Member</h3>
-        <div className="flex flex-col sm:flex-row gap-3">
-          <Input
-            placeholder="colleague@company.com"
-            value={inviteEmail}
-            onChange={(e) => setInviteEmail((e.target as HTMLInputElement).value)}
-            className="flex-1 border-tenkai-border rounded-tenkai focus-visible:border-torii focus-visible:ring-torii/20"
-          />
-          <select
-            value={inviteRole}
-            onChange={(e) => setInviteRole(e.target.value)}
-            className="h-8 px-3 rounded-tenkai border border-tenkai-border bg-transparent text-sm text-charcoal outline-none focus:border-torii focus:ring-2 focus:ring-torii/20"
-          >
-            <option value="Admin">Admin</option>
-            <option value="Editor">Editor</option>
-            <option value="Viewer">Viewer</option>
-          </select>
-          <Button className="bg-torii text-white hover:bg-torii-dark rounded-tenkai gap-1.5 flex-shrink-0">
-            <UserPlus className="size-4" />
-            Invite
-          </Button>
+        <div>
+          <h3 className="font-serif text-lg text-charcoal">Team management coming soon</h3>
+          <p className="text-warm-gray text-sm mt-1 max-w-sm">
+            Invite teammates and manage roles will be available in a future update.
+          </p>
         </div>
       </div>
     </div>
@@ -380,42 +264,112 @@ const notificationSettings: NotificationSetting[] = [
   },
 ]
 
+// Map UI ids to DB keys
+const UI_TO_DB: Record<string, string> = {
+  'content-approval': 'content_ready',
+  'weekly-summary':   'weekly_report',
+  'ranking-changes':  'strategy_updates',
+  'audit-findings':   'audit_findings',
+  'billing-receipts': 'billing_alerts',
+}
+
 function NotificationsTab() {
   const [settings, setSettings] = useState<Record<string, boolean>>(
-    Object.fromEntries(
-      notificationSettings.map((s) => [s.id, s.defaultOn])
-    )
+    Object.fromEntries(notificationSettings.map((s) => [s.id, s.defaultOn]))
   )
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const toggle = (id: string) =>
-    setSettings((prev) => ({ ...prev, [id]: !prev[id] }))
+  useEffect(() => {
+    fetch('/api/portal/notifications')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.preferences) {
+          const prefs = data.preferences
+          setSettings((prev) => {
+            const next = { ...prev }
+            for (const [uiId, dbKey] of Object.entries(UI_TO_DB)) {
+              if (prefs[dbKey] !== undefined) next[uiId] = prefs[dbKey]
+            }
+            return next
+          })
+        }
+      })
+  }, [])
+
+  function savePreferences(next: Record<string, boolean>) {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(async () => {
+      setSaving(true)
+      const dbPrefs: Record<string, boolean> = {}
+      for (const [uiId, dbKey] of Object.entries(UI_TO_DB)) {
+        dbPrefs[dbKey] = next[uiId] ?? false
+      }
+      await fetch('/api/portal/notifications', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ preferences: dbPrefs }),
+      })
+      setSaving(false)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2500)
+    }, 600)
+  }
+
+  function toggle(id: string) {
+    setSettings((prev) => {
+      const next = { ...prev, [id]: !prev[id] }
+      savePreferences(next)
+      return next
+    })
+  }
 
   return (
-    <div className="bg-white rounded-tenkai border border-tenkai-border divide-y divide-tenkai-border/50 max-w-xl">
-      {notificationSettings.map((setting) => (
-        <div
-          key={setting.id}
-          className="px-6 py-5 flex items-start justify-between gap-4"
-        >
-          <div className="space-y-0.5">
-            <p className="text-sm font-medium text-charcoal">{setting.label}</p>
-            <p className="text-xs text-warm-gray leading-relaxed">
-              {setting.description}
-            </p>
+    <div className="space-y-3 max-w-xl">
+      <div className="bg-white rounded-tenkai border border-tenkai-border divide-y divide-tenkai-border/50">
+        {notificationSettings.map((setting) => (
+          <div
+            key={setting.id}
+            className="px-6 py-5 flex items-start justify-between gap-4"
+          >
+            <div className="space-y-0.5">
+              <p className="text-sm font-medium text-charcoal">{setting.label}</p>
+              <p className="text-xs text-warm-gray leading-relaxed">
+                {setting.description}
+              </p>
+            </div>
+            <Toggle
+              checked={settings[setting.id]}
+              onChange={() => toggle(setting.id)}
+            />
           </div>
-          <Toggle
-            checked={settings[setting.id]}
-            onChange={() => toggle(setting.id)}
-          />
-        </div>
-      ))}
+        ))}
+      </div>
+      <p className={`text-xs transition-opacity duration-300 flex items-center gap-1 ${saved ? 'text-green-600 opacity-100' : saving ? 'text-warm-gray opacity-100' : 'opacity-0'}`}>
+        <Check className="size-3.5" />
+        {saving ? 'Saving…' : 'Preferences saved'}
+      </p>
     </div>
   )
 }
 
 // --- Main Page ---
 
+const VALID_TABS = ['profile', 'billing', 'team', 'notifications']
+
 export default function SettingsPage() {
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const tabParam = searchParams.get('tab')
+  const activeTab = VALID_TABS.includes(tabParam ?? '') ? tabParam! : 'profile'
+
+  function handleTabChange(value: string) {
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('tab', value)
+    router.replace(`/settings?${params.toString()}`)
+  }
+
   return (
     <div className="space-y-8">
       <div>
@@ -425,7 +379,7 @@ export default function SettingsPage() {
         </p>
       </div>
 
-      <Tabs defaultValue="profile">
+      <Tabs value={activeTab} onValueChange={handleTabChange}>
         <TabsList className="bg-parchment/60 border border-tenkai-border rounded-tenkai">
           <TabsTrigger
             value="profile"

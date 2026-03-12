@@ -7,6 +7,7 @@ const navLinks = [
   { href: '/admin', label: 'Overview' },
   { href: '/admin/clients', label: 'Clients' },
   { href: '/admin/content', label: 'Content' },
+  { href: '/admin/users', label: 'Team' },
   { href: '/admin/invites', label: 'Invites' },
 ]
 

@@ -91,12 +91,14 @@ const round2: Question[] = [
 
 // --- Onboarding Page ---
 
-type Phase = 'round1' | 'transition' | 'round2' | 'complete'
+type Phase = 'round1' | 'transition' | 'round2' | 'complete' | 'error'
 
 export default function OnboardingPage() {
   const [phase, setPhase] = useState<Phase>('round1')
   const [step, setStep] = useState(0)
   const [answers, setAnswers] = useState<Record<string, string | Record<string, string>>>({})
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const questions = phase === 'round1' ? round1 : round2
   const current = phase === 'round1' || phase === 'round2' ? questions[step] : null
@@ -111,13 +113,27 @@ export default function OnboardingPage() {
     [current]
   )
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (step < totalSteps - 1) {
       setStep(step + 1)
     } else if (phase === 'round1') {
       setPhase('transition')
     } else if (phase === 'round2') {
-      setPhase('complete')
+      setIsSubmitting(true)
+      try {
+        const res = await fetch('/api/portal/onboarding', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ answers }),
+        })
+        if (!res.ok) throw new Error('Submission failed')
+        setPhase('complete')
+      } catch {
+        setSubmitError('Something went wrong. Please try again.')
+        setPhase('error')
+      } finally {
+        setIsSubmitting(false)
+      }
     }
   }
 
@@ -153,6 +169,29 @@ export default function OnboardingPage() {
           >
             Continue
             <ArrowRight className="size-4" />
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  // --- Error Screen ---
+  if (phase === 'error') {
+    return (
+      <div className="min-h-[80vh] flex items-center justify-center px-4">
+        <div className="max-w-md text-center space-y-6 animate-fade-up">
+          <div className="space-y-2">
+            <h2 className="font-serif text-2xl text-charcoal">Something went wrong</h2>
+            <p className="text-warm-gray text-sm">{submitError}</p>
+          </div>
+          <Button
+            onClick={() => {
+              setSubmitError(null)
+              setPhase('round2')
+            }}
+            className="bg-torii text-white hover:bg-torii-dark rounded-tenkai gap-2"
+          >
+            Try Again
           </Button>
         </div>
       </div>
@@ -284,9 +323,10 @@ export default function OnboardingPage() {
               </button>
               <Button
                 onClick={handleNext}
+                disabled={isSubmitting}
                 className="bg-torii text-white hover:bg-torii-dark rounded-tenkai gap-1.5"
               >
-                Next
+                {isSubmitting ? 'Submitting…' : phase === 'round2' && step === totalSteps - 1 ? 'Submit' : 'Next'}
                 <ArrowRight className="size-4" />
               </Button>
             </div>

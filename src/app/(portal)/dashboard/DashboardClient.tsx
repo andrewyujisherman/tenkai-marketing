@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { agents } from '@/lib/design-system'
 import { StatCard } from '@/components/portal/StatCard'
 import { ActivityItem } from '@/components/portal/ActivityItem'
@@ -11,80 +11,12 @@ import {
   Target,
   TrendingUp,
 } from 'lucide-react'
-
-const mockStats = [
-  {
-    label: 'Keywords Tracked',
-    value: '47',
-    trend: 'up' as const,
-    trendValue: '+12 this month',
-    icon: <Target className="size-4" />,
-  },
-  {
-    label: 'Content Pipeline',
-    value: '3',
-    trend: 'up' as const,
-    trendValue: 'drafts ready',
-    icon: <FileText className="size-4" />,
-  },
-  {
-    label: 'SEO Score',
-    value: '72/100',
-    trend: 'up' as const,
-    trendValue: '+8 from last month',
-    icon: <Search className="size-4" />,
-  },
-  {
-    label: 'Organic Traffic',
-    value: '2,340',
-    trend: 'up' as const,
-    trendValue: '+15%',
-    icon: <TrendingUp className="size-4" />,
-  },
-]
-
-const mockActivityItems = [
-  {
-    agent: 'Haruki',
-    action: 'Analyzed 47 keywords and found 12 new ranking opportunities for your market',
-    timestamp: '2h ago',
-    needsAction: false,
-  },
-  {
-    agent: 'Sakura',
-    action: 'Drafted a blog post: "5 Local SEO Tips for Utah Businesses"',
-    timestamp: '4h ago',
-    needsAction: true,
-    actionType: 'approve' as const,
-  },
-  {
-    agent: 'Kenji',
-    action: 'Fixed 3 broken internal links on your homepage — site health improved',
-    timestamp: '5h ago',
-    needsAction: false,
-  },
-  {
-    agent: 'Takeshi',
-    action: 'Detected ranking improvement: "plumber near me" moved from #8 to #5',
-    timestamp: '6h ago',
-    needsAction: false,
-  },
-  {
-    agent: 'Sakura',
-    action: 'Prepared a batch of 10 new blog topics for March based on keyword research',
-    timestamp: '8h ago',
-    needsAction: true,
-    actionType: 'review' as const,
-  },
-  {
-    agent: 'Aiko',
-    action: 'Generated your weekly performance summary — organic traffic up 15%',
-    timestamp: 'Yesterday',
-    needsAction: false,
-  },
-]
+import type { ActivityPost, PendingApproval, DashboardStats } from './page'
 
 const agentMap = Object.fromEntries(agents.map((a) => [a.name, a]))
+
+// Fallback agent for unknown agent_name values
+const defaultAgent = { name: 'Tenkai', role: 'AI Agent', icon: '🤖' }
 
 type DateFilter = 'today' | 'week' | 'month'
 
@@ -94,34 +26,218 @@ interface ClientRecord {
   website_url?: string | null
 }
 
-interface Approval {
-  id: string
-  title?: string | null
-  type?: string | null
-  agent_name?: string | null
-  description?: string | null
-}
-
 interface DashboardClientProps {
   client: ClientRecord | null
   userName: string | null
-  pendingApprovals: Approval[]
+  pendingApprovals: PendingApproval[]
+  activityPosts: ActivityPost[]
+  stats: DashboardStats
 }
 
-export default function DashboardClient({ client, userName, pendingApprovals }: DashboardClientProps) {
+function getDateThreshold(filter: DateFilter): Date {
+  const now = new Date()
+  if (filter === 'today') {
+    const d = new Date(now)
+    d.setHours(0, 0, 0, 0)
+    return d
+  }
+  if (filter === 'week') {
+    const d = new Date(now)
+    d.setDate(d.getDate() - 7)
+    return d
+  }
+  // month
+  const d = new Date(now)
+  d.setDate(d.getDate() - 30)
+  return d
+}
+
+function formatTimestamp(isoString: string): string {
+  const date = new Date(isoString)
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
+  const diffDays = Math.floor(diffHours / 24)
+
+  if (diffHours < 1) return 'Just now'
+  if (diffHours < 24) return `${diffHours}h ago`
+  if (diffDays === 1) return 'Yesterday'
+  return `${diffDays}d ago`
+}
+
+function getActivityAction(post: ActivityPost): string {
+  const type = post.content_type ?? 'content'
+  const title = post.title ?? 'Untitled'
+  if (post.status === 'draft' || post.status === 'pending_review') {
+    return `Drafted "${title}" — ready for your review`
+  }
+  if (post.status === 'published') {
+    return `Published "${title}"`
+  }
+  if (post.status === 'approved') {
+    return `"${title}" was approved and queued for publishing`
+  }
+  if (post.status === 'rejected') {
+    return `"${title}" was sent back for revisions`
+  }
+  return `Created ${type}: "${title}"`
+}
+
+export default function DashboardClient({
+  client,
+  userName,
+  pendingApprovals,
+  activityPosts,
+  stats,
+}: DashboardClientProps) {
   const [dateFilter, setDateFilter] = useState<DateFilter>('today')
+  // Track which approvals have been acted on (optimistic UI)
+  const [resolvedApprovals, setResolvedApprovals] = useState<Set<string>>(new Set())
+  // Track which activity posts have been acted on (optimistic UI)
+  const [resolvedPosts, setResolvedPosts] = useState<Set<string>>(new Set())
 
   const displayName = client?.company_name || userName || null
 
-  // Build pending approval cards — fall back to mock if none from DB
-  const approvalCards = pendingApprovals.length > 0 ? pendingApprovals : null
+  // Filter activity posts by date
+  const threshold = getDateThreshold(dateFilter)
+  const filteredPosts = activityPosts.filter(
+    (p) => new Date(p.created_at) >= threshold && !resolvedPosts.has(p.id)
+  )
+
+  const handleApprovePost = useCallback(async (postId: string) => {
+    // Optimistic update
+    setResolvedPosts((prev) => new Set(prev).add(postId))
+    try {
+      const res = await fetch(`/api/content/${postId}/approve`, { method: 'POST' })
+      if (!res.ok) {
+        // Rollback
+        setResolvedPosts((prev) => {
+          const next = new Set(prev)
+          next.delete(postId)
+          return next
+        })
+      }
+    } catch {
+      setResolvedPosts((prev) => {
+        const next = new Set(prev)
+        next.delete(postId)
+        return next
+      })
+    }
+  }, [])
+
+  const handleRejectPost = useCallback(async (postId: string) => {
+    setResolvedPosts((prev) => new Set(prev).add(postId))
+    try {
+      const res = await fetch(`/api/content/${postId}/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: '' }),
+      })
+      if (!res.ok) {
+        setResolvedPosts((prev) => {
+          const next = new Set(prev)
+          next.delete(postId)
+          return next
+        })
+      }
+    } catch {
+      setResolvedPosts((prev) => {
+        const next = new Set(prev)
+        next.delete(postId)
+        return next
+      })
+    }
+  }, [])
+
+  const handleApproveApproval = useCallback(async (approval: PendingApproval) => {
+    const postId = approval.content_post_id
+    if (!postId) return
+    setResolvedApprovals((prev) => new Set(prev).add(approval.id))
+    try {
+      const res = await fetch(`/api/content/${postId}/approve`, { method: 'POST' })
+      if (!res.ok) {
+        setResolvedApprovals((prev) => {
+          const next = new Set(prev)
+          next.delete(approval.id)
+          return next
+        })
+      }
+    } catch {
+      setResolvedApprovals((prev) => {
+        const next = new Set(prev)
+        next.delete(approval.id)
+        return next
+      })
+    }
+  }, [])
+
+  const handleRejectApproval = useCallback(async (approval: PendingApproval) => {
+    const postId = approval.content_post_id
+    if (!postId) return
+    setResolvedApprovals((prev) => new Set(prev).add(approval.id))
+    try {
+      const res = await fetch(`/api/content/${postId}/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: '' }),
+      })
+      if (!res.ok) {
+        setResolvedApprovals((prev) => {
+          const next = new Set(prev)
+          next.delete(approval.id)
+          return next
+        })
+      }
+    } catch {
+      setResolvedApprovals((prev) => {
+        const next = new Set(prev)
+        next.delete(approval.id)
+        return next
+      })
+    }
+  }, [])
+
+  const visibleApprovals = pendingApprovals.filter((a) => !resolvedApprovals.has(a.id))
+
+  // Build stats cards from real data
+  const statsCards = [
+    {
+      label: 'Total Content',
+      value: String(stats.totalContent),
+      trend: 'up' as const,
+      trendValue: `${stats.publishedContent} published`,
+      icon: <FileText className="size-4" />,
+    },
+    {
+      label: 'Pending Approvals',
+      value: String(stats.pendingApprovals),
+      trend: stats.pendingApprovals > 0 ? ('down' as const) : ('up' as const),
+      trendValue: stats.pendingApprovals > 0 ? 'needs review' : 'all clear',
+      icon: <Target className="size-4" />,
+    },
+    {
+      label: 'SEO Audit Score',
+      value: stats.auditScore != null ? `${stats.auditScore}/100` : '—',
+      trend: 'up' as const,
+      trendValue: stats.auditScore != null ? 'latest score' : 'no audit yet',
+      icon: <Search className="size-4" />,
+    },
+    {
+      label: 'Published Content',
+      value: String(stats.publishedContent),
+      trend: 'up' as const,
+      trendValue: 'live pages',
+      icon: <TrendingUp className="size-4" />,
+    },
+  ]
 
   return (
     <div className="max-w-6xl mx-auto space-y-8">
       {/* Quick Stats */}
       <section>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {mockStats.map((stat) => (
+          {statsCards.map((stat) => (
             <StatCard key={stat.label} {...stat} />
           ))}
         </div>
@@ -157,24 +273,32 @@ export default function DashboardClient({ client, userName, pendingApprovals }: 
           </div>
 
           <div className="space-y-3">
-            {mockActivityItems.map((item, i) => {
-              const agent = agentMap[item.agent]
-              return (
-                <ActivityItem
-                  key={i}
-                  agentName={agent.name}
-                  agentIcon={agent.icon}
-                  agentRole={agent.role}
-                  action={item.action}
-                  timestamp={item.timestamp}
-                  needsAction={item.needsAction}
-                  actionType={item.actionType}
-                  onApprove={() => {}}
-                  onDeny={() => {}}
-                  onEdit={() => {}}
-                />
-              )
-            })}
+            {filteredPosts.length === 0 ? (
+              <div className="bg-cream rounded-tenkai border border-tenkai-border p-8 text-center">
+                <p className="text-warm-gray text-sm">No activity for this time period yet.</p>
+              </div>
+            ) : (
+              filteredPosts.map((post) => {
+                const agentName = post.agent_name ?? ''
+                const agent = agentMap[agentName] ?? { ...defaultAgent, name: agentName || 'Agent' }
+                const needsApproval = post.needs_approval
+                return (
+                  <ActivityItem
+                    key={post.id}
+                    agentName={agent.name}
+                    agentIcon={agent.icon}
+                    agentRole={agent.role}
+                    action={getActivityAction(post)}
+                    timestamp={formatTimestamp(post.created_at)}
+                    needsAction={needsApproval}
+                    actionType={needsApproval ? 'approve' : undefined}
+                    onApprove={needsApproval ? () => handleApprovePost(post.id) : undefined}
+                    onDeny={needsApproval ? () => handleRejectPost(post.id) : undefined}
+                    onEdit={needsApproval ? () => {} : undefined}
+                  />
+                )
+              })
+            )}
           </div>
         </section>
 
@@ -186,8 +310,12 @@ export default function DashboardClient({ client, userName, pendingApprovals }: 
           </div>
 
           <div className="space-y-4">
-            {approvalCards ? (
-              approvalCards.map((approval) => (
+            {visibleApprovals.length === 0 ? (
+              <div className="bg-white rounded-tenkai border border-tenkai-border p-6 text-center">
+                <p className="text-warm-gray text-sm">Nothing pending — you&apos;re all caught up.</p>
+              </div>
+            ) : (
+              visibleApprovals.map((approval) => (
                 <div key={approval.id} className="bg-white rounded-tenkai border border-tenkai-border p-5 space-y-4">
                   <div className="flex items-start gap-3">
                     <span className="text-lg">✍️</span>
@@ -206,16 +334,23 @@ export default function DashboardClient({ client, userName, pendingApprovals }: 
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Button className="bg-torii text-white hover:bg-torii-dark flex-1 text-xs h-8 rounded-tenkai">
+                    <Button
+                      onClick={() => handleApproveApproval(approval)}
+                      disabled={!approval.content_post_id}
+                      className="bg-torii text-white hover:bg-torii-dark flex-1 text-xs h-8 rounded-tenkai"
+                    >
                       Approve
                     </Button>
                     <Button
                       variant="outline"
                       className="text-charcoal border-tenkai-border flex-1 text-xs h-8 rounded-tenkai hover:bg-parchment"
+                      onClick={() => {}}
                     >
                       Edit
                     </Button>
                     <Button
+                      onClick={() => handleRejectApproval(approval)}
+                      disabled={!approval.content_post_id}
                       variant="outline"
                       className="text-warm-gray border-tenkai-border text-xs h-8 px-3 rounded-tenkai hover:bg-parchment"
                     >
@@ -224,75 +359,13 @@ export default function DashboardClient({ client, userName, pendingApprovals }: 
                   </div>
                 </div>
               ))
-            ) : (
-              <>
-                {/* Mock: Blog post approval */}
-                <div className="bg-white rounded-tenkai border border-tenkai-border p-5 space-y-4">
-                  <div className="flex items-start gap-3">
-                    <span className="text-lg">✍️</span>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-sm font-semibold text-charcoal leading-snug">
-                        5 Local SEO Tips for Utah Businesses
-                      </h3>
-                      <p className="text-warm-gray text-xs mt-1">Blog post &middot; by Sakura</p>
-                      <p className="text-charcoal/70 text-xs mt-2 leading-relaxed">
-                        1,200 words &middot; EEAT optimized &middot; targets &ldquo;local SEO Utah&rdquo;
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button className="bg-torii text-white hover:bg-torii-dark flex-1 text-xs h-8 rounded-tenkai">
-                      Approve
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="text-charcoal border-tenkai-border flex-1 text-xs h-8 rounded-tenkai hover:bg-parchment"
-                    >
-                      Edit
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="text-warm-gray border-tenkai-border text-xs h-8 px-3 rounded-tenkai hover:bg-parchment"
-                    >
-                      Deny
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Mock: Topic batch approval */}
-                <div className="bg-white rounded-tenkai border border-tenkai-border p-5 space-y-4">
-                  <div className="flex items-start gap-3">
-                    <span className="text-lg">🎯</span>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-sm font-semibold text-charcoal leading-snug">
-                        10 New Blog Topics for March
-                      </h3>
-                      <p className="text-warm-gray text-xs mt-1">Topic batch &middot; by Haruki</p>
-                      <p className="text-charcoal/70 text-xs mt-2 leading-relaxed">
-                        Based on keyword gap analysis &middot; avg. search volume 1.2k/mo
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button className="bg-torii text-white hover:bg-torii-dark flex-1 text-xs h-8 rounded-tenkai">
-                      Approve All
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="text-charcoal border-tenkai-border flex-1 text-xs h-8 rounded-tenkai hover:bg-parchment"
-                    >
-                      Review
-                    </Button>
-                  </div>
-                </div>
-              </>
             )}
 
             {/* Summary note */}
             <div className="bg-parchment/50 rounded-tenkai px-4 py-3 text-center">
               <p className="text-warm-gray text-xs">
                 <span className="font-semibold text-torii">
-                  {approvalCards ? approvalCards.length : 2} item{(approvalCards?.length ?? 2) !== 1 ? 's' : ''}
+                  {visibleApprovals.length} item{visibleApprovals.length !== 1 ? 's' : ''}
                 </span>{' '}
                 waiting for your review
               </p>
