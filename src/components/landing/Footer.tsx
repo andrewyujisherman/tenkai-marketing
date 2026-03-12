@@ -10,26 +10,12 @@ const footerLinks = {
   Product: [
     { label: 'Features', href: '#features' },
     { label: 'Pricing', href: '#pricing' },
-    { label: 'Free Audit', href: '#' },
-    { label: 'Dashboard', href: '/portal' },
+    { label: 'Book a Demo', href: 'https://cal.com/alegius/tenkai-demo', external: true },
   ],
   Company: [
     { label: 'About', href: '#about' },
-    { label: 'Blog', href: '/blog' },
-    { label: 'Careers', href: '/careers' },
-    { label: 'Contact', href: '/contact' },
-  ],
-  Resources: [
-    { label: 'SEO Guide', href: '/guides/seo' },
-    { label: 'EEAT Explained', href: '/guides/eeat' },
-    { label: 'Case Studies', href: '/case-studies' },
-    { label: 'API Docs', href: '/docs' },
-  ],
-  Legal: [
-    { label: 'Privacy Policy', href: '/privacy' },
-    { label: 'Terms of Service', href: '/terms' },
-    { label: 'Cookie Policy', href: '/cookies' },
-    { label: 'Refund Policy', href: '/refunds' },
+    { label: 'Sign Up', href: '/auth/signup' },
+    { label: 'Log In', href: '/auth/login' },
   ],
 }
 
@@ -66,7 +52,17 @@ export function Footer() {
               onChange={(e) => setUrl(e.target.value)}
               className="h-12 px-4 text-base bg-white border-tenkai-border rounded-xl focus-visible:border-torii focus-visible:ring-torii/20"
             />
-            <Button className="bg-torii hover:bg-torii-dark text-white h-12 px-6 text-base font-medium rounded-xl gap-2 shrink-0">
+            <Button
+              className="bg-torii hover:bg-torii-dark text-white h-12 px-6 text-base font-medium rounded-xl gap-2 shrink-0"
+              onClick={() => {
+                const target = url.trim()
+                if (target) {
+                  window.location.href = `/auth/signup?url=${encodeURIComponent(target)}`
+                } else {
+                  window.location.href = '/auth/signup'
+                }
+              }}
+            >
               Get Free Audit
               <ArrowRight className="size-4" />
             </Button>
@@ -87,9 +83,9 @@ export function Footer() {
       {/* Footer links */}
       <div className="border-t border-tenkai-border">
         <div className="w-full max-w-container mx-auto px-6 py-12">
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             {/* Brand column */}
-            <div className="col-span-2 md:col-span-1">
+            <div className="col-span-2 md:col-span-2">
               <Link href="/" className="flex items-center gap-2 mb-4">
                 <span className="text-torii font-serif text-xl font-semibold">
                   天界
@@ -112,12 +108,23 @@ export function Footer() {
                 <ul className="space-y-2.5">
                   {links.map((link) => (
                     <li key={link.label}>
-                      <Link
-                        href={link.href}
-                        className="text-sm text-warm-gray hover:text-charcoal transition-colors"
-                      >
-                        {link.label}
-                      </Link>
+                      {'external' in link && link.external ? (
+                        <a
+                          href={link.href}
+                          target="_blank"
+                          rel="noopener"
+                          className="text-sm text-warm-gray hover:text-charcoal transition-colors"
+                        >
+                          {link.label}
+                        </a>
+                      ) : (
+                        <Link
+                          href={link.href}
+                          className="text-sm text-warm-gray hover:text-charcoal transition-colors"
+                        >
+                          {link.label}
+                        </Link>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -133,16 +140,12 @@ export function Footer() {
               &copy; 2026 Tenkai Marketing. All rights reserved.
             </p>
             <div className="flex items-center gap-4">
-              {/* Social links — placeholder hrefs */}
-              {['Twitter', 'LinkedIn', 'GitHub'].map((social) => (
-                <a
-                  key={social}
-                  href="#"
-                  className="text-xs text-muted-gray hover:text-charcoal transition-colors"
-                >
-                  {social}
-                </a>
-              ))}
+              <a
+                href="mailto:andrew@alegius.com"
+                className="text-xs text-muted-gray hover:text-charcoal transition-colors"
+              >
+                Contact
+              </a>
             </div>
           </div>
         </div>
