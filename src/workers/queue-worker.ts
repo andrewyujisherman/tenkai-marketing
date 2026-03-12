@@ -15,7 +15,7 @@
 //
 // Model routing:
 //   Research tasks  (keyword_research, link_analysis):           gemini-2.5-flash
-//   Customer-facing (site_audit, analytics_audit, content_brief, technical_audit, social_strategy): gemini-2.5-pro
+//   Customer-facing (site_audit, analytics_audit, content_brief, technical_audit): gemini-2.5-pro
 //
 // The worker uses the Supabase service_role key to bypass RLS.
 // ============================================================
@@ -214,7 +214,6 @@ async function processRequest(request: ServiceRequest): Promise<void> {
     keyword_research: `Keyword Research: ${request.target_url ?? 'Website'}`,
     technical_audit: `Technical SEO Audit: ${request.target_url ?? 'Website'}`,
     link_analysis: `Link Profile Analysis: ${request.target_url ?? 'Website'}`,
-    social_strategy: `Social Media Strategy: ${request.target_url ?? 'Business'}`,
   }
 
   const title = titleMap[request.request_type] ?? `${agent.name} Report`
@@ -345,11 +344,6 @@ function generateSummary(requestType: string, content: Record<string, unknown>):
         const profile = content.current_profile as Record<string, unknown> | undefined
         return `Link profile score: ${score ?? 'N/A'}/100. Estimated ${profile?.estimated_referring_domains ?? '?'} referring domains.`
       }
-      case 'social_strategy': {
-        const score = content.social_strategy_score as number | undefined
-        const pillars = content.content_pillars as unknown[] | undefined
-        return `Social strategy score: ${score ?? 'N/A'}/100. ${pillars?.length ?? 0} content pillars defined.`
-      }
       default:
         return 'Report generated.'
     }
@@ -368,7 +362,6 @@ function extractScore(requestType: string, content: Record<string, unknown>): nu
       keyword_research: ['keyword_quality_score', 'quality_score', 'overall_score'],
       technical_audit: ['technical_score'],
       link_analysis: ['link_profile_score'],
-      social_strategy: ['social_strategy_score'],
     }
     const keys = scoreKeys[requestType] ?? []
     for (const key of keys) {

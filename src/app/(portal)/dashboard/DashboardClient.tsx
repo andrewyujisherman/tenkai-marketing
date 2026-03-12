@@ -56,7 +56,6 @@ const SERVICE_TYPES = [
   { key: 'content_brief', label: 'Content Brief', icon: '✍️', description: 'Generate an optimized content brief' },
   { key: 'technical_audit', label: 'Technical Audit', icon: '🔧', description: 'Deep technical health check' },
   { key: 'link_analysis', label: 'Link Analysis', icon: '🔗', description: 'Analyze your backlink profile' },
-  { key: 'social_strategy', label: 'Social Strategy', icon: '📱', description: 'Social media optimization plan' },
   { key: 'analytics_audit', label: 'Analytics Audit', icon: '📊', description: 'Review your analytics setup' },
 ] as const
 

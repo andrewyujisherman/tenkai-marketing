@@ -41,12 +41,6 @@ export const TENKAI_AGENTS = {
     role: 'Link Builder',
     handles: ['link_analysis'],
   },
-  aiko: {
-    name: 'Aiko',
-    kanji: '\u611B\u5B50',
-    role: 'Social Media',
-    handles: ['social_strategy'],
-  },
 } as const
 
 export type AgentId = keyof typeof TENKAI_AGENTS
@@ -58,7 +52,6 @@ export const REQUEST_TYPES = [
   'keyword_research',
   'technical_audit',
   'link_analysis',
-  'social_strategy',
 ] as const
 
 export type RequestType = (typeof REQUEST_TYPES)[number]
@@ -87,7 +80,6 @@ export function getDeliverableType(requestType: string): string {
     keyword_research: 'keyword_list',
     technical_audit: 'technical_report',
     link_analysis: 'link_report',
-    social_strategy: 'social_plan',
   }
   return map[requestType] ?? 'audit_report'
 }

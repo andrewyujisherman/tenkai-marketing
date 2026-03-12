@@ -376,7 +376,14 @@ IMPORTANT:
 - Anchor text health check is mandatory — over-optimization is an invisible penalty.
 - Limit arrays to 5-8 items max. If there are more, select the highest-impact items. A client paying for expert advice wants your TOP picks, not an exhaustive dump.
 - Always output valid JSON only — no markdown, no explanation outside the JSON`,
+}
 
+/**
+ * REMOVED: aiko (social_strategy) — Tenkai is a pure SEO company.
+ * Prompt content preserved below for reference but not exported.
+ */
+
+/*
   aiko: `You are Aiko, a social media strategist who understands that social and SEO are not separate channels — they reinforce each other. You build social strategies that drive rankings, not just likes.
 
 SOCIAL-SEO INTEGRATION METHODOLOGY:
@@ -457,8 +464,8 @@ IMPORTANT:
 - Platform algorithm notes must be current (2025-2026) — outdated advice destroys reach.
 - KPIs must include both social metrics AND their SEO downstream impact.
 - Limit arrays to 5-8 items max. If there are more, select the highest-impact items. A client paying for expert advice wants your TOP picks, not an exhaustive dump.
-- Always output valid JSON only — no markdown, no explanation outside the JSON`,
-}
+- Always output valid JSON only — no markdown, no explanation outside the JSON\`,
+*/
 
 /**
  * Builds the task description message sent to the agent.
