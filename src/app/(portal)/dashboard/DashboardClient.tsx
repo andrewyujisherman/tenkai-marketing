@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { agents } from '@/lib/design-system'
 import { StatCard } from '@/components/portal/StatCard'
 import { ActivityItem } from '@/components/portal/ActivityItem'
@@ -11,6 +11,13 @@ import {
   Target,
   TrendingUp,
 } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
 import type { ActivityPost, PendingApproval, DashboardStats } from './page'
 
 const agentMap = Object.fromEntries(agents.map((a) => [a.name, a]))
@@ -95,6 +102,10 @@ export default function DashboardClient({
   const [resolvedApprovals, setResolvedApprovals] = useState<Set<string>>(new Set())
   // Track which activity posts have been acted on (optimistic UI)
   const [resolvedPosts, setResolvedPosts] = useState<Set<string>>(new Set())
+  // Feedback dialog state
+  const [feedbackTarget, setFeedbackTarget] = useState<{ id: string; title: string } | null>(null)
+  const [feedbackText, setFeedbackText] = useState('')
+  const [feedbackLoading, setFeedbackLoading] = useState(false)
 
   const displayName = client?.company_name || userName || null
 
@@ -198,6 +209,22 @@ export default function DashboardClient({
     }
   }, [])
 
+  const handleFeedbackSubmit = useCallback(async () => {
+    if (!feedbackTarget || !feedbackText.trim()) return
+    setFeedbackLoading(true)
+    try {
+      await fetch(`/api/content/${feedbackTarget.id}/feedback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ feedback: feedbackText.trim() }),
+      })
+    } finally {
+      setFeedbackLoading(false)
+      setFeedbackText('')
+      setFeedbackTarget(null)
+    }
+  }, [feedbackTarget, feedbackText])
+
   const visibleApprovals = pendingApprovals.filter((a) => !resolvedApprovals.has(a.id))
 
   // Build stats cards from real data
@@ -296,7 +323,7 @@ export default function DashboardClient({
                     actionType={needsApproval ? 'approve' : undefined}
                     onApprove={needsApproval ? () => handleApprovePost(post.id) : undefined}
                     onDeny={needsApproval ? () => handleRejectPost(post.id) : undefined}
-                    onEdit={needsApproval ? () => {} : undefined}
+                    onEdit={needsApproval ? () => setFeedbackTarget({ id: post.id, title: post.title ?? 'Untitled' }) : undefined}
                   />
                 )
               })
@@ -346,7 +373,10 @@ export default function DashboardClient({
                     <Button
                       variant="outline"
                       className="text-charcoal border-tenkai-border flex-1 text-xs h-8 rounded-tenkai hover:bg-parchment"
-                      onClick={() => {}}
+                      onClick={() => setFeedbackTarget({
+                        id: approval.content_post_id ?? approval.id,
+                        title: approval.title ?? 'Untitled',
+                      })}
                     >
                       Edit
                     </Button>
@@ -375,6 +405,34 @@ export default function DashboardClient({
           </div>
         </section>
       </div>
+
+      {/* Feedback dialog */}
+      <Dialog open={feedbackTarget !== null} onOpenChange={(o) => { if (!o) { setFeedbackTarget(null); setFeedbackText('') } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-serif text-charcoal">
+              Request Changes: {feedbackTarget?.title}
+            </DialogTitle>
+          </DialogHeader>
+          <textarea
+            value={feedbackText}
+            onChange={(e) => setFeedbackText(e.target.value)}
+            placeholder="Describe what you'd like changed..."
+            rows={4}
+            className="w-full px-4 py-3 text-sm border border-tenkai-border rounded-tenkai bg-transparent outline-none resize-none focus:border-torii focus:ring-2 focus:ring-torii/20 placeholder:text-muted-gray"
+            autoFocus
+          />
+          <DialogFooter showCloseButton>
+            <Button
+              onClick={handleFeedbackSubmit}
+              disabled={feedbackLoading || !feedbackText.trim()}
+              className="bg-torii text-white hover:bg-torii-dark rounded-tenkai"
+            >
+              {feedbackLoading ? 'Sending…' : 'Send Feedback'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

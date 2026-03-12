@@ -10,7 +10,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { onboarding_data } = await request.json()
+  const body = await request.json()
+  const onboarding_data = body.onboarding_data ?? body.answers
 
   // Try auth_user_id first, fall back to email
   let client = null
