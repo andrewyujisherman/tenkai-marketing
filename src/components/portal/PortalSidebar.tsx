@@ -13,6 +13,7 @@ import {
   Menu,
   ChevronDown,
   Shield,
+  Link2,
 } from 'lucide-react'
 import {
   Sheet,
@@ -26,6 +27,7 @@ const navItems = [
   { label: 'Content', href: '/content', icon: FileText },
   { label: 'Audit Results', href: '/audit', icon: Search },
   { label: 'Reports', href: '/reports', icon: BarChart3 },
+  { label: 'Integrations', href: '/integrations', icon: Link2 },
   { label: 'Settings', href: '/settings', icon: Settings },
 ]
 
