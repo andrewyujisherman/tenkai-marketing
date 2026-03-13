@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { createServerClient } from '@/lib/supabase'
 import { isDemoMode, DEMO_CLIENT_ID } from '@/lib/demo'
+import { buildClientContextForm } from '@/lib/client-context'
 
 export interface Integration {
   type: string
@@ -50,8 +51,8 @@ const INTEGRATION_DEFINITIONS: Omit<Integration, 'status'>[] = [
   },
   {
     type: 'competitors',
-    display_name: 'Competitor URLs',
-    description: 'Top competitors for gap analysis',
+    display_name: 'Competitors',
+    description: 'Key competitors for market and gap analysis',
     required: false,
     icon: 'users',
   },
@@ -72,7 +73,7 @@ const INTEGRATION_DEFINITIONS: Omit<Integration, 'status'>[] = [
   {
     type: 'business_info',
     display_name: 'Business Information',
-    description: 'Business name, location, industry, target audience',
+    description: 'Business basics, services, differentiators, goals, and notes',
     required: true,
     icon: 'building',
   },
@@ -108,13 +109,13 @@ export async function GET(req: NextRequest) {
   // Fetch existing integrations
   const { data: existing } = await supabaseAdmin
     .from('client_integrations')
-    .select('integration_type, status')
+    .select('integration_type, status, metadata, credentials')
     .eq('client_id', clientId)
 
   // Also check client record for website_access and business_info
   const { data: clientRecord } = await supabaseAdmin
     .from('clients')
-    .select('website_url, company_name, name')
+    .select('website_url, company_name, name, onboarding_data')
     .eq('id', clientId)
     .single()
 
@@ -140,5 +141,14 @@ export async function GET(req: NextRequest) {
   const total = integrations.length
   const completion_percentage = Math.round((connected / total) * 100)
 
-  return NextResponse.json({ integrations, completion_percentage, client_id: clientId })
+  const form = buildClientContextForm(
+    clientRecord,
+    (existing ?? []) as Array<{
+      integration_type: string
+      metadata?: Record<string, unknown> | null
+      credentials?: Record<string, unknown> | null
+    }>
+  )
+
+  return NextResponse.json({ integrations, completion_percentage, client_id: clientId, form })
 }

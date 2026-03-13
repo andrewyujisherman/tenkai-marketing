@@ -12,8 +12,8 @@ import {
 } from '@/components/ui/dialog'
 import { TopicCard, type TopicCardProps } from '@/components/portal/TopicCard'
 import { DraftCard, type DraftCardProps } from '@/components/portal/DraftCard'
-import { CheckCircle2, FileText, Globe, Lightbulb, Clock } from 'lucide-react'
-import type { ContentDeliverable } from './page'
+import { CheckCircle2, FileText, Globe, Lightbulb, Clock, CalendarDays, HeartPulse, ChevronDown, ChevronUp } from 'lucide-react'
+import type { ContentDeliverable, PlanningDeliverable, HealthDeliverable } from './page'
 
 interface FeedbackDialogProps {
   open: boolean
@@ -72,9 +72,196 @@ interface ContentClientProps {
   initialDrafts: DraftItem[]
   publishedPosts: PublishedItem[]
   contentDeliverables: ContentDeliverable[]
+  planningDeliverables: PlanningDeliverable[]
+  healthDeliverables: HealthDeliverable[]
 }
 
-export default function ContentClient({ initialTopics, initialDrafts, publishedPosts, contentDeliverables }: ContentClientProps) {
+/* ─── Helper: safely parse content JSON ─────────────────── */
+function parseContent(content: Record<string, unknown> | string | null | undefined): Record<string, unknown> | null {
+  if (!content) return null
+  if (typeof content === 'object') return content as Record<string, unknown>
+  try { return JSON.parse(content) } catch { return null }
+}
+
+/* ─── Severity color helper ─────────────────────────────── */
+function severityColor(change: number): string {
+  if (change >= 0) return 'text-[#4A7C59] bg-[#4A7C59]/10'
+  if (change > -30) return 'text-[#C49A3C] bg-[#C49A3C]/10'
+  return 'text-torii bg-torii/10'
+}
+
+function severityLabel(change: number): string {
+  if (change >= 0) return 'Healthy'
+  if (change > -30) return 'Declining'
+  return 'Critical'
+}
+
+/* ─── Content Health Tab Component ──────────────────────── */
+function ContentHealthTab({ healthDeliverables }: { healthDeliverables: HealthDeliverable[] }) {
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
+
+  const toggleRow = (id: string) => {
+    setExpandedRows((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  if (healthDeliverables.length === 0) {
+    return (
+      <div className="space-y-4">
+        <div>
+          <h2 className="font-serif text-lg font-medium text-charcoal">Content Health</h2>
+          <p className="text-sm text-warm-gray mt-0.5">
+            Monitor content freshness, traffic decay, and optimization opportunities
+          </p>
+        </div>
+        <div className="rounded-tenkai border border-tenkai-border bg-parchment/30 py-16 text-center">
+          <HeartPulse className="size-8 text-muted-gray mx-auto mb-3" />
+          <p className="font-serif text-base font-medium text-charcoal mb-1">No content health checks yet</p>
+          <p className="text-sm text-warm-gray max-w-sm mx-auto">
+            Request a Content Freshness audit from your Dashboard.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  // Try to extract structured decay data from all reports
+  const decayRows: Array<{
+    id: string
+    url: string
+    traffic: number
+    change: number
+    severity: string
+    action: string
+    recommendation: string
+    reportTitle: string
+  }> = []
+
+  healthDeliverables.forEach((d) => {
+    const parsed = parseContent(d.content)
+    if (parsed && Array.isArray(parsed.pages)) {
+      (parsed.pages as Array<Record<string, unknown>>).forEach((page, i) => {
+        decayRows.push({
+          id: `${d.id}-${i}`,
+          url: String(page.url ?? page.page ?? '—'),
+          traffic: Number(page.traffic ?? page.sessions ?? 0),
+          change: Number(page.change ?? page.change_percent ?? 0),
+          severity: String(page.severity ?? ''),
+          action: String(page.action ?? page.recommendation ?? '—'),
+          recommendation: String(page.details ?? page.full_recommendation ?? page.action ?? ''),
+          reportTitle: d.title ?? 'Decay Report',
+        })
+      })
+    }
+  })
+
+  // If we have structured data, render as table
+  if (decayRows.length > 0) {
+    return (
+      <div className="space-y-4">
+        <div>
+          <h2 className="font-serif text-lg font-medium text-charcoal">Content Health</h2>
+          <p className="text-sm text-warm-gray mt-0.5">
+            Pages with declining traffic or freshness issues
+          </p>
+        </div>
+        <div className="rounded-tenkai border border-tenkai-border bg-white overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-tenkai-border bg-parchment/50">
+                <th className="text-left py-3 px-4 font-medium text-warm-gray w-8" />
+                <th className="text-left py-3 px-4 font-medium text-warm-gray">Page URL</th>
+                <th className="text-right py-3 px-4 font-medium text-warm-gray hidden sm:table-cell">Traffic</th>
+                <th className="text-right py-3 px-4 font-medium text-warm-gray">Change (%)</th>
+                <th className="text-right py-3 px-4 font-medium text-warm-gray hidden md:table-cell">Severity</th>
+                <th className="text-left py-3 px-4 font-medium text-warm-gray hidden lg:table-cell">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {decayRows.map((row) => {
+                const isExpanded = expandedRows.has(row.id)
+                return (
+                  <tr key={row.id} className="border-b border-tenkai-border-light last:border-none group">
+                    <td className="py-3 px-4">
+                      <button onClick={() => toggleRow(row.id)} className="text-warm-gray hover:text-charcoal transition-colors">
+                        {isExpanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+                      </button>
+                    </td>
+                    <td className="py-3 px-4 font-medium text-charcoal max-w-xs truncate">{row.url}</td>
+                    <td className="py-3 px-4 text-right text-charcoal tabular-nums hidden sm:table-cell">
+                      {row.traffic.toLocaleString()}
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${severityColor(row.change)}`}>
+                        {row.change >= 0 ? '+' : ''}{row.change}%
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-right hidden md:table-cell">
+                      <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${severityColor(row.change)}`}>
+                        {row.severity || severityLabel(row.change)}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-warm-gray hidden lg:table-cell max-w-xs truncate">{row.action}</td>
+                    {isExpanded && (
+                      <td colSpan={6} className="px-4 pb-4">
+                        <div className="bg-parchment/50 rounded-tenkai p-4 mt-2">
+                          <p className="text-sm text-charcoal font-medium mb-1">Full Recommendation</p>
+                          <p className="text-sm text-warm-gray leading-relaxed">{row.recommendation}</p>
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    )
+  }
+
+  // Fallback: card display for non-structured data
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="font-serif text-lg font-medium text-charcoal">Content Health</h2>
+        <p className="text-sm text-warm-gray mt-0.5">
+          Content decay reports and freshness analysis
+        </p>
+      </div>
+      <div className="space-y-3">
+        {healthDeliverables.map((d) => (
+          <div key={d.id} className="bg-white rounded-tenkai border border-tenkai-border p-6">
+            <div className="flex items-center gap-2 mb-2">
+              <HeartPulse className="size-4 text-torii" />
+              <span className="font-medium text-charcoal">{d.title ?? 'Decay Report'}</span>
+              {d.score != null && (
+                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                  d.score >= 80 ? 'bg-[#4A7C59]/10 text-[#4A7C59]' : d.score >= 50 ? 'bg-[#C49A3C]/10 text-[#C49A3C]' : 'bg-torii/10 text-torii'
+                }`}>
+                  Score: {d.score}/100
+                </span>
+              )}
+            </div>
+            {d.summary && <p className="text-sm text-warm-gray leading-relaxed">{d.summary}</p>}
+            <div className="flex items-center gap-3 mt-3 pt-3 border-t border-tenkai-border-light">
+              {d.agent_name && <span className="text-xs text-muted-gray">By {d.agent_name}</span>}
+              <span className="text-xs text-muted-gray">
+                {new Date(d.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+export default function ContentClient({ initialTopics, initialDrafts, publishedPosts, contentDeliverables, planningDeliverables, healthDeliverables }: ContentClientProps) {
   const [topics, setTopics] = useState(initialTopics)
   const [drafts, setDrafts] = useState(initialDrafts)
   const [topicFeedbackId, setTopicFeedbackId] = useState<string | null>(null)
@@ -156,6 +343,24 @@ export default function ContentClient({ initialTopics, initialDrafts, publishedP
             {contentDeliverables.length > 0 && (
               <span className="ml-1 rounded-full bg-[#5B7B9A]/10 px-1.5 py-0.5 text-[10px] font-semibold text-[#5B7B9A]">
                 {contentDeliverables.length}
+              </span>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="planning" className="gap-1.5">
+            <CalendarDays className="size-3.5" />
+            Planning
+            {planningDeliverables.length > 0 && (
+              <span className="ml-1 rounded-full bg-[#5B7B9A]/10 px-1.5 py-0.5 text-[10px] font-semibold text-[#5B7B9A]">
+                {planningDeliverables.length}
+              </span>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="health" className="gap-1.5">
+            <HeartPulse className="size-3.5" />
+            Content Health
+            {healthDeliverables.length > 0 && (
+              <span className="ml-1 rounded-full bg-[#5B7B9A]/10 px-1.5 py-0.5 text-[10px] font-semibold text-[#5B7B9A]">
+                {healthDeliverables.length}
               </span>
             )}
           </TabsTrigger>
@@ -397,6 +602,134 @@ export default function ContentClient({ initialTopics, initialDrafts, publishedP
               </div>
             )}
           </div>
+        </TabsContent>
+
+        {/* ─── Planning Tab ──────────────────────────────────────── */}
+        <TabsContent value="planning">
+          <div className="space-y-6">
+            <div>
+              <h2 className="font-serif text-lg font-medium text-charcoal">Content Planning</h2>
+              <p className="text-sm text-warm-gray mt-0.5">
+                Content calendars, topic strategies, and cluster maps from your Tenkai team
+              </p>
+            </div>
+
+            {planningDeliverables.length === 0 ? (
+              <div className="rounded-tenkai border border-tenkai-border bg-parchment/30 py-16 text-center">
+                <CalendarDays className="size-8 text-muted-gray mx-auto mb-3" />
+                <p className="font-serif text-base font-medium text-charcoal mb-1">No content plans yet</p>
+                <p className="text-sm text-warm-gray max-w-sm mx-auto">
+                  Request a Content Calendar or Topic Strategy Map from your Dashboard.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-8">
+                {/* Content Plans — timeline/list view */}
+                {(() => {
+                  const plans = planningDeliverables.filter((d) => d.deliverable_type === 'content_plan')
+                  if (plans.length === 0) return null
+                  return (
+                    <div className="space-y-3">
+                      <h3 className="font-serif text-base font-medium text-charcoal">Content Calendar</h3>
+                      <div className="rounded-tenkai border border-tenkai-border bg-white overflow-hidden">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-tenkai-border bg-parchment/50">
+                              <th className="text-left py-3 px-4 font-medium text-warm-gray">Date</th>
+                              <th className="text-left py-3 px-4 font-medium text-warm-gray">Title</th>
+                              <th className="text-left py-3 px-4 font-medium text-warm-gray hidden sm:table-cell">Target Keyword</th>
+                              <th className="text-right py-3 px-4 font-medium text-warm-gray">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {plans.map((plan) => {
+                              const parsed = parseContent(plan.content)
+                              const keyword = parsed?.target_keyword as string ?? parsed?.keyword as string ?? '—'
+                              return (
+                                <tr key={plan.id} className="border-b border-tenkai-border-light last:border-none hover:bg-parchment/30 transition-colors">
+                                  <td className="py-3 px-4 text-warm-gray whitespace-nowrap">
+                                    {new Date(plan.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                  </td>
+                                  <td className="py-3 px-4 font-medium text-charcoal">{plan.title ?? 'Untitled'}</td>
+                                  <td className="py-3 px-4 text-warm-gray hidden sm:table-cell">{keyword}</td>
+                                  <td className="py-3 px-4 text-right">
+                                    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+                                      plan.status === 'completed'
+                                        ? 'bg-[#4A7C59]/10 text-[#4A7C59]'
+                                        : plan.status === 'in_progress'
+                                          ? 'bg-[#C49A3C]/10 text-[#C49A3C]'
+                                          : 'bg-parchment text-charcoal'
+                                    }`}>
+                                      {(plan.status ?? 'pending').replace(/_/g, ' ')}
+                                    </span>
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )
+                })()}
+
+                {/* Cluster Maps — card grid */}
+                {(() => {
+                  const clusters = planningDeliverables.filter((d) => d.deliverable_type === 'cluster_map')
+                  if (clusters.length === 0) return null
+                  return (
+                    <div className="space-y-3">
+                      <h3 className="font-serif text-base font-medium text-charcoal">Topic Clusters</h3>
+                      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        {clusters.map((cluster) => {
+                          const parsed = parseContent(cluster.content)
+                          const pillar = parsed?.pillar_topic as string ?? parsed?.pillar as string ?? cluster.title ?? 'Untitled'
+                          const supporting = Array.isArray(parsed?.supporting_topics) ? parsed.supporting_topics as string[] : []
+                          return (
+                            <div key={cluster.id} className="bg-white rounded-tenkai border border-tenkai-border p-6">
+                              <div className="flex items-center gap-2 mb-3">
+                                <span className="size-2 rounded-full bg-torii shrink-0" />
+                                <h4 className="font-serif text-base font-medium text-charcoal">{pillar}</h4>
+                              </div>
+                              {cluster.summary && (
+                                <p className="text-sm text-warm-gray mb-3">{cluster.summary}</p>
+                              )}
+                              {supporting.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5">
+                                  {supporting.map((topic, i) => (
+                                    <span key={i} className="rounded-full bg-parchment px-2.5 py-1 text-xs text-charcoal">
+                                      {String(topic)}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                              <div className="flex items-center gap-3 mt-3 pt-3 border-t border-tenkai-border-light">
+                                {cluster.score != null && (
+                                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                                    cluster.score >= 80 ? 'bg-[#4A7C59]/10 text-[#4A7C59]' : cluster.score >= 50 ? 'bg-[#C49A3C]/10 text-[#C49A3C]' : 'bg-torii/10 text-torii'
+                                  }`}>
+                                    Score: {cluster.score}/100
+                                  </span>
+                                )}
+                                <span className="text-xs text-muted-gray">
+                                  {new Date(cluster.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                </span>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })()}
+              </div>
+            )}
+          </div>
+        </TabsContent>
+
+        {/* ─── Content Health Tab ────────────────────────────────── */}
+        <TabsContent value="health">
+          <ContentHealthTab healthDeliverables={healthDeliverables} />
         </TabsContent>
       </Tabs>
 

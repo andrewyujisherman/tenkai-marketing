@@ -5,7 +5,9 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { EMPTY_CLIENT_CONTEXT_FORM } from '@/lib/client-context'
 import {
   CreditCard,
   Check,
@@ -65,9 +67,7 @@ function ProfileTab() {
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
 
-  const [companyName, setCompanyName] = useState('')
-  const [website, setWebsite] = useState('')
-  const [industry, setIndustry] = useState('')
+  const [context, setContext] = useState(EMPTY_CLIENT_CONTEXT_FORM)
   const [email, setEmail] = useState('')
 
   useEffect(() => {
@@ -75,15 +75,17 @@ function ProfileTab() {
       .then((r) => r.json())
       .then((data) => {
         if (data.client) {
-          setCompanyName(data.client.company_name || '')
-          setWebsite(data.client.website_url || '')
-          setIndustry(data.client.onboarding_data?.industry || data.client.industry || '')
+          setContext({ ...EMPTY_CLIENT_CONTEXT_FORM, ...(data.context ?? {}) })
         }
         if (data.email) setEmail(data.email)
       })
       .catch(() => setError('Failed to load profile'))
       .finally(() => setLoading(false))
   }, [])
+
+  function setField<K extends keyof typeof context>(key: K, value: (typeof context)[K]) {
+    setContext((prev) => ({ ...prev, [key]: value }))
+  }
 
   async function handleSave() {
     setSaving(true)
@@ -92,11 +94,7 @@ function ProfileTab() {
       const res = await fetch('/api/portal/profile', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          company_name: companyName,
-          website_url: website,
-          industry,
-        }),
+        body: JSON.stringify(context),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Save failed')
@@ -133,24 +131,129 @@ function ProfileTab() {
       <div className="space-y-4">
         <FormField label="Business Name">
           <Input
-            value={companyName}
-            onChange={(e) => setCompanyName((e.target as HTMLInputElement).value)}
+            value={context.business_name}
+            onChange={(e) => setField('business_name', (e.target as HTMLInputElement).value)}
             className="border-tenkai-border rounded-tenkai focus-visible:border-torii focus-visible:ring-torii/20"
           />
         </FormField>
         <FormField label="Website URL">
           <Input
-            value={website}
-            onChange={(e) => setWebsite((e.target as HTMLInputElement).value)}
+            value={context.website_url}
+            onChange={(e) => setField('website_url', (e.target as HTMLInputElement).value)}
             className="border-tenkai-border rounded-tenkai focus-visible:border-torii focus-visible:ring-torii/20"
           />
         </FormField>
         <FormField label="Industry">
           <Input
-            value={industry}
-            onChange={(e) => setIndustry((e.target as HTMLInputElement).value)}
+            value={context.business_industry}
+            onChange={(e) => setField('business_industry', (e.target as HTMLInputElement).value)}
             className="border-tenkai-border rounded-tenkai focus-visible:border-torii focus-visible:ring-torii/20"
             placeholder="e.g. Home Services / Plumbing"
+          />
+        </FormField>
+        <FormField label="Primary Location">
+          <Input
+            value={context.business_location}
+            onChange={(e) => setField('business_location', (e.target as HTMLInputElement).value)}
+            className="border-tenkai-border rounded-tenkai focus-visible:border-torii focus-visible:ring-torii/20"
+            placeholder="e.g. Austin, TX"
+          />
+        </FormField>
+        <FormField label="Target Audience">
+          <Input
+            value={context.business_target_audience}
+            onChange={(e) => setField('business_target_audience', (e.target as HTMLInputElement).value)}
+            className="border-tenkai-border rounded-tenkai focus-visible:border-torii focus-visible:ring-torii/20"
+            placeholder="e.g. Homeowners in Central Texas"
+          />
+        </FormField>
+        <FormField label="Years in Business">
+          <Input
+            value={context.years_in_business}
+            onChange={(e) => setField('years_in_business', (e.target as HTMLInputElement).value)}
+            className="border-tenkai-border rounded-tenkai focus-visible:border-torii focus-visible:ring-torii/20"
+            placeholder="e.g. Since 2014"
+          />
+        </FormField>
+        <FormField label="Services">
+          <Textarea
+            value={context.services}
+            onChange={(e) => setField('services', e.target.value)}
+            rows={4}
+            className="border-tenkai-border rounded-tenkai resize-none focus-visible:border-torii focus-visible:ring-torii/20"
+            placeholder="One service per line"
+          />
+        </FormField>
+        <FormField label="Service Areas">
+          <Textarea
+            value={context.service_areas}
+            onChange={(e) => setField('service_areas', e.target.value)}
+            rows={3}
+            className="border-tenkai-border rounded-tenkai resize-none focus-visible:border-torii focus-visible:ring-torii/20"
+            placeholder="Cities, metros, or neighborhoods you serve"
+          />
+        </FormField>
+        <FormField label="What Makes You Different">
+          <Textarea
+            value={context.differentiators}
+            onChange={(e) => setField('differentiators', e.target.value)}
+            rows={3}
+            className="border-tenkai-border rounded-tenkai resize-none focus-visible:border-torii focus-visible:ring-torii/20"
+            placeholder="Guarantees, expertise, positioning, trust signals"
+          />
+        </FormField>
+        <FormField label="Business Goals">
+          <Textarea
+            value={context.business_goals}
+            onChange={(e) => setField('business_goals', e.target.value)}
+            rows={3}
+            className="border-tenkai-border rounded-tenkai resize-none focus-visible:border-torii focus-visible:ring-torii/20"
+            placeholder="Revenue, lead volume, geographic expansion, service-line growth"
+          />
+        </FormField>
+        <FormField label="Target Keywords">
+          <Textarea
+            value={context.target_keywords}
+            onChange={(e) => setField('target_keywords', e.target.value)}
+            rows={4}
+            className="border-tenkai-border rounded-tenkai resize-none focus-visible:border-torii focus-visible:ring-torii/20"
+            placeholder="One keyword per line"
+          />
+        </FormField>
+        <FormField label="Competitors">
+          <Textarea
+            value={context.competitors}
+            onChange={(e) => setField('competitors', e.target.value)}
+            rows={4}
+            className="border-tenkai-border rounded-tenkai resize-none focus-visible:border-torii focus-visible:ring-torii/20"
+            placeholder="Competitor domains or business names, one per line"
+          />
+        </FormField>
+        <FormField label="Brand Voice and Guidelines">
+          <Textarea
+            value={context.brand_guidelines}
+            onChange={(e) => setField('brand_guidelines', e.target.value)}
+            rows={4}
+            className="border-tenkai-border rounded-tenkai resize-none focus-visible:border-torii focus-visible:ring-torii/20"
+            placeholder="Tone, messaging rules, claims to avoid, compliance notes"
+          />
+        </FormField>
+        <FormField label="Proof Points">
+          <Textarea
+            value={context.proof_points}
+            onChange={(e) => setField('proof_points', e.target.value)}
+            rows={3}
+            className="border-tenkai-border rounded-tenkai resize-none focus-visible:border-torii focus-visible:ring-torii/20"
+            placeholder="Testimonials, review highlights, case-study outcomes"
+          />
+        </FormField>
+        <FormField label="Notes for the Tenkai Team">
+          <Textarea
+            value={context.notes}
+            onChange={(e) => setField('notes', e.target.value)}
+            rows={4}
+            className="border-tenkai-border rounded-tenkai resize-none focus-visible:border-torii focus-visible:ring-torii/20"
+            placeholder="Context, constraints, seasonality, internal notes, campaign guidance"
           />
         </FormField>
         <FormField label="Contact Email">

@@ -45,7 +45,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Protected routes — redirect to login if not authenticated (demo mode bypasses)
-  const protectedPaths = ['/dashboard', '/content', '/audit', '/reports', '/settings', '/onboarding']
+  const protectedPaths = ['/dashboard', '/content', '/audit', '/health', '/reports', '/settings', '/onboarding']
   const isProtected = protectedPaths.some(path => request.nextUrl.pathname.startsWith(path))
   const isDemo = request.cookies.get('demo_mode')?.value === 'true'
 
@@ -67,5 +67,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/content/:path*', '/audit/:path*', '/reports/:path*', '/settings/:path*', '/onboarding/:path*', '/auth/:path*', '/admin/:path*'],
+  matcher: ['/dashboard/:path*', '/content/:path*', '/audit/:path*', '/health/:path*', '/reports/:path*', '/settings/:path*', '/onboarding/:path*', '/auth/:path*', '/admin/:path*'],
 }

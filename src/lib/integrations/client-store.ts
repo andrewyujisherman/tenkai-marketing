@@ -71,3 +71,16 @@ export async function upsertClientIntegration(
     throw error
   }
 }
+
+export async function deleteClientIntegration(clientId: string, type: string): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from('client_integrations')
+    .delete()
+    .eq('client_id', clientId)
+    .eq('integration_type', type)
+
+  if (error) {
+    console.error('[client-store] deleteClientIntegration error:', error)
+    throw error
+  }
+}

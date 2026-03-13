@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { isDemoMode, DEMO_CLIENT_ID } from '@/lib/demo'
+import { getClientContext, saveClientContext } from '@/lib/client-context-store'
+import type { ClientContextForm } from '@/lib/client-context'
 
 async function findClientForUser(userId: string, email: string) {
   // Try auth_user_id first (after migration)
@@ -32,7 +34,8 @@ export async function GET() {
       .select('*')
       .eq('id', DEMO_CLIENT_ID)
       .single()
-    return NextResponse.json({ client, email: client?.email ?? 'sarah@premierplumbing.com' })
+    const { form: context } = await getClientContext(DEMO_CLIENT_ID)
+    return NextResponse.json({ client, context, email: client?.email ?? 'sarah@premierplumbing.com' })
   }
 
   const supabase = await createServerClient()
@@ -44,7 +47,13 @@ export async function GET() {
 
   const client = await findClientForUser(user.id, user.email ?? '')
 
-  return NextResponse.json({ client, email: user.email })
+  if (!client) {
+    return NextResponse.json({ error: 'Client not found' }, { status: 404 })
+  }
+
+  const { form: context } = await getClientContext(client.id)
+
+  return NextResponse.json({ client, context, email: user.email })
 }
 
 export async function PATCH(request: Request) {
@@ -63,29 +72,13 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const allowed = ['name', 'company_name', 'website_url']
-  const safeUpdates: Record<string, string> = {}
-  for (const key of allowed) {
-    if (body[key] !== undefined) safeUpdates[key] = body[key]
-  }
-
   const client = await findClientForUser(user.id, user.email ?? '')
   if (!client) {
     return NextResponse.json({ error: 'Client not found' }, { status: 404 })
   }
 
-  // Handle industry separately — stored in onboarding_data JSON
-  if (body.industry !== undefined) {
-    const existingData = client.onboarding_data ?? {}
-    safeUpdates.onboarding_data = { ...existingData, industry: body.industry }
-  }
-
-  const { error } = await supabaseAdmin
-    .from('clients')
-    .update(safeUpdates)
-    .eq('id', client.id)
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  const form = body as ClientContextForm
+  await saveClientContext(client.id, form, client.onboarding_data)
 
   return NextResponse.json({ success: true })
 }

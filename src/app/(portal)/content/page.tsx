@@ -18,6 +18,31 @@ export interface ContentDeliverable {
   score: number | null
   status: string | null
   created_at: string
+  content?: Record<string, unknown> | string | null
+}
+
+export interface PlanningDeliverable {
+  id: string
+  agent_name: string | null
+  deliverable_type: string | null
+  title: string | null
+  summary: string | null
+  score: number | null
+  status: string | null
+  content: Record<string, unknown> | string | null
+  created_at: string
+}
+
+export interface HealthDeliverable {
+  id: string
+  agent_name: string | null
+  deliverable_type: string | null
+  title: string | null
+  summary: string | null
+  score: number | null
+  status: string | null
+  content: Record<string, unknown> | string | null
+  created_at: string
 }
 
 async function getClientId(userId: string, email: string): Promise<string | null> {
@@ -63,7 +88,7 @@ export default async function ContentPage() {
     }
   }
 
-  const [topicsRes, draftsRes, publishedRes, contentDeliverablesRes] = await Promise.all([
+  const [topicsRes, draftsRes, publishedRes, contentDeliverablesRes, planningRes, healthRes] = await Promise.all([
     supabaseAdmin
       .from('content_posts')
       .select('id, title, keywords, created_at')
@@ -87,6 +112,20 @@ export default async function ContentPage() {
       .select('id, agent_name, deliverable_type, title, summary, score, status, created_at')
       .eq('client_id', clientId)
       .in('deliverable_type', ['content_draft', 'keyword_list'])
+      .order('created_at', { ascending: false })
+      .limit(20),
+    supabaseAdmin
+      .from('deliverables')
+      .select('id, agent_name, deliverable_type, title, summary, score, status, content, created_at')
+      .eq('client_id', clientId)
+      .in('deliverable_type', ['content_plan', 'cluster_map'])
+      .order('created_at', { ascending: false })
+      .limit(20),
+    supabaseAdmin
+      .from('deliverables')
+      .select('id, agent_name, deliverable_type, title, summary, score, status, content, created_at')
+      .eq('client_id', clientId)
+      .in('deliverable_type', ['decay_report'])
       .order('created_at', { ascending: false })
       .limit(20),
   ])
@@ -137,12 +176,38 @@ export default async function ContentPage() {
     created_at: d.created_at,
   }))
 
+  const planningDeliverables: PlanningDeliverable[] = (planningRes.data ?? []).map((d) => ({
+    id: d.id,
+    agent_name: d.agent_name ?? null,
+    deliverable_type: d.deliverable_type ?? null,
+    title: d.title ?? null,
+    summary: d.summary ?? null,
+    score: d.score ?? null,
+    status: d.status ?? null,
+    content: (d.content as Record<string, unknown> | string) ?? null,
+    created_at: d.created_at,
+  }))
+
+  const healthDeliverables: HealthDeliverable[] = (healthRes.data ?? []).map((d) => ({
+    id: d.id,
+    agent_name: d.agent_name ?? null,
+    deliverable_type: d.deliverable_type ?? null,
+    title: d.title ?? null,
+    summary: d.summary ?? null,
+    score: d.score ?? null,
+    status: d.status ?? null,
+    content: (d.content as Record<string, unknown> | string) ?? null,
+    created_at: d.created_at,
+  }))
+
   return (
     <ContentClient
       initialTopics={topics}
       initialDrafts={drafts}
       publishedPosts={published}
       contentDeliverables={contentDeliverables}
+      planningDeliverables={planningDeliverables}
+      healthDeliverables={healthDeliverables}
     />
   )
 }

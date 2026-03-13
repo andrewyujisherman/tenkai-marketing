@@ -1,7 +1,7 @@
 import { createServerClient } from '@/lib/supabase'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { isDemoMode, DEMO_CLIENT_ID } from '@/lib/demo'
-import ReportsClient, { type ReportData } from './ReportsClient'
+import ReportsClient, { type ReportData, type ReportDeliverable } from './ReportsClient'
 
 export default async function ReportsPage() {
   const supabase = await createServerClient()
@@ -35,11 +35,42 @@ export default async function ReportsPage() {
 
   const db = demo ? supabaseAdmin : supabase
 
-  const { data: rows } = await db
-    .from('reports')
-    .select('id, type, period_start, period_end, metrics, insights, agent_commentary, created_at')
-    .eq('client_id', clientId)
-    .order('period_end', { ascending: false })
+  const [
+    { data: rows },
+    { data: keywordRows },
+    { data: competitorRows },
+    { data: analyticsRows },
+    { data: aiRows },
+  ] = await Promise.all([
+    db.from('reports')
+      .select('id, type, period_start, period_end, metrics, insights, agent_commentary, created_at')
+      .eq('client_id', clientId)
+      .order('period_end', { ascending: false }),
+    db.from('deliverables')
+      .select('id, agent_name, deliverable_type, title, summary, score, status, content, created_at')
+      .eq('client_id', clientId)
+      .in('deliverable_type', ['keyword_list'])
+      .order('created_at', { ascending: false })
+      .limit(20),
+    db.from('deliverables')
+      .select('id, agent_name, deliverable_type, title, summary, score, status, content, created_at')
+      .eq('client_id', clientId)
+      .in('deliverable_type', ['competitive_report'])
+      .order('created_at', { ascending: false })
+      .limit(20),
+    db.from('deliverables')
+      .select('id, agent_name, deliverable_type, title, summary, score, status, content, created_at')
+      .eq('client_id', clientId)
+      .in('deliverable_type', ['analytics_report', 'performance_report'])
+      .order('created_at', { ascending: false })
+      .limit(20),
+    db.from('deliverables')
+      .select('id, agent_name, deliverable_type, title, summary, score, status, content, created_at')
+      .eq('client_id', clientId)
+      .in('deliverable_type', ['geo_report', 'entity_report'])
+      .order('created_at', { ascending: false })
+      .limit(20),
+  ])
 
   const reports: ReportData[] = (rows ?? []).map((r) => ({
     id: r.id,
@@ -51,5 +82,25 @@ export default async function ReportsPage() {
     agent_commentary: r.agent_commentary ?? { recommendations: [] },
   }))
 
-  return <ReportsClient reports={reports} />
+  const mapDeliverable = (d: Record<string, unknown>): ReportDeliverable => ({
+    id: d.id as string,
+    agent_name: (d.agent_name as string) ?? null,
+    deliverable_type: (d.deliverable_type as string) ?? null,
+    title: (d.title as string) ?? null,
+    summary: (d.summary as string) ?? null,
+    score: (d.score as number) ?? null,
+    status: (d.status as string) ?? null,
+    content: (d.content as Record<string, unknown> | string) ?? null,
+    created_at: d.created_at as string,
+  })
+
+  return (
+    <ReportsClient
+      reports={reports}
+      keywordDeliverables={(keywordRows ?? []).map(mapDeliverable)}
+      competitorDeliverables={(competitorRows ?? []).map(mapDeliverable)}
+      analyticsDeliverables={(analyticsRows ?? []).map(mapDeliverable)}
+      aiDeliverables={(aiRows ?? []).map(mapDeliverable)}
+    />
+  )
 }

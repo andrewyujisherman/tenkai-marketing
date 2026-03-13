@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Search,
   BarChart3,
@@ -21,6 +21,7 @@ import {
   Save,
 } from 'lucide-react'
 import type { Integration } from '@/app/api/onboarding/status/route'
+import { EMPTY_CLIENT_CONTEXT_FORM, type ClientContextForm } from '@/lib/client-context'
 
 // --- Icon map ---
 const iconMap: Record<string, React.ReactNode> = {
@@ -71,38 +72,8 @@ function StatusBadge({ status }: { status: Integration['status'] }) {
 // --- Google OAuth types ---
 type OAuthType = 'google_search_console' | 'google_analytics' | 'google_business_profile'
 
-const GOOGLE_OAUTH_TYPES: OAuthType[] = [
-  'google_search_console',
-  'google_analytics',
-  'google_business_profile',
-]
-
 // --- Form state ---
-interface FormState {
-  website_url: string
-  cms_url: string
-  cms_username: string
-  competitors: string
-  brand_guidelines: string
-  target_keywords: string
-  business_name: string
-  business_location: string
-  business_industry: string
-  business_target_audience: string
-}
-
-const EMPTY_FORM: FormState = {
-  website_url: '',
-  cms_url: '',
-  cms_username: '',
-  competitors: '',
-  brand_guidelines: '',
-  target_keywords: '',
-  business_name: '',
-  business_location: '',
-  business_industry: '',
-  business_target_audience: '',
-}
+type FormState = ClientContextForm
 
 export default function IntegrationsPage() {
   const [integrations, setIntegrations] = useState<Integration[]>([])
@@ -111,7 +82,7 @@ export default function IntegrationsPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
-  const [form, setForm] = useState<FormState>(EMPTY_FORM)
+  const [form, setForm] = useState<FormState>(EMPTY_CLIENT_CONTEXT_FORM)
   const [expanded, setExpanded] = useState<string | null>(null)
 
   const fetchStatus = useCallback(async () => {
@@ -122,6 +93,7 @@ export default function IntegrationsPage() {
       setIntegrations(data.integrations ?? [])
       setCompletionPct(data.completion_percentage ?? 0)
       setClientId(data.client_id ?? null)
+      setForm({ ...EMPTY_CLIENT_CONTEXT_FORM, ...(data.form ?? {}) })
     } catch {
       // silently fail
     } finally {
@@ -412,12 +384,12 @@ function IntegrationFields({
   if (item.type === 'competitors') {
     return (
       <div className="pt-3">
-        <textarea
+        <Textarea
           value={form.competitors}
           onChange={(e) => setField('competitors', e.target.value)}
           placeholder="One competitor URL per line&#10;https://competitor1.com&#10;https://competitor2.com"
           rows={3}
-          className="w-full px-3 py-2.5 text-sm border border-tenkai-border rounded-tenkai bg-transparent outline-none resize-none focus:border-torii focus:ring-2 focus:ring-torii/20 placeholder:text-muted-gray"
+          className="text-sm border-tenkai-border rounded-tenkai bg-transparent resize-none focus-visible:border-torii focus-visible:ring-torii/20"
         />
       </div>
     )
@@ -426,12 +398,12 @@ function IntegrationFields({
   if (item.type === 'brand_guidelines') {
     return (
       <div className="pt-3">
-        <textarea
+        <Textarea
           value={form.brand_guidelines}
           onChange={(e) => setField('brand_guidelines', e.target.value)}
           placeholder="Describe your brand voice, tone, and writing guidelines. What should we always/never say?"
           rows={4}
-          className="w-full px-3 py-2.5 text-sm border border-tenkai-border rounded-tenkai bg-transparent outline-none resize-none focus:border-torii focus:ring-2 focus:ring-torii/20 placeholder:text-muted-gray"
+          className="text-sm border-tenkai-border rounded-tenkai bg-transparent resize-none focus-visible:border-torii focus-visible:ring-torii/20"
         />
       </div>
     )
@@ -440,19 +412,19 @@ function IntegrationFields({
   if (item.type === 'target_keywords') {
     return (
       <div className="pt-3">
-        <textarea
+        <Textarea
           value={form.target_keywords}
           onChange={(e) => setField('target_keywords', e.target.value)}
           placeholder="One keyword or phrase per line&#10;plumber near me&#10;emergency plumbing Austin"
           rows={4}
-          className="w-full px-3 py-2.5 text-sm border border-tenkai-border rounded-tenkai bg-transparent outline-none resize-none focus:border-torii focus:ring-2 focus:ring-torii/20 placeholder:text-muted-gray"
+          className="text-sm border-tenkai-border rounded-tenkai bg-transparent resize-none focus-visible:border-torii focus-visible:ring-torii/20"
         />
       </div>
     )
   }
 
   if (item.type === 'business_info') {
-    return (
+      return (
       <div className="pt-3 space-y-2">
         <Input
           value={form.business_name}
@@ -476,6 +448,54 @@ function IntegrationFields({
           value={form.business_target_audience}
           onChange={(e) => setField('business_target_audience', (e.target as HTMLInputElement).value)}
           placeholder="Target audience (e.g., homeowners in Austin, TX)"
+          className="h-10 text-sm border-tenkai-border rounded-tenkai focus-visible:border-torii focus-visible:ring-torii/20"
+        />
+        <Textarea
+          value={form.services}
+          onChange={(e) => setField('services', e.target.value)}
+          placeholder="Main services, one per line&#10;Emergency plumbing&#10;Water heater installation"
+          rows={4}
+          className="text-sm border-tenkai-border rounded-tenkai bg-transparent resize-none focus-visible:border-torii focus-visible:ring-torii/20"
+        />
+        <Textarea
+          value={form.service_areas}
+          onChange={(e) => setField('service_areas', e.target.value)}
+          placeholder="Service areas, one per line&#10;Austin, TX&#10;Round Rock, TX"
+          rows={3}
+          className="text-sm border-tenkai-border rounded-tenkai bg-transparent resize-none focus-visible:border-torii focus-visible:ring-torii/20"
+        />
+        <Textarea
+          value={form.differentiators}
+          onChange={(e) => setField('differentiators', e.target.value)}
+          placeholder="What makes you different? Certifications, guarantees, response times, niche expertise..."
+          rows={3}
+          className="text-sm border-tenkai-border rounded-tenkai bg-transparent resize-none focus-visible:border-torii focus-visible:ring-torii/20"
+        />
+        <Textarea
+          value={form.business_goals}
+          onChange={(e) => setField('business_goals', e.target.value)}
+          placeholder="Business or SEO goals for the next 3-6 months"
+          rows={3}
+          className="text-sm border-tenkai-border rounded-tenkai bg-transparent resize-none focus-visible:border-torii focus-visible:ring-torii/20"
+        />
+        <Textarea
+          value={form.proof_points}
+          onChange={(e) => setField('proof_points', e.target.value)}
+          placeholder="Reviews, testimonials, case-study wins, trust signals, and proof points"
+          rows={3}
+          className="text-sm border-tenkai-border rounded-tenkai bg-transparent resize-none focus-visible:border-torii focus-visible:ring-torii/20"
+        />
+        <Textarea
+          value={form.notes}
+          onChange={(e) => setField('notes', e.target.value)}
+          placeholder="Anything else your Tenkai team should know: constraints, seasonality, offers, internal notes, or sensitive context"
+          rows={4}
+          className="text-sm border-tenkai-border rounded-tenkai bg-transparent resize-none focus-visible:border-torii focus-visible:ring-torii/20"
+        />
+        <Input
+          value={form.years_in_business}
+          onChange={(e) => setField('years_in_business', (e.target as HTMLInputElement).value)}
+          placeholder="Years in business (e.g., Since 2014)"
           className="h-10 text-sm border-tenkai-border rounded-tenkai focus-visible:border-torii focus-visible:ring-torii/20"
         />
       </div>

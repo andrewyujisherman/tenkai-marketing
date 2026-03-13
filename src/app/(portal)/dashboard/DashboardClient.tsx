@@ -17,6 +17,7 @@ import {
   Clock,
   AlertCircle,
   Loader2,
+  ChevronDown,
 } from 'lucide-react'
 import {
   Dialog,
@@ -26,6 +27,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
+import { SERVICE_CATEGORIES, QUICK_ACTIONS, ALL_SERVICES } from '@/lib/service-categories'
 import type { ActivityPost, PendingApproval, DashboardStats, Deliverable } from './page'
 
 const agentMap = Object.fromEntries(agents.map((a) => [a.name, a]))
@@ -50,14 +52,6 @@ interface DashboardClientProps {
   recentDeliverables: Deliverable[]
 }
 
-const SERVICE_TYPES = [
-  { key: 'site_audit', label: 'Run SEO Audit', icon: '🔍', description: 'Full technical SEO audit of your website' },
-  { key: 'keyword_research', label: 'Keyword Research', icon: '🎯', description: 'Discover high-value keyword opportunities' },
-  { key: 'content_brief', label: 'Content Brief', icon: '✍️', description: 'Generate an optimized content brief' },
-  { key: 'technical_audit', label: 'Technical Audit', icon: '🔧', description: 'Deep technical health check' },
-  { key: 'link_analysis', label: 'Link Analysis', icon: '🔗', description: 'Analyze your backlink profile' },
-  { key: 'analytics_audit', label: 'Analytics Audit', icon: '📊', description: 'Review your analytics setup' },
-] as const
 
 function deliverableStatusIcon(status: string | null) {
   switch (status) {
@@ -514,22 +508,64 @@ export default function DashboardClient({
           </p>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-          {SERVICE_TYPES.map((svc) => (
-            <button
-              key={svc.key}
-              onClick={() => {
-                setServiceDialog({ key: svc.key, label: svc.label })
-                setServiceUrl(client?.website_url ?? '')
-              }}
-              className="flex flex-col items-center gap-2 rounded-tenkai border border-tenkai-border bg-white p-4 text-center hover:border-torii/40 hover:shadow-sm transition-all group"
-            >
-              <span className="text-2xl">{svc.icon}</span>
-              <span className="text-xs font-medium text-charcoal group-hover:text-torii transition-colors">
-                {svc.label}
-              </span>
-            </button>
-          ))}
+        {/* Quick Actions */}
+        <div className="space-y-4">
+          <h3 className="font-serif text-lg text-charcoal">Quick Actions</h3>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {QUICK_ACTIONS.map((key) => {
+              const svc = ALL_SERVICES.find((s) => s.key === key)!
+              return (
+                <button
+                  key={key}
+                  onClick={() => {
+                    setServiceDialog({ key, label: svc.label })
+                    setServiceUrl(client?.website_url ?? '')
+                  }}
+                  className="flex flex-col items-start gap-2 p-4 rounded-tenkai border border-tenkai-border hover:border-torii/30 hover:bg-parchment/50 transition-colors text-left"
+                >
+                  <span className="text-2xl">{svc.icon}</span>
+                  <span className="text-sm font-medium text-charcoal">{svc.label}</span>
+                  <span className="text-xs text-warm-gray">{svc.description}</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* All Services — collapsible categories */}
+        <div className="space-y-3 mt-8">
+          <h3 className="font-serif text-lg text-charcoal">All Services</h3>
+          {SERVICE_CATEGORIES.map((cat) => {
+            const CatIcon = cat.icon
+            return (
+              <details key={cat.label} className="group border border-tenkai-border rounded-tenkai overflow-hidden">
+                <summary className="flex items-center gap-2.5 cursor-pointer px-4 py-3 bg-parchment/30 hover:bg-parchment/60 transition-colors">
+                  <CatIcon className={`size-4 ${cat.color}`} />
+                  <span className="text-sm font-medium text-charcoal">{cat.label}</span>
+                  <span className="text-xs text-warm-gray">({cat.services.length})</span>
+                  <ChevronDown className="size-4 ml-auto text-warm-gray transition-transform group-open:rotate-180" />
+                </summary>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 p-3">
+                  {cat.services.map((svc) => (
+                    <button
+                      key={svc.key}
+                      onClick={() => {
+                        setServiceDialog({ key: svc.key, label: svc.label })
+                        setServiceUrl(client?.website_url ?? '')
+                      }}
+                      className="flex items-start gap-2 p-3 rounded-tenkai border border-tenkai-border-light hover:border-torii/20 hover:bg-parchment/30 transition-colors text-left"
+                    >
+                      <span className="text-lg flex-shrink-0">{svc.icon}</span>
+                      <div className="min-w-0">
+                        <div className="text-xs font-medium text-charcoal truncate">{svc.label}</div>
+                        <div className="text-[10px] text-warm-gray line-clamp-2">{svc.description}</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </details>
+            )
+          })}
         </div>
       </section>
 

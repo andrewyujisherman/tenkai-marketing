@@ -18,7 +18,7 @@ interface InsightCardProps {
 function guessRoute(rec: string): string {
   const lower = rec.toLowerCase()
   if (lower.includes('content') || lower.includes('blog') || lower.includes('publish') || lower.includes('article') || lower.includes('cluster') || lower.includes('topic')) return '/content'
-  if (lower.includes('audit') || lower.includes('crawl') || lower.includes('seo score') || lower.includes('meta') || lower.includes('broken link')) return '/audit'
+  if (lower.includes('audit') || lower.includes('crawl') || lower.includes('seo score') || lower.includes('meta') || lower.includes('broken link')) return '/health'
   if (lower.includes('report') || lower.includes('traffic') || lower.includes('ranking') || lower.includes('keyword')) return '/reports'
   return '/content'
 }

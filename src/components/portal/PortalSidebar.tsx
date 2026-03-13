@@ -7,13 +7,15 @@ import { cn } from '@/lib/utils'
 import {
   LayoutDashboard,
   FileText,
-  Search,
+  ShieldCheck,
+  Link2,
+  MapPin,
   BarChart3,
+  Plug,
   Settings,
   Menu,
   ChevronDown,
   Shield,
-  Link2,
 } from 'lucide-react'
 import {
   Sheet,
@@ -25,9 +27,11 @@ import {
 const navItems = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { label: 'Content', href: '/content', icon: FileText },
-  { label: 'Audit Results', href: '/audit', icon: Search },
+  { label: 'Website Health', href: '/health', icon: ShieldCheck },
+  { label: 'Link Building', href: '/links', icon: Link2 },
+  { label: 'Local & Reviews', href: '/local', icon: MapPin },
   { label: 'Reports', href: '/reports', icon: BarChart3 },
-  { label: 'Integrations', href: '/integrations', icon: Link2 },
+  { label: 'Integrations', href: '/integrations', icon: Plug },
   { label: 'Settings', href: '/settings', icon: Settings },
 ]
 
@@ -47,7 +51,9 @@ function SidebarNav({ pathname, isAdmin }: { pathname: string; isAdmin: boolean 
   return (
     <nav className="flex flex-col gap-1 px-3">
       {allItems.map((item) => {
-        const isActive = pathname === item.href
+        const isActive = item.href === '/dashboard'
+          ? pathname === '/dashboard'
+          : pathname.startsWith(item.href)
         const Icon = item.icon
         return (
           <Link
