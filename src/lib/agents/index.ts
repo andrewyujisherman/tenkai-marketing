@@ -15,7 +15,7 @@ export const TENKAI_AGENTS = {
     name: 'Haruki',
     kanji: '\u6625\u6A39',
     role: 'SEO Strategist',
-    handles: ['site_audit', 'keyword_research'],
+    handles: ['site_audit', 'keyword_research', 'competitor_analysis'],
   },
   sakura: {
     name: 'Sakura',
@@ -33,13 +33,37 @@ export const TENKAI_AGENTS = {
     name: 'Yumi',
     kanji: '\u7531\u7F8E',
     role: 'Analytics',
-    handles: ['analytics_audit'],
+    handles: ['analytics_audit', 'monthly_report', 'content_decay_audit'],
   },
   takeshi: {
     name: 'Takeshi',
     kanji: '\u6B66',
     role: 'Link Builder',
     handles: ['link_analysis'],
+  },
+  mika: {
+    name: 'Mika',
+    kanji: '\u7F8E\u82B1',
+    role: 'On-Page Optimizer',
+    handles: ['on_page_audit', 'meta_optimization'],
+  },
+  ryo: {
+    name: 'Ryo',
+    kanji: '\u6DBC',
+    role: 'Content Planner',
+    handles: ['content_calendar', 'topic_cluster_map'],
+  },
+  hana: {
+    name: 'Hana',
+    kanji: '\u82B1',
+    role: 'Local SEO Specialist',
+    handles: ['local_seo_audit', 'gbp_optimization'],
+  },
+  daichi: {
+    name: 'Daichi',
+    kanji: '\u5927\u5730',
+    role: 'GEO / AI Search Specialist',
+    handles: ['geo_audit', 'entity_optimization'],
   },
 } as const
 
@@ -52,6 +76,17 @@ export const REQUEST_TYPES = [
   'keyword_research',
   'technical_audit',
   'link_analysis',
+  'competitor_analysis',
+  'monthly_report',
+  'content_decay_audit',
+  'on_page_audit',
+  'meta_optimization',
+  'content_calendar',
+  'topic_cluster_map',
+  'local_seo_audit',
+  'gbp_optimization',
+  'geo_audit',
+  'entity_optimization',
 ] as const
 
 export type RequestType = (typeof REQUEST_TYPES)[number]
@@ -80,6 +115,17 @@ export function getDeliverableType(requestType: string): string {
     keyword_research: 'keyword_list',
     technical_audit: 'technical_report',
     link_analysis: 'link_report',
+    competitor_analysis: 'competitive_report',
+    monthly_report: 'performance_report',
+    content_decay_audit: 'decay_report',
+    on_page_audit: 'on_page_report',
+    meta_optimization: 'meta_report',
+    content_calendar: 'content_plan',
+    topic_cluster_map: 'cluster_map',
+    local_seo_audit: 'local_report',
+    gbp_optimization: 'gbp_report',
+    geo_audit: 'geo_report',
+    entity_optimization: 'entity_report',
   }
   return map[requestType] ?? 'audit_report'
 }

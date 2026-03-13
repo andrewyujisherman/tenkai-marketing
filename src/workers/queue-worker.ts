@@ -14,8 +14,11 @@
 //   QUEUE_WORKER_LOG_LEVEL     — optional, 'debug' | 'info' | 'warn' | 'error'
 //
 // Model routing:
-//   Research tasks  (keyword_research, link_analysis):           gemini-2.5-flash
-//   Customer-facing (site_audit, analytics_audit, content_brief, technical_audit): gemini-2.5-pro
+//   Flash (research/analysis): keyword_research, link_analysis, topic_cluster_map,
+//     meta_optimization, content_decay_audit, entity_optimization
+//   Pro (customer-facing): site_audit, technical_audit, analytics_audit, content_brief,
+//     on_page_audit, content_calendar, local_seo_audit, gbp_optimization,
+//     geo_audit, competitor_analysis, monthly_report
 //
 // The worker uses the Supabase service_role key to bypass RLS.
 // ============================================================
@@ -24,7 +27,98 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 import { createClient } from '@supabase/supabase-js'
 import { getAgentForRequest, getDeliverableType, TENKAI_AGENTS } from '../lib/agents/index'
 import { AGENT_PROMPTS, buildTaskMessage } from '../lib/agents/prompts'
+import { fetchAllSiteData, type SiteData } from '../lib/integrations'
 import type { AgentId } from '../lib/agents/index'
+
+// --------------- Site Scraping ---------------
+
+const URL_BASED_REQUESTS = new Set([
+  'site_audit', 'technical_audit', 'analytics_audit', 'link_analysis',
+  'on_page_audit', 'meta_optimization', 'local_seo_audit', 'gbp_optimization',
+  'geo_audit', 'entity_optimization', 'competitor_analysis',
+  'monthly_report', 'content_decay_audit',
+])
+
+interface ScrapedSite {
+  title: string
+  metaDescription: string
+  headings: string[]
+  bodyText: string
+  links: { internal: number; external: number }
+  error?: string
+}
+
+async function scrapeUrl(url: string): Promise<ScrapedSite> {
+  try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 15_000)
+
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'TenkaiSEO/1.0 (SEO Audit Bot)',
+        'Accept': 'text/html',
+      },
+    })
+    clearTimeout(timeout)
+
+    if (!response.ok) {
+      return { title: '', metaDescription: '', headings: [], bodyText: '', links: { internal: 0, external: 0 }, error: `HTTP ${response.status}` }
+    }
+
+    const html = await response.text()
+
+    // Extract title
+    const titleMatch = html.match(/<title[^>]*>(.*?)<\/title>/is)
+    const title = titleMatch ? titleMatch[1].trim() : ''
+
+    // Extract meta description
+    const metaMatch = html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']*)["']/is)
+      ?? html.match(/<meta[^>]*content=["']([^"']*)["'][^>]*name=["']description["']/is)
+    const metaDescription = metaMatch ? metaMatch[1].trim() : ''
+
+    // Extract headings (H1-H3)
+    const headingRegex = /<h[1-3][^>]*>(.*?)<\/h[1-3]>/gis
+    const headings: string[] = []
+    let hMatch
+    while ((hMatch = headingRegex.exec(html)) !== null && headings.length < 20) {
+      headings.push(hMatch[1].replace(/<[^>]+>/g, '').trim())
+    }
+
+    // Extract body text (strip tags, scripts, styles)
+    let bodyText = html
+      .replace(/<script[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[\s\S]*?<\/style>/gi, '')
+      .replace(/<nav[\s\S]*?<\/nav>/gi, '')
+      .replace(/<footer[\s\S]*?<\/footer>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+    // Limit to ~2000 chars to keep prompt reasonable
+    if (bodyText.length > 2000) bodyText = bodyText.slice(0, 2000) + '...'
+
+    // Count links
+    const allLinks = html.match(/<a[^>]*href=["']([^"']*)["']/gi) ?? []
+    const parsedUrl = new URL(url)
+    let internal = 0, external = 0
+    for (const link of allLinks) {
+      const hrefMatch = link.match(/href=["']([^"']*)["']/i)
+      if (hrefMatch) {
+        const href = hrefMatch[1]
+        if (href.startsWith('/') || href.includes(parsedUrl.hostname)) internal++
+        else if (href.startsWith('http')) external++
+      }
+    }
+
+    return { title, metaDescription, headings, bodyText, links: { internal, external } }
+  } catch (err) {
+    return {
+      title: '', metaDescription: '', headings: [], bodyText: '',
+      links: { internal: 0, external: 0 },
+      error: err instanceof Error ? err.message : String(err),
+    }
+  }
+}
 
 // --------------- Config ---------------
 
@@ -32,13 +126,31 @@ const POLL_INTERVAL = parseInt(process.env.QUEUE_POLL_INTERVAL_MS ?? '10000', 10
 const LOG_LEVEL = (process.env.QUEUE_WORKER_LOG_LEVEL ?? 'info') as 'debug' | 'info' | 'warn' | 'error'
 const REQUEST_TIMEOUT_MS = 120_000 // 2 min timeout for AI calls
 
-// Model routing
-const RESEARCH_TASKS = new Set(['keyword_research', 'link_analysis'])
-const MODEL_RESEARCH = 'gemini-2.5-flash'
-const MODEL_CUSTOMER_FACING = 'gemini-2.5-pro'
+// Model routing — Flash for research/analysis, Pro for customer-facing deliverables
+const MODEL_MAP: Record<string, string> = {
+  // Flash (research/analysis tasks)
+  keyword_research: 'gemini-2.5-flash',
+  link_analysis: 'gemini-2.5-flash',
+  topic_cluster_map: 'gemini-2.5-flash',
+  meta_optimization: 'gemini-2.5-flash',
+  content_decay_audit: 'gemini-2.5-flash',
+  entity_optimization: 'gemini-2.5-flash',
+  // Pro (customer-facing deliverables)
+  site_audit: 'gemini-2.5-pro',
+  technical_audit: 'gemini-2.5-pro',
+  analytics_audit: 'gemini-2.5-pro',
+  content_brief: 'gemini-2.5-pro',
+  on_page_audit: 'gemini-2.5-pro',
+  content_calendar: 'gemini-2.5-pro',
+  local_seo_audit: 'gemini-2.5-pro',
+  gbp_optimization: 'gemini-2.5-pro',
+  geo_audit: 'gemini-2.5-pro',
+  competitor_analysis: 'gemini-2.5-pro',
+  monthly_report: 'gemini-2.5-pro',
+}
 
 function getModelForRequestType(requestType: string): string {
-  return RESEARCH_TASKS.has(requestType) ? MODEL_RESEARCH : MODEL_CUSTOMER_FACING
+  return MODEL_MAP[requestType] ?? 'gemini-2.5-pro'
 }
 
 // --------------- Clients ---------------
@@ -160,10 +272,51 @@ async function processRequest(request: ServiceRequest): Promise<void> {
   const model = getModelForRequestType(request.request_type)
   log('info', `Processing request ${request.id} (${request.request_type}) with agent ${agent.name} (${agent.kanji}) using ${model}`)
 
+  // Fetch site data if URL-based request (scrape + API integrations in parallel)
+  let scrapedSite: ScrapedSite | null = null
+  let siteData: SiteData | null = null
+  const isUrlBased = request.target_url && URL_BASED_REQUESTS.has(request.request_type)
+
+  if (isUrlBased) {
+    log('info', `Fetching site data for ${request.target_url}...`)
+
+    // Run scrape and API integrations in parallel for speed
+    const [scraped, enriched] = await Promise.all([
+      scrapeUrl(request.target_url!),
+      fetchAllSiteData(request.target_url!, {
+        gscSiteUrl: request.parameters?.gsc_site_url as string | undefined,
+        ga4PropertyId: request.parameters?.ga4_property_id as string | undefined,
+      }).catch((err) => {
+        log('warn', `Integration data fetch failed: ${err instanceof Error ? err.message : String(err)}`)
+        return null
+      }),
+    ])
+
+    scrapedSite = scraped
+    siteData = enriched
+
+    if (scrapedSite.error) {
+      log('warn', `Scrape failed for ${request.target_url}: ${scrapedSite.error}`)
+    } else {
+      log('info', `Scraped ${request.target_url}: title="${scrapedSite.title}", ${scrapedSite.headings.length} headings, ${scrapedSite.bodyText.length} chars body`)
+    }
+    if (siteData) {
+      const sources = [
+        siteData.pageSpeed && !siteData.pageSpeed.error ? 'PageSpeed' : null,
+        siteData.serp && !siteData.serp.error ? 'SERP' : null,
+        siteData.gsc && !siteData.gsc.error ? 'GSC' : null,
+        siteData.ga4 && !siteData.ga4.error ? 'GA4' : null,
+      ].filter(Boolean)
+      log('info', `Enriched data available: ${sources.join(', ') || 'none'}`)
+    }
+  }
+
   const taskMessage = buildTaskMessage(
     request.request_type,
     request.target_url,
-    request.parameters
+    request.parameters ?? {},
+    scrapedSite,
+    siteData
   )
 
   // Call Gemini API with timeout
@@ -172,10 +325,17 @@ async function processRequest(request: ServiceRequest): Promise<void> {
 
   let responseText: string
   try {
-    const geminiModel = genAI.getGenerativeModel({
+    // Enable Google Search grounding for URL-based requests
+    const modelConfig: Record<string, unknown> = {
       model,
       systemInstruction: systemPrompt,
-    })
+    }
+    if (isUrlBased) {
+      modelConfig.tools = [{ googleSearch: {} }]
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const geminiModel = genAI.getGenerativeModel(modelConfig as any)
 
     const result = await geminiModel.generateContent({
       contents: [{ role: 'user', parts: [{ text: taskMessage }] }],
@@ -207,13 +367,25 @@ async function processRequest(request: ServiceRequest): Promise<void> {
   }
 
   // Generate a human-readable title for the deliverable
+  const params = request.parameters as Record<string, string>
   const titleMap: Record<string, string> = {
+    content_brief: `Content Brief: ${params.topic ?? params.keyword ?? request.target_url ?? 'Topic'}`,
+    keyword_research: `Keyword Research: ${params.topic ?? request.target_url ?? 'Website'}`,
     site_audit: `SEO Site Audit: ${request.target_url ?? 'Website'}`,
-    analytics_audit: `Analytics Audit: ${request.target_url ?? 'Website'}`,
-    content_brief: `Content Brief: ${(request.parameters as Record<string, string>).keyword ?? request.target_url ?? 'Topic'}`,
-    keyword_research: `Keyword Research: ${request.target_url ?? 'Website'}`,
     technical_audit: `Technical SEO Audit: ${request.target_url ?? 'Website'}`,
-    link_analysis: `Link Profile Analysis: ${request.target_url ?? 'Website'}`,
+    analytics_audit: `Analytics Audit: ${request.target_url ?? 'Website'}`,
+    link_analysis: `Link Analysis: ${request.target_url ?? 'Website'}`,
+    on_page_audit: `On-Page SEO Audit: ${request.target_url ?? 'Page'}`,
+    meta_optimization: `Meta Optimization: ${request.target_url ?? 'Website'}`,
+    content_calendar: `Content Calendar: ${params.topic ?? request.target_url ?? 'Website'}`,
+    topic_cluster_map: `Topic Cluster Map: ${params.topic ?? request.target_url ?? 'Website'}`,
+    local_seo_audit: `Local SEO Audit: ${request.target_url ?? 'Business'}`,
+    gbp_optimization: `GBP Optimization: ${request.target_url ?? 'Business'}`,
+    geo_audit: `GEO / AI Search Audit: ${request.target_url ?? 'Website'}`,
+    entity_optimization: `Entity Optimization: ${request.target_url ?? 'Brand'}`,
+    competitor_analysis: `Competitor Analysis: ${params.topic ?? request.target_url ?? 'Market'}`,
+    monthly_report: `Monthly SEO Report: ${request.target_url ?? 'Website'}`,
+    content_decay_audit: `Content Decay Audit: ${request.target_url ?? 'Website'}`,
   }
 
   const title = titleMap[request.request_type] ?? `${agent.name} Report`
@@ -316,10 +488,12 @@ function generateSummary(requestType: string, content: Record<string, unknown>):
       }
       case 'analytics_audit': {
         const score = content.analytics_score as number | undefined
-        const opportunities = content.keyword_performance as Record<string, unknown> | undefined
+        const traffic = content.traffic_analysis as Record<string, unknown> | undefined
+        const contentPerf = content.content_performance as Record<string, unknown> | undefined
         const parts = [`Analytics score: ${score ?? 'N/A'}/100.`]
-        const opps = opportunities?.keyword_opportunities as unknown[] | undefined
-        if (opps?.length) parts.push(`${opps.length} keyword opportunities identified.`)
+        if (traffic?.estimated_monthly_organic) parts.push(`Est. organic traffic: ${traffic.estimated_monthly_organic}.`)
+        const topPages = contentPerf?.top_pages as unknown[] | undefined
+        if (topPages?.length) parts.push(`${topPages.length} top pages analyzed.`)
         return parts.join(' ')
       }
       case 'content_brief': {
@@ -344,6 +518,65 @@ function generateSummary(requestType: string, content: Record<string, unknown>):
         const profile = content.current_profile as Record<string, unknown> | undefined
         return `Link profile score: ${score ?? 'N/A'}/100. Estimated ${profile?.estimated_referring_domains ?? '?'} referring domains.`
       }
+      case 'on_page_audit': {
+        const score = content.on_page_score as number | undefined
+        const issues = content.issues as unknown[] | undefined
+        return `On-page score: ${score ?? 'N/A'}/100. ${issues?.length ?? 0} issues found.`
+      }
+      case 'meta_optimization': {
+        const score = content.optimization_score as number | undefined
+        const pages = content.pages_analyzed as unknown[] | undefined
+        return `Optimization score: ${score ?? 'N/A'}/100. ${pages?.length ?? 0} pages analyzed.`
+      }
+      case 'content_calendar': {
+        const score = content.calendar_score as number | undefined
+        const items = content.calendar_items as unknown[] | undefined
+        return `Calendar score: ${score ?? 'N/A'}/100. ${items?.length ?? 0} content pieces planned.`
+      }
+      case 'topic_cluster_map': {
+        const score = content.cluster_score as number | undefined
+        const clusters = content.clusters as unknown[] | undefined
+        return `Cluster score: ${score ?? 'N/A'}/100. ${clusters?.length ?? 0} topic clusters mapped.`
+      }
+      case 'local_seo_audit': {
+        const score = content.local_seo_score as number | undefined
+        const issues = content.issues as unknown[] | undefined
+        return `Local SEO score: ${score ?? 'N/A'}/100. ${issues?.length ?? 0} local issues identified.`
+      }
+      case 'gbp_optimization': {
+        const score = content.gbp_score as number | undefined
+        const recs = content.recommendations as unknown[] | undefined
+        return `GBP score: ${score ?? 'N/A'}/100. ${recs?.length ?? 0} optimization recommendations.`
+      }
+      case 'geo_audit': {
+        const score = content.geo_score as number | undefined
+        const visibility = content.ai_visibility as Record<string, unknown> | undefined
+        const parts = [`GEO score: ${score ?? 'N/A'}/100.`]
+        if (visibility?.platforms_present) parts.push(`Visible on ${visibility.platforms_present} AI platforms.`)
+        return parts.join(' ')
+      }
+      case 'entity_optimization': {
+        const score = content.entity_score as number | undefined
+        const entities = content.entities as unknown[] | undefined
+        return `Entity score: ${score ?? 'N/A'}/100. ${entities?.length ?? 0} entities analyzed.`
+      }
+      case 'competitor_analysis': {
+        const score = content.competitive_score as number | undefined
+        const competitors = content.competitors as unknown[] | undefined
+        return `Competitive score: ${score ?? 'N/A'}/100. ${competitors?.length ?? 0} competitors analyzed.`
+      }
+      case 'monthly_report': {
+        const summary = content.executive_summary as string | undefined
+        if (summary) return summary.slice(0, 200)
+        const kpi = content.kpi_dashboard as Record<string, unknown> | undefined
+        if (kpi?.organic_traffic) return `Monthly report: ${kpi.organic_traffic} organic sessions.`
+        return 'Monthly SEO report generated.'
+      }
+      case 'content_decay_audit': {
+        const score = content.decay_score as number | undefined
+        const decaying = content.decaying_pages as unknown[] | undefined
+        return `Decay score: ${score ?? 'N/A'}/100. ${decaying?.length ?? 0} pages showing content decay.`
+      }
       default:
         return 'Report generated.'
     }
@@ -362,6 +595,17 @@ function extractScore(requestType: string, content: Record<string, unknown>): nu
       keyword_research: ['keyword_quality_score', 'quality_score', 'overall_score'],
       technical_audit: ['technical_score'],
       link_analysis: ['link_profile_score'],
+      on_page_audit: ['on_page_score'],
+      meta_optimization: ['optimization_score'],
+      content_calendar: ['calendar_score'],
+      topic_cluster_map: ['cluster_score'],
+      local_seo_audit: ['local_seo_score', 'local_score', 'overall_score'],
+      gbp_optimization: ['gbp_score', 'local_seo_score', 'optimization_score'],
+      geo_audit: ['geo_score'],
+      entity_optimization: ['entity_score'],
+      competitor_analysis: ['competitive_score'],
+      monthly_report: ['overall_score', 'seo_health_score', 'performance_score'],
+      content_decay_audit: ['decay_score'],
     }
     const keys = scoreKeys[requestType] ?? []
     for (const key of keys) {
@@ -408,7 +652,7 @@ async function pollOnce(): Promise<void> {
 async function startWorker(): Promise<void> {
   log('info', `Tenkai Queue Worker starting (poll interval: ${POLL_INTERVAL}ms)`)
   log('info', `Supabase URL: ${supabaseUrl}`)
-  log('info', `Model routing: research=${MODEL_RESEARCH}, customer-facing=${MODEL_CUSTOMER_FACING}`)
+  log('info', `Model routing: flash for research, pro for customer-facing (${Object.keys(MODEL_MAP).length} types configured)`)
 
   // Process any backlog immediately
   await pollOnce()
