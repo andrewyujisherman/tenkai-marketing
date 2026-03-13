@@ -21,13 +21,13 @@ export const TENKAI_AGENTS = {
     name: 'Sakura',
     kanji: '\u685C',
     role: 'Content Specialist',
-    handles: ['content_brief'],
+    handles: ['content_brief', 'content_article', 'content_rewrite'],
   },
   kenji: {
     name: 'Kenji',
     kanji: '\u5065\u4E8C',
     role: 'Technical SEO',
-    handles: ['technical_audit'],
+    handles: ['technical_audit', 'schema_generation', 'redirect_map', 'robots_sitemap'],
   },
   yumi: {
     name: 'Yumi',
@@ -39,7 +39,7 @@ export const TENKAI_AGENTS = {
     name: 'Takeshi',
     kanji: '\u6B66',
     role: 'Link Builder',
-    handles: ['link_analysis'],
+    handles: ['link_analysis', 'outreach_emails', 'guest_post_draft', 'directory_submissions'],
   },
   mika: {
     name: 'Mika',
@@ -57,7 +57,7 @@ export const TENKAI_AGENTS = {
     name: 'Hana',
     kanji: '\u82B1',
     role: 'Local SEO Specialist',
-    handles: ['local_seo_audit', 'gbp_optimization'],
+    handles: ['local_seo_audit', 'gbp_optimization', 'review_responses', 'review_campaign'],
   },
   daichi: {
     name: 'Daichi',
@@ -87,6 +87,17 @@ export const REQUEST_TYPES = [
   'gbp_optimization',
   'geo_audit',
   'entity_optimization',
+  // Execution types
+  'content_article',
+  'content_rewrite',
+  'schema_generation',
+  'redirect_map',
+  'robots_sitemap',
+  'outreach_emails',
+  'guest_post_draft',
+  'directory_submissions',
+  'review_responses',
+  'review_campaign',
 ] as const
 
 export type RequestType = (typeof REQUEST_TYPES)[number]
@@ -126,6 +137,17 @@ export function getDeliverableType(requestType: string): string {
     gbp_optimization: 'gbp_report',
     geo_audit: 'geo_report',
     entity_optimization: 'entity_report',
+    // Execution types
+    content_article: 'article',
+    content_rewrite: 'article',
+    schema_generation: 'schema_code',
+    redirect_map: 'redirect_config',
+    robots_sitemap: 'robots_config',
+    outreach_emails: 'outreach_templates',
+    guest_post_draft: 'article',
+    directory_submissions: 'directory_profiles',
+    review_responses: 'review_responses',
+    review_campaign: 'campaign_templates',
   }
   return map[requestType] ?? 'audit_report'
 }

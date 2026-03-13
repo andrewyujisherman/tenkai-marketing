@@ -37,6 +37,10 @@ const URL_BASED_REQUESTS = new Set([
   'on_page_audit', 'meta_optimization', 'local_seo_audit', 'gbp_optimization',
   'geo_audit', 'entity_optimization', 'competitor_analysis',
   'monthly_report', 'content_decay_audit',
+  // Execution types — url-based (content_article and content_rewrite are topic-based, NOT url-based)
+  'schema_generation', 'redirect_map', 'robots_sitemap',
+  'outreach_emails', 'guest_post_draft', 'directory_submissions',
+  'review_responses', 'review_campaign',
 ])
 
 interface ScrapedSite {
@@ -147,6 +151,17 @@ const MODEL_MAP: Record<string, string> = {
   geo_audit: 'gemini-2.5-pro',
   competitor_analysis: 'gemini-2.5-pro',
   monthly_report: 'gemini-2.5-pro',
+  // Execution types — Pro for writing quality, Flash for structured generation
+  content_article: 'gemini-2.5-pro',
+  outreach_emails: 'gemini-2.5-pro',
+  guest_post_draft: 'gemini-2.5-pro',
+  content_rewrite: 'gemini-2.5-flash',
+  schema_generation: 'gemini-2.5-flash',
+  redirect_map: 'gemini-2.5-flash',
+  robots_sitemap: 'gemini-2.5-flash',
+  directory_submissions: 'gemini-2.5-flash',
+  review_responses: 'gemini-2.5-flash',
+  review_campaign: 'gemini-2.5-flash',
 }
 
 function getModelForRequestType(requestType: string): string {
@@ -386,6 +401,17 @@ async function processRequest(request: ServiceRequest): Promise<void> {
     competitor_analysis: `Competitor Analysis: ${params.topic ?? request.target_url ?? 'Market'}`,
     monthly_report: `Monthly SEO Report: ${request.target_url ?? 'Website'}`,
     content_decay_audit: `Content Decay Audit: ${request.target_url ?? 'Website'}`,
+    // Execution types
+    content_article: `SEO Article: ${params.topic ?? params.target_keyword ?? 'Topic'}`,
+    content_rewrite: `Content Rewrite: ${params.target_keyword ?? request.target_url ?? 'Page'}`,
+    schema_generation: `Schema Markup: ${request.target_url ?? 'Website'}`,
+    redirect_map: `Redirect Map: ${request.target_url ?? 'Migration'}`,
+    robots_sitemap: `Robots & Sitemap: ${request.target_url ?? 'Website'}`,
+    outreach_emails: `Outreach Emails: ${request.target_url ?? 'Campaign'}`,
+    guest_post_draft: `Guest Post: ${params.topic ?? request.target_url ?? 'Article'}`,
+    directory_submissions: `Directory Submissions: ${request.target_url ?? 'Business'}`,
+    review_responses: `Review Responses: ${request.target_url ?? 'Business'}`,
+    review_campaign: `Review Campaign: ${request.target_url ?? 'Business'}`,
   }
 
   const title = titleMap[request.request_type] ?? `${agent.name} Report`
@@ -577,6 +603,84 @@ function generateSummary(requestType: string, content: Record<string, unknown>):
         const decaying = content.decaying_pages as unknown[] | undefined
         return `Decay score: ${score ?? 'N/A'}/100. ${decaying?.length ?? 0} pages showing content decay.`
       }
+      case 'content_article': {
+        const score = content.article_score as number | undefined
+        const meta = content.meta as Record<string, unknown> | undefined
+        const article = content.article as Record<string, unknown> | undefined
+        const sections = article?.sections as unknown[] | undefined
+        const parts = [`Article score: ${score ?? 'N/A'}/100.`]
+        if (meta?.target_keyword) parts.push(`Target keyword: "${meta.target_keyword}".`)
+        if (meta?.estimated_word_count) parts.push(`~${meta.estimated_word_count} words.`)
+        if (sections?.length) parts.push(`${sections.length} sections.`)
+        return parts.join(' ')
+      }
+      case 'content_rewrite': {
+        const score = content.rewrite_score as number | undefined
+        const meta = content.meta as Record<string, unknown> | undefined
+        const diag = content.diagnosis as Record<string, unknown> | undefined
+        const issues = diag?.identified_issues as unknown[] | undefined
+        const parts = [`Rewrite score: ${score ?? 'N/A'}/100.`]
+        if (meta?.target_keyword) parts.push(`Refocused on "${meta.target_keyword}".`)
+        if (issues?.length) parts.push(`${issues.length} decay issues addressed.`)
+        return parts.join(' ')
+      }
+      case 'schema_generation': {
+        const score = content.schema_score as number | undefined
+        const schemas = content.schemas as unknown[] | undefined
+        return `Schema score: ${score ?? 'N/A'}/100. ${schemas?.length ?? 0} schema type(s) generated.`
+      }
+      case 'redirect_map': {
+        const score = content.redirect_score as number | undefined
+        const summary = content.summary as Record<string, unknown> | undefined
+        const total = summary?.total_redirects as number | undefined
+        return `Redirect map: ${total ?? 0} redirect rules. Score: ${score ?? 'N/A'}/100. Available in .htaccess, nginx, Vercel, and Next.js formats.`
+      }
+      case 'robots_sitemap': {
+        const score = content.robots_sitemap_score as number | undefined
+        const sitemap = content.sitemap_strategy as Record<string, unknown> | undefined
+        const parts = [`Robots & sitemap score: ${score ?? 'N/A'}/100.`]
+        if (sitemap?.recommended_structure) parts.push(`Structure: ${sitemap.recommended_structure}.`)
+        return parts.join(' ')
+      }
+      case 'outreach_emails': {
+        const score = content.outreach_score as number | undefined
+        const templates = content.email_templates as unknown[] | undefined
+        const strategy = content.outreach_strategy as Record<string, unknown> | undefined
+        const parts = [`Outreach score: ${score ?? 'N/A'}/100.`]
+        if (templates?.length) parts.push(`${templates.length} email templates generated.`)
+        if (strategy?.type) parts.push(`Type: ${strategy.type}.`)
+        return parts.join(' ')
+      }
+      case 'guest_post_draft': {
+        const score = content.guest_post_score as number | undefined
+        const fit = content.publication_fit_analysis as Record<string, unknown> | undefined
+        const parts = [`Guest post score: ${score ?? 'N/A'}/100.`]
+        if (fit?.publication_style) parts.push(`Matched to: ${String(fit.publication_style).slice(0, 80)}.`)
+        return parts.join(' ')
+      }
+      case 'directory_submissions': {
+        const score = content.submission_score as number | undefined
+        const profiles = content.directory_profiles as unknown[] | undefined
+        return `Submission score: ${score ?? 'N/A'}/100. ${profiles?.length ?? 0} directory profile(s) generated.`
+      }
+      case 'review_responses': {
+        const score = content.response_score as number | undefined
+        const responses = content.responses as unknown[] | undefined
+        const patterns = content.patterns_detected as unknown[] | undefined
+        const parts = [`Response score: ${score ?? 'N/A'}/100.`]
+        if (responses?.length) parts.push(`${responses.length} review response(s) drafted.`)
+        if (patterns?.length) parts.push(`${patterns.length} recurring pattern(s) detected.`)
+        return parts.join(' ')
+      }
+      case 'review_campaign': {
+        const score = content.campaign_score as number | undefined
+        const emails = content.email_templates as unknown[] | undefined
+        const sms = content.sms_templates as unknown[] | undefined
+        const parts = [`Campaign score: ${score ?? 'N/A'}/100.`]
+        if (emails?.length) parts.push(`${emails.length} email template(s).`)
+        if (sms?.length) parts.push(`${sms.length} SMS template(s).`)
+        return parts.join(' ')
+      }
       default:
         return 'Report generated.'
     }
@@ -606,6 +710,17 @@ function extractScore(requestType: string, content: Record<string, unknown>): nu
       competitor_analysis: ['competitive_score'],
       monthly_report: ['overall_score', 'seo_health_score', 'performance_score'],
       content_decay_audit: ['decay_score'],
+      // Execution types
+      content_article: ['article_score'],
+      content_rewrite: ['rewrite_score'],
+      schema_generation: ['schema_score'],
+      redirect_map: ['redirect_score'],
+      robots_sitemap: ['robots_sitemap_score'],
+      outreach_emails: ['outreach_score'],
+      guest_post_draft: ['guest_post_score'],
+      directory_submissions: ['submission_score'],
+      review_responses: ['response_score'],
+      review_campaign: ['campaign_score'],
     }
     const keys = scoreKeys[requestType] ?? []
     for (const key of keys) {
