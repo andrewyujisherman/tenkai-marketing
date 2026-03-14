@@ -392,13 +392,14 @@ async function processRequest(request: ServiceRequest): Promise<void> {
   const score = extractScore(request.request_type, parsedContent)
 
   // Create the deliverable
+  const deliverableType = getDeliverableType(request.request_type)
   const { error: deliverableError } = await supabase
     .from('deliverables')
     .insert({
       request_id: request.id,
       client_id: request.client_id,
       agent_name: agentId,
-      deliverable_type: getDeliverableType(request.request_type),
+      deliverable_type: deliverableType,
       title,
       content: parsedContent,
       summary,
@@ -408,6 +409,36 @@ async function processRequest(request: ServiceRequest): Promise<void> {
 
   if (deliverableError) {
     throw new Error(`Failed to create deliverable: ${deliverableError.message}`)
+  }
+
+  // Content promotion bridge: article deliverables also create a content_post
+  // so they appear in the Content Approval workflow for client review
+  if (deliverableType === 'article') {
+    const articleText = parsedContent.article ?? parsedContent.content ?? parsedContent.body ?? parsedContent.raw_response ?? ''
+    const keywords = Array.isArray(parsedContent.keywords)
+      ? parsedContent.keywords as string[]
+      : Array.isArray(parsedContent.target_keywords)
+        ? parsedContent.target_keywords as string[]
+        : []
+
+    const { error: postError } = await supabase
+      .from('content_posts')
+      .insert({
+        client_id: request.client_id,
+        title,
+        content: typeof articleText === 'string' ? articleText : JSON.stringify(articleText),
+        status: 'pending_approval',
+        topic: (request.parameters?.topic as string) ?? (parsedContent.topic as string) ?? null,
+        keywords: keywords.length > 0 ? keywords : null,
+        agent_author: agent.name,
+        seo_score: score,
+      })
+
+    if (postError) {
+      log('warn', `Deliverable created but content_post promotion failed: ${postError.message}`)
+    } else {
+      log('info', `Content post created for approval (article: "${title}")`)
+    }
   }
 
   // Mark request as completed

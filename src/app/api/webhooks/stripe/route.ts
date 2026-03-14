@@ -46,10 +46,18 @@ export async function POST(request: NextRequest) {
       const priceId = subscription.items.data[0]?.price.id
       const tier = tierByPrice[priceId] ?? 'starter'
 
-      await supabase
-        .from('clients')
-        .update({ stripe_customer_id: customerId, tier, status: 'active' })
-        .eq('email', session.customer_email)
+      const clientId = session.metadata?.client_id
+      const updateData = { stripe_customer_id: customerId, tier, status: 'active' }
+
+      if (clientId) {
+        // Preferred: match by client_id UUID (reliable)
+        await supabase.from('clients').update(updateData).eq('id', clientId)
+      } else if (session.customer_email) {
+        // Fallback: match by email (less reliable — can be null or wrong case)
+        await supabase.from('clients').update(updateData).eq('email', session.customer_email.toLowerCase())
+      } else {
+        console.error('[Stripe webhook] checkout.session.completed: no client_id or email to match')
+      }
       break
     }
 
@@ -73,6 +81,34 @@ export async function POST(request: NextRequest) {
         .from('clients')
         .update({ status: 'canceled' })
         .eq('stripe_customer_id', sub.customer)
+      break
+    }
+
+    case 'invoice.payment_failed': {
+      const invoice = event.data.object as Stripe.Invoice
+      const customerId = invoice.customer as string
+
+      console.log(`[Stripe webhook] invoice.payment_failed for customer ${customerId}`)
+
+      await supabase
+        .from('clients')
+        .update({ status: 'past_due' })
+        .eq('stripe_customer_id', customerId)
+      break
+    }
+
+    case 'invoice.payment_succeeded': {
+      const invoice = event.data.object as Stripe.Invoice
+      const customerId = invoice.customer as string
+
+      console.log(`[Stripe webhook] invoice.payment_succeeded for customer ${customerId}`)
+
+      // Only restore to active if currently past_due — don't overwrite other statuses
+      await supabase
+        .from('clients')
+        .update({ status: 'active' })
+        .eq('stripe_customer_id', customerId)
+        .eq('status', 'past_due')
       break
     }
   }

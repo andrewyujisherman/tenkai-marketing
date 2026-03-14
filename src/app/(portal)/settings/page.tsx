@@ -312,6 +312,23 @@ function ProfileTab() {
 // --- Billing Tab ---
 
 function BillingTab() {
+  const [portalLoading, setPortalLoading] = useState(false)
+  const [portalError, setPortalError] = useState('')
+
+  async function handleManageBilling() {
+    setPortalLoading(true)
+    setPortalError('')
+    try {
+      const res = await fetch('/api/billing/portal', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to open billing portal')
+      window.location.href = data.url
+    } catch (e: unknown) {
+      setPortalError(e instanceof Error ? e.message : 'Something went wrong')
+      setPortalLoading(false)
+    }
+  }
+
   return (
     <div className="max-w-xl space-y-4">
       <div className="bg-white rounded-tenkai border border-tenkai-border p-8 space-y-5">
@@ -321,20 +338,30 @@ function BillingTab() {
           </div>
           <div>
             <h3 className="font-serif text-lg text-charcoal">Billing & Subscription</h3>
-            <p className="text-warm-gray text-xs">Self-service billing is launching soon</p>
+            <p className="text-warm-gray text-xs">Manage your plan, payment method, and invoices</p>
           </div>
         </div>
-        <div className="bg-parchment/40 rounded-tenkai p-4 space-y-3">
-          <p className="text-sm text-charcoal">
-            In the meantime, for any billing questions — plan changes, invoices, or cancellations:
-          </p>
-          <a
-            href="mailto:support@tenkai.marketing?subject=Billing%20Question"
-            className="inline-flex items-center gap-2 text-sm font-medium text-torii hover:text-torii-dark transition-colors"
+        <div className="space-y-4">
+          <Button
+            onClick={handleManageBilling}
+            disabled={portalLoading}
+            className="bg-torii text-white hover:bg-torii-dark rounded-tenkai"
           >
-            support@tenkai.marketing
-            <span className="text-xs text-warm-gray">(usually replies within a few hours)</span>
-          </a>
+            {portalLoading ? 'Opening…' : 'Manage Billing'}
+          </Button>
+          {portalError && <p className="text-sm text-red-500">{portalError}</p>}
+          <div className="bg-parchment/40 rounded-tenkai p-4 space-y-3">
+            <p className="text-sm text-charcoal">
+              Questions about your plan or invoices? We&apos;re happy to help:
+            </p>
+            <a
+              href="mailto:support@tenkai.marketing?subject=Billing%20Question"
+              className="inline-flex items-center gap-2 text-sm font-medium text-torii hover:text-torii-dark transition-colors"
+            >
+              support@tenkai.marketing
+              <span className="text-xs text-warm-gray">(usually replies within a few hours)</span>
+            </a>
+          </div>
         </div>
       </div>
     </div>

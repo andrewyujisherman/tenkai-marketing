@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
       apiVersion: '2026-02-25.clover',
     })
 
-    const { priceId, tier } = await request.json()
+    const { priceId, tier, clientId } = await request.json()
 
     const resolvedPriceId =
       priceId ?? process.env[tierPriceEnvMap[tier?.toLowerCase() ?? '']]
@@ -32,6 +32,7 @@ export async function POST(request: NextRequest) {
       line_items: [{ price: resolvedPriceId, quantity: 1 }],
       success_url: `${origin}/dashboard?welcome=true`,
       cancel_url: `${origin}/?canceled=true`,
+      ...(clientId ? { metadata: { client_id: clientId } } : {}),
     })
 
     return NextResponse.json({ url: session.url })

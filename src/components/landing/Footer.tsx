@@ -140,8 +140,20 @@ export function Footer() {
               &copy; 2026 Tenkai Marketing. All rights reserved.
             </p>
             <div className="flex items-center gap-4">
+              <Link
+                href="/privacy"
+                className="text-xs text-muted-gray hover:text-charcoal transition-colors"
+              >
+                Privacy Policy
+              </Link>
+              <Link
+                href="/terms"
+                className="text-xs text-muted-gray hover:text-charcoal transition-colors"
+              >
+                Terms of Service
+              </Link>
               <a
-                href="mailto:andrew@alegius.com"
+                href="mailto:support@alegius.com"
                 className="text-xs text-muted-gray hover:text-charcoal transition-colors"
               >
                 Contact

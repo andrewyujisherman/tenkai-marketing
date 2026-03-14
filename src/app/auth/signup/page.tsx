@@ -166,7 +166,19 @@ export default function SignupPage() {
           </Button>
         </form>
 
-        <p className="text-center text-sm text-warm-gray mt-6">
+        <p className="text-center text-xs text-warm-gray mt-6 leading-relaxed">
+          By creating an account, you agree to our{' '}
+          <Link href="/terms" className="text-torii hover:text-torii-dark font-medium">
+            Terms of Service
+          </Link>{' '}
+          and{' '}
+          <Link href="/privacy" className="text-torii hover:text-torii-dark font-medium">
+            Privacy Policy
+          </Link>
+          .
+        </p>
+
+        <p className="text-center text-sm text-warm-gray mt-4">
           Already have an account?{' '}
           <Link href="/auth/login" className="text-torii hover:text-torii-dark font-medium">
             Sign in
