@@ -31,8 +31,8 @@ export async function GET(req: NextRequest) {
       body: new URLSearchParams({
         grant_type: 'authorization_code',
         code,
-        client_id: process.env.GOOGLE_CLIENT_ID ?? '',
-        client_secret: process.env.GOOGLE_CLIENT_SECRET ?? '',
+        client_id: process.env.GOOGLE_OAUTH_WEB_CLIENT_ID ?? '',
+        client_secret: process.env.GOOGLE_OAUTH_WEB_CLIENT_SECRET ?? '',
         redirect_uri: redirectUri,
       }),
     })

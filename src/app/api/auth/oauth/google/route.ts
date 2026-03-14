@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
   const state = Buffer.from(JSON.stringify({ client_id: clientId, type })).toString('base64')
 
   const params = new URLSearchParams({
-    client_id: process.env.GOOGLE_CLIENT_ID ?? '',
+    client_id: process.env.GOOGLE_OAUTH_WEB_CLIENT_ID ?? '',
     redirect_uri: redirectUri,
     response_type: 'code',
     scope,
