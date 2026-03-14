@@ -76,7 +76,7 @@ export function ActivityItem({
                   variant="outline"
                   className="text-charcoal border-tenkai-border text-xs h-7 px-3 rounded-tenkai hover:bg-parchment"
                 >
-                  Edit
+                  Give Feedback
                 </Button>
                 <Button
                   onClick={onDeny}

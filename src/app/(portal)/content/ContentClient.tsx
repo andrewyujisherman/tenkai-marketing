@@ -208,9 +208,13 @@ function ContentHealthTab({ healthDeliverables }: { healthDeliverables: HealthDe
                   <>
                     <tr key={row.id} className="border-b border-tenkai-border-light group">
                       <td className="py-3 px-4">
-                        <button onClick={() => toggleRow(row.id)} className="text-warm-gray hover:text-charcoal transition-colors">
-                          {isExpanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
-                        </button>
+                        {row.recommendation && row.recommendation !== row.action ? (
+                          <button onClick={() => toggleRow(row.id)} className="text-warm-gray hover:text-charcoal transition-colors">
+                            {isExpanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+                          </button>
+                        ) : (
+                          <span className="size-4 block" />
+                        )}
                       </td>
                       <td className="py-3 px-4 font-medium text-charcoal max-w-xs truncate">{row.url}</td>
                       <td className="py-3 px-4 text-right text-charcoal tabular-nums hidden sm:table-cell">
@@ -228,7 +232,7 @@ function ContentHealthTab({ healthDeliverables }: { healthDeliverables: HealthDe
                       </td>
                       <td className="py-3 px-4 text-warm-gray hidden lg:table-cell max-w-xs truncate">{row.action}</td>
                     </tr>
-                    {isExpanded && (
+                    {isExpanded && row.recommendation && row.recommendation !== row.action && (
                       <tr key={`${row.id}-expanded`} className="border-b border-tenkai-border-light">
                         <td colSpan={6} className="px-4 pb-4 pt-0">
                           <div className="bg-parchment/50 rounded-tenkai p-4">
