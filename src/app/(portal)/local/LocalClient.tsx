@@ -375,14 +375,33 @@ function GoogleProfileTab({ items }: { items: LocalDeliverable[] }) {
                   {fields.map((field) => (
                     <div
                       key={field.name}
-                      className="flex items-center gap-2.5 rounded-tenkai border border-tenkai-border bg-parchment/50 px-3 py-2"
+                      className={`flex items-start gap-2.5 rounded-tenkai border px-3 py-2 ${
+                        field.complete
+                          ? 'border-tenkai-border bg-parchment/50'
+                          : 'border-[#C49A3C]/30 bg-[#C49A3C]/5'
+                      }`}
                     >
                       {field.complete ? (
-                        <CheckCircle2 className="size-4 text-[#4A7C59] shrink-0" />
+                        <CheckCircle2 className="size-4 text-[#4A7C59] shrink-0 mt-0.5" />
                       ) : (
-                        <AlertTriangle className="size-4 text-[#C49A3C] shrink-0" />
+                        <AlertTriangle className="size-4 text-[#C49A3C] shrink-0 mt-0.5" />
                       )}
-                      <span className="text-sm text-charcoal">{field.name}</span>
+                      <div className="min-w-0">
+                        <span className="text-sm text-charcoal">{field.name}</span>
+                        {!field.complete && (
+                          <p className="text-[11px] text-[#C49A3C] mt-0.5">
+                            Update this in your{' '}
+                            <a
+                              href="https://business.google.com"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="underline hover:text-[#C49A3C]/80"
+                            >
+                              Google Business Profile
+                            </a>
+                          </p>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>

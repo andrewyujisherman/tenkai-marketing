@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { Copy, Check, Link2, ExternalLink, Mail, FolderOpen, SearchX } from 'lucide-react'
+import { useState, useCallback } from 'react'
+import { Copy, Check, Link2, ExternalLink, Mail, FolderOpen, SearchX, ChevronDown } from 'lucide-react'
 import type { LinkDeliverable } from './page'
 
 interface LinksClientProps {
@@ -45,19 +45,84 @@ function EmptyTab({ message }: { message: string }) {
   )
 }
 
+function OutreachCard({ d }: { d: LinkDeliverable }) {
+  const [expanded, setExpanded] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const isTemplate = d.deliverable_type === 'outreach_templates'
+  const copyText = d.content ?? d.summary ?? ''
+  const isLong = copyText.length > 200
+  const preview = isLong && !expanded ? copyText.slice(0, 200) + '…' : copyText
+
+  const handleCopy = useCallback(async () => {
+    await navigator.clipboard.writeText(copyText)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }, [copyText])
+
+  return (
+    <div className="rounded-tenkai border border-tenkai-border bg-white p-6">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-2">
+            {isTemplate ? (
+              <Mail className="size-4 text-torii flex-shrink-0" />
+            ) : (
+              <ExternalLink className="size-4 text-torii flex-shrink-0" />
+            )}
+            <h3 className="font-serif text-base font-medium text-charcoal truncate">
+              {d.title ?? (isTemplate ? 'Email Template' : 'Guest Post')}
+            </h3>
+            <span className="rounded-full bg-parchment px-2 py-0.5 text-[10px] font-medium text-charcoal">
+              {isTemplate ? 'email template' : (d.deliverable_type ?? 'content').replace(/_/g, ' ')}
+            </span>
+          </div>
+          {preview && (
+            <div className="mb-3">
+              <p className="text-sm text-warm-gray leading-relaxed whitespace-pre-line">
+                {preview}
+              </p>
+              {isLong && (
+                <button
+                  onClick={() => setExpanded(!expanded)}
+                  className="text-xs text-torii hover:text-torii-dark mt-1 flex items-center gap-1"
+                >
+                  {expanded ? 'Show less' : 'Show full template'}
+                  <ChevronDown className={`size-3 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+                </button>
+              )}
+            </div>
+          )}
+          <div className="flex items-center gap-3">
+            {d.agent_name && (
+              <span className="text-xs text-muted-gray">By {d.agent_name}</span>
+            )}
+            <DateLabel iso={d.created_at} />
+          </div>
+        </div>
+        {copyText && (
+          <button
+            onClick={handleCopy}
+            className="flex items-center gap-1.5 rounded-tenkai border border-tenkai-border px-3 py-1.5 text-xs font-medium text-warm-gray hover:text-charcoal hover:border-charcoal/30 transition-colors flex-shrink-0"
+          >
+            {copied ? (
+              <Check className="size-4 text-[#4A7C59]" />
+            ) : (
+              <Copy className="size-4" />
+            )}
+            {copied ? 'Copied' : 'Copy'}
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function LinksClient({
   profileDeliverables,
   outreachDeliverables,
   directoryDeliverables,
 }: LinksClientProps) {
   const [activeTab, setActiveTab] = useState<'profile' | 'outreach' | 'directories'>('profile')
-  const [copied, setCopied] = useState<string | null>(null)
-
-  const handleCopy = (id: string, text: string) => {
-    navigator.clipboard.writeText(text)
-    setCopied(id)
-    setTimeout(() => setCopied(null), 2000)
-  }
 
   const tabs = [
     { key: 'profile' as const, label: 'Profile', count: profileDeliverables.length, icon: Link2 },
@@ -149,60 +214,9 @@ export default function LinksClient({
           {outreachDeliverables.length === 0 ? (
             <EmptyTab message="No outreach campaigns yet. Request Outreach Campaigns from your Dashboard." />
           ) : (
-            outreachDeliverables.map((d) => {
-              const isTemplate = d.deliverable_type === 'outreach_templates'
-              const copyText = d.content ?? d.summary ?? ''
-              const preview = copyText.length > 200 ? copyText.slice(0, 200) + '...' : copyText
-
-              return (
-                <div
-                  key={d.id}
-                  className="rounded-tenkai border border-tenkai-border bg-white p-6"
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-2">
-                        {isTemplate ? (
-                          <Mail className="size-4 text-torii flex-shrink-0" />
-                        ) : (
-                          <ExternalLink className="size-4 text-torii flex-shrink-0" />
-                        )}
-                        <h3 className="font-serif text-base font-medium text-charcoal truncate">
-                          {d.title ?? (isTemplate ? 'Email Template' : 'Guest Post')}
-                        </h3>
-                        <span className="rounded-full bg-parchment px-2 py-0.5 text-[10px] font-medium text-charcoal">
-                          {isTemplate ? 'email template' : (d.deliverable_type ?? 'content').replace(/_/g, ' ')}
-                        </span>
-                      </div>
-                      {preview && (
-                        <p className="text-sm text-warm-gray leading-relaxed mb-3 whitespace-pre-line">
-                          {preview}
-                        </p>
-                      )}
-                      <div className="flex items-center gap-3">
-                        {d.agent_name && (
-                          <span className="text-xs text-muted-gray">By {d.agent_name}</span>
-                        )}
-                        <DateLabel iso={d.created_at} />
-                      </div>
-                    </div>
-                    {copyText && (
-                      <button
-                        onClick={() => handleCopy(d.id, copyText)}
-                        className="flex items-center gap-1.5 rounded-tenkai border border-tenkai-border px-3 py-1.5 text-xs font-medium text-warm-gray hover:text-charcoal hover:border-charcoal/30 transition-colors flex-shrink-0"
-                      >
-                        {copied === d.id ? (
-                          <Check className="size-4 text-[#4A7C59]" />
-                        ) : (
-                          <Copy className="size-4" />
-                        )}
-                        {copied === d.id ? 'Copied' : 'Copy'}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )
-            })
+            outreachDeliverables.map((d) => (
+              <OutreachCard key={d.id} d={d} />
+            ))
           )}
         </div>
       )}

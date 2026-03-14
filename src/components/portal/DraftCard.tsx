@@ -18,6 +18,7 @@ import {
   AccordionContent,
 } from '@/components/ui/accordion'
 import { Eye, FileText, CheckCircle2, AlertTriangle } from 'lucide-react'
+import ReactMarkdown from 'react-markdown'
 
 export interface ChecklistItem {
   label: string
@@ -126,13 +127,9 @@ export function DraftCard({
               by {author} &middot; {wordCount.toLocaleString()} words &middot; {readingTime} min read
             </DialogDescription>
           </DialogHeader>
-          <div className="prose prose-sm max-w-none text-charcoal mt-4">
+          <div className="prose prose-sm max-w-none text-charcoal mt-4 [&_h1]:font-serif [&_h1]:text-lg [&_h1]:text-charcoal [&_h2]:font-serif [&_h2]:text-base [&_h2]:text-charcoal [&_h3]:font-serif [&_h3]:text-sm [&_h3]:text-charcoal [&_p]:text-sm [&_p]:leading-relaxed [&_p]:text-warm-gray [&_li]:text-sm [&_li]:text-warm-gray [&_strong]:text-charcoal [&_a]:text-torii [&_a]:underline [&_blockquote]:border-l-torii/30 [&_blockquote]:text-warm-gray [&_code]:bg-parchment [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs">
             {fullContent ? (
-              fullContent.split('\n\n').map((p, i) => (
-                <p key={i} className="mb-3 text-sm leading-relaxed text-warm-gray">
-                  {p}
-                </p>
-              ))
+              <ReactMarkdown>{fullContent}</ReactMarkdown>
             ) : (
               <p className="text-sm text-warm-gray">{excerpt}</p>
             )}

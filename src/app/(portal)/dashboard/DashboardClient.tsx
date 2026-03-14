@@ -140,6 +140,9 @@ export default function DashboardClient({
   const [feedbackTarget, setFeedbackTarget] = useState<{ id: string; title: string } | null>(null)
   const [feedbackText, setFeedbackText] = useState('')
   const [feedbackLoading, setFeedbackLoading] = useState(false)
+  const [denyTarget, setDenyTarget] = useState<{ id: string; title: string; type: 'post' | 'approval' } | null>(null)
+  const [denyReason, setDenyReason] = useState('')
+  const [denyLoading, setDenyLoading] = useState(false)
 
   // Service request dialog — tracks all field values dynamically
   const [serviceDialog, setServiceDialog] = useState<{ key: string; label: string } | null>(null)
@@ -180,29 +183,41 @@ export default function DashboardClient({
     }
   }, [])
 
-  const handleRejectPost = useCallback(async (postId: string) => {
-    setResolvedPosts((prev) => new Set(prev).add(postId))
+  const handleRejectPost = useCallback(async (postId: string, title?: string) => {
+    setDenyTarget({ id: postId, title: title ?? 'Untitled', type: 'post' })
+  }, [])
+
+  const handleDenySubmit = useCallback(async () => {
+    if (!denyTarget || !denyReason.trim()) return
+    setDenyLoading(true)
+    const { id, type } = denyTarget
+    const resolve = type === 'post' ? setResolvedPosts : setResolvedApprovals
+    resolve((prev) => new Set(prev).add(id))
     try {
-      const res = await fetch(`/api/content/${postId}/reject`, {
+      const res = await fetch(`/api/content/${id}/reject`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason: '' }),
+        body: JSON.stringify({ reason: denyReason.trim() }),
       })
       if (!res.ok) {
-        setResolvedPosts((prev) => {
+        resolve((prev) => {
           const next = new Set(prev)
-          next.delete(postId)
+          next.delete(id)
           return next
         })
       }
     } catch {
-      setResolvedPosts((prev) => {
+      resolve((prev) => {
         const next = new Set(prev)
-        next.delete(postId)
+        next.delete(id)
         return next
       })
+    } finally {
+      setDenyLoading(false)
+      setDenyReason('')
+      setDenyTarget(null)
     }
-  }, [])
+  }, [denyTarget, denyReason])
 
   const handleApproveApproval = useCallback(async (approval: PendingApproval) => {
     const postId = approval.content_post_id
@@ -229,27 +244,7 @@ export default function DashboardClient({
   const handleRejectApproval = useCallback(async (approval: PendingApproval) => {
     const postId = approval.content_post_id
     if (!postId) return
-    setResolvedApprovals((prev) => new Set(prev).add(approval.id))
-    try {
-      const res = await fetch(`/api/content/${postId}/reject`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason: '' }),
-      })
-      if (!res.ok) {
-        setResolvedApprovals((prev) => {
-          const next = new Set(prev)
-          next.delete(approval.id)
-          return next
-        })
-      }
-    } catch {
-      setResolvedApprovals((prev) => {
-        const next = new Set(prev)
-        next.delete(approval.id)
-        return next
-      })
-    }
+    setDenyTarget({ id: postId, title: approval.title ?? 'Untitled', type: 'approval' })
   }, [])
 
   const handleFeedbackSubmit = useCallback(async () => {
@@ -317,8 +312,9 @@ export default function DashboardClient({
   }, [serviceDialog, serviceFields, client?.website_url, refreshDeliverables])
 
   useEffect(() => {
-    if (serviceSuccess && !serviceSuccess.startsWith('Error')) {
-      const timer = setTimeout(() => setServiceSuccess(null), 5000)
+    if (serviceSuccess) {
+      const delay = serviceSuccess.startsWith('Error') ? 10000 : 5000
+      const timer = setTimeout(() => setServiceSuccess(null), delay)
       return () => clearTimeout(timer)
     }
   }, [serviceSuccess])
@@ -440,7 +436,7 @@ export default function DashboardClient({
                     needsAction={needsApproval}
                     actionType={needsApproval ? 'approve' : undefined}
                     onApprove={needsApproval ? () => handleApprovePost(post.id) : undefined}
-                    onDeny={needsApproval ? () => handleRejectPost(post.id) : undefined}
+                    onDeny={needsApproval ? () => handleRejectPost(post.id, post.title ?? undefined) : undefined}
                     onEdit={needsApproval ? () => setFeedbackTarget({ id: post.id, title: post.title ?? 'Untitled' }) : undefined}
                   />
                 )
@@ -496,7 +492,7 @@ export default function DashboardClient({
                         title: approval.title ?? 'Untitled',
                       })}
                     >
-                      Edit
+                      Give Feedback
                     </Button>
                     <Button
                       onClick={() => handleRejectApproval(approval)}
@@ -710,6 +706,37 @@ export default function DashboardClient({
         </DialogContent>
       </Dialog>
 
+      {/* Deny dialog — requires a reason */}
+      <Dialog open={denyTarget !== null} onOpenChange={(o) => { if (!o) { setDenyTarget(null); setDenyReason('') } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-serif text-charcoal">
+              Deny: {denyTarget?.title}
+            </DialogTitle>
+            <DialogDescription>
+              Let the team know why this doesn&apos;t meet your standards so they can improve.
+            </DialogDescription>
+          </DialogHeader>
+          <textarea
+            value={denyReason}
+            onChange={(e) => setDenyReason(e.target.value)}
+            placeholder="What needs to change? Be specific so the team can get it right..."
+            rows={4}
+            className="w-full px-4 py-3 text-sm border border-tenkai-border rounded-tenkai bg-transparent outline-none resize-none focus:border-torii focus:ring-2 focus:ring-torii/20 placeholder:text-muted-gray"
+            autoFocus
+          />
+          <DialogFooter showCloseButton>
+            <Button
+              onClick={handleDenySubmit}
+              disabled={denyLoading || !denyReason.trim()}
+              className="bg-torii text-white hover:bg-torii-dark rounded-tenkai"
+            >
+              {denyLoading ? 'Denying…' : 'Deny with Reason'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Service request dialog — context-aware fields per service type */}
       <Dialog open={serviceDialog !== null} onOpenChange={(o) => { if (!o) { setServiceDialog(null); setServiceLoading(false) } }}>
         <DialogContent className="sm:max-w-md">
@@ -847,17 +874,38 @@ export default function DashboardClient({
                         <button
                           onClick={(e) => {
                             e.stopPropagation()
-                            const blob = new Blob([JSON.stringify(content, null, 2)], { type: 'application/json' })
+                            // Build readable text from structured content
+                            const lines: string[] = [`${d.title ?? 'Report'}\n${'='.repeat(40)}\n`]
+                            if (d.summary) lines.push(`Summary: ${d.summary}\n`)
+                            const flatten = (obj: Record<string, unknown>, prefix = ''): void => {
+                              for (const [k, v] of Object.entries(obj)) {
+                                const label = k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+                                if (Array.isArray(v)) {
+                                  lines.push(`\n${prefix}${label}:`)
+                                  v.forEach((item, i) => {
+                                    if (typeof item === 'object' && item) lines.push(`  ${i + 1}. ${JSON.stringify(item)}`)
+                                    else lines.push(`  • ${item}`)
+                                  })
+                                } else if (typeof v === 'object' && v) {
+                                  lines.push(`\n${prefix}${label}:`)
+                                  flatten(v as Record<string, unknown>, prefix + '  ')
+                                } else {
+                                  lines.push(`${prefix}${label}: ${v}`)
+                                }
+                              }
+                            }
+                            flatten(content as Record<string, unknown>)
+                            const blob = new Blob([lines.join('\n')], { type: 'text/plain' })
                             const url = URL.createObjectURL(blob)
                             const a = document.createElement('a')
                             a.href = url
-                            a.download = `${d.title ?? 'deliverable'}.json`
+                            a.download = `${d.title ?? 'report'}.txt`
                             a.click()
                             URL.revokeObjectURL(url)
                           }}
                           className="text-xs text-torii hover:text-torii-dark transition-colors px-2 py-1 rounded-tenkai border border-torii/20 hover:border-torii/40"
                         >
-                          Download JSON
+                          Download Report
                         </button>
                         <ChevronDown className={`size-4 text-warm-gray transition-transform ${reportExpanded ? 'rotate-180' : ''}`} />
                       </div>

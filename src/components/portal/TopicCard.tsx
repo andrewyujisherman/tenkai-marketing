@@ -85,7 +85,7 @@ export function TopicCard({
             Approve
           </Button>
           <Button variant="outline" size="sm" onClick={onEdit}>
-            Edit
+            Give Feedback
           </Button>
           <Button variant="ghost" size="sm" className="text-warm-gray" onClick={onDeny}>
             Deny

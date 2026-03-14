@@ -727,7 +727,11 @@ function PerformanceTab({ reports }: { reports: ReportData[] }) {
     if (period === '3m') return r.type === 'quarterly'
     return true
   })
-  const activeReport = filteredReports[0] ?? reports[0]
+  const activeReport = filteredReports[0] ?? null
+  const isFallback = !activeReport && reports.length > 0
+  const displayReport = activeReport ?? reports[0]
+
+  const periodLabel = period === '30d' ? 'monthly' : period === '3m' ? 'quarterly' : 'this period'
 
   return (
     <div className="space-y-6">
@@ -746,21 +750,24 @@ function PerformanceTab({ reports }: { reports: ReportData[] }) {
           </TabsList>
 
           <TabsContent value="30d">
-            {activeReport ? <ReportView report={activeReport} /> : <p className="text-sm text-warm-gray mt-6">No monthly report available.</p>}
+            {isFallback && <p className="text-xs text-[#C49A3C] mb-3">No {periodLabel} report yet — showing your most recent report below.</p>}
+            {displayReport ? <ReportView report={displayReport} /> : <p className="text-sm text-warm-gray mt-6">No monthly report available.</p>}
           </TabsContent>
           <TabsContent value="3m">
-            {activeReport ? <ReportView report={activeReport} /> : <p className="text-sm text-warm-gray mt-6">No quarterly report available.</p>}
+            {isFallback && <p className="text-xs text-[#C49A3C] mb-3">No {periodLabel} report yet — showing your most recent report below.</p>}
+            {displayReport ? <ReportView report={displayReport} /> : <p className="text-sm text-warm-gray mt-6">No quarterly report available.</p>}
           </TabsContent>
           <TabsContent value="6m">
-            {activeReport ? <ReportView report={activeReport} /> : <p className="text-sm text-warm-gray mt-6">No reports available for this period.</p>}
+            {isFallback && <p className="text-xs text-[#C49A3C] mb-3">No reports for {periodLabel} yet — showing your most recent report below.</p>}
+            {displayReport ? <ReportView report={displayReport} /> : <p className="text-sm text-warm-gray mt-6">No reports available for this period.</p>}
           </TabsContent>
         </Tabs>
       </div>
-      {activeReport && (
+      {displayReport && (
         <Button
           variant="outline"
           className="border-tenkai-border text-charcoal hover:bg-parchment rounded-tenkai gap-2"
-          onClick={() => exportReportCSV(activeReport)}
+          onClick={() => exportReportCSV(displayReport)}
         >
           <Download className="size-4" />
           Export Report

@@ -549,6 +549,14 @@ export default function ContentClient({ initialTopics, initialDrafts, publishedP
                 </p>
               </div>
             ) : (
+              <>
+              <div className="rounded-tenkai border border-[#C49A3C]/20 bg-[#C49A3C]/5 px-4 py-3 mb-4 flex items-start gap-2">
+                <span className="text-sm">📊</span>
+                <p className="text-xs text-[#C49A3C]">
+                  Traffic and ranking data will appear here once your Google Search Console is connected.{' '}
+                  <a href="/integrations" className="underline hover:text-[#C49A3C]/80">Set up integrations →</a>
+                </p>
+              </div>
               <div className="rounded-tenkai border border-tenkai-border bg-white overflow-hidden">
                 <table className="w-full text-sm">
                   <thead>
@@ -596,6 +604,7 @@ export default function ContentClient({ initialTopics, initialDrafts, publishedP
                   </tbody>
                 </table>
               </div>
+              </>
             )}
           </div>
         </TabsContent>
