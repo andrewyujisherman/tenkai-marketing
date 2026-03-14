@@ -141,6 +141,9 @@ export async function saveClientContext(
       proof_points: form.proof_points,
       notes: form.notes,
       years_in_business: form.years_in_business,
+      phone: form.phone,
+      server_type: form.server_type,
+      conversion_goals: form.conversion_goals,
     }),
   ])
 }

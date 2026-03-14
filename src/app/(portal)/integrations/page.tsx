@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import {
   CheckCircle2,
   AlertCircle,
@@ -19,6 +20,11 @@ import {
   Wifi,
   WifiOff,
   Info,
+  Mail,
+  Star,
+  Link,
+  Share2,
+  Bell,
 } from 'lucide-react'
 import { EMPTY_CLIENT_CONTEXT_FORM, type ClientContextForm } from '@/lib/client-context'
 
@@ -341,6 +347,88 @@ function CMSPlatformSection({
   )
 }
 
+// ─── Future Integrations Roadmap ──────────────────────────────────────────────
+
+const ROADMAP_ITEMS = [
+  {
+    icon: <Mail className="size-4" />,
+    name: 'Email & Outreach',
+    services: 'Gmail, Mailchimp',
+    description: 'Automate outreach campaigns and track email-driven conversions.',
+    eta: 'Coming Q2 2026',
+  },
+  {
+    icon: <Star className="size-4" />,
+    name: 'Review Platforms',
+    services: 'Yelp, Google Reviews',
+    description: 'Monitor and respond to reviews across platforms.',
+    eta: 'Coming Q2 2026',
+  },
+  {
+    icon: <Link className="size-4" />,
+    name: 'Backlink Tools',
+    services: 'Ahrefs, SEMrush',
+    description: 'Track your backlink profile and find link-building opportunities.',
+    eta: 'Coming Q3 2026',
+  },
+  {
+    icon: <Share2 className="size-4" />,
+    name: 'Social Media',
+    services: 'Facebook, Instagram',
+    description: 'Sync social performance data with your SEO strategy.',
+    eta: 'Coming Q3 2026',
+  },
+]
+
+function FutureIntegrationsSection() {
+  return (
+    <section className="space-y-3">
+      <div>
+        <h2 className="text-xs font-semibold uppercase tracking-widest text-warm-gray">
+          Coming Soon
+        </h2>
+        <p className="text-xs text-warm-gray mt-1">
+          We&apos;re building more integrations to supercharge your SEO. Get notified when they launch.
+        </p>
+      </div>
+      <div className="grid gap-2">
+        {ROADMAP_ITEMS.map((item) => (
+          <div
+            key={item.name}
+            className="border border-tenkai-border rounded-tenkai bg-cream p-4 flex items-center gap-4"
+          >
+            <div className="w-10 h-10 rounded-lg bg-parchment flex items-center justify-center text-warm-gray flex-shrink-0">
+              {item.icon}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-medium text-charcoal">{item.name}</span>
+                <span className="text-[10px] text-torii/70 border border-torii/20 rounded-full px-2 py-0.5 font-medium">
+                  {item.eta}
+                </span>
+              </div>
+              <p className="text-xs text-warm-gray mt-0.5">
+                <span className="font-medium">{item.services}</span> — {item.description}
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                window.location.href = `mailto:support@tenkai.marketing?subject=Notify me: ${encodeURIComponent(item.name)}`
+              }}
+              className="text-xs rounded-tenkai border-tenkai-border text-warm-gray hover:text-torii hover:border-torii/30 gap-1.5 flex-shrink-0"
+            >
+              <Bell className="size-3" />
+              Notify Me
+            </Button>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
 // ─── Section 3: Business Context (collapsible) ────────────────────────────────
 
 interface ContextSectionDef {
@@ -396,6 +484,20 @@ const CONTEXT_SECTIONS: ContextSectionDef[] = [
     isComplete: (f) => hasValue(f.business_name),
     completionLabel: (f) => (hasValue(f.business_name) ? f.business_name : null),
   },
+]
+
+const SERVER_TYPE_OPTIONS = [
+  { value: '', label: 'Select your website server...' },
+  { value: 'wordpress', label: 'WordPress' },
+  { value: 'shopify', label: 'Shopify' },
+  { value: 'wix', label: 'Wix' },
+  { value: 'squarespace', label: 'Squarespace' },
+  { value: 'webflow', label: 'Webflow' },
+  { value: 'vercel_nextjs', label: 'Vercel / Next.js' },
+  { value: 'netlify', label: 'Netlify' },
+  { value: 'apache', label: 'Apache' },
+  { value: 'nginx', label: 'Nginx' },
+  { value: 'other', label: 'Other' },
 ]
 
 function ContextSectionRow({
@@ -556,6 +658,12 @@ function ContextFields({
           className={inputCls}
         />
         <Input
+          value={form.phone}
+          onChange={(e) => setField('phone', (e.target as HTMLInputElement).value)}
+          placeholder="Business phone (e.g., (512) 555-0100)"
+          className={inputCls}
+        />
+        <Input
           value={form.business_location}
           onChange={(e) => setField('business_location', (e.target as HTMLInputElement).value)}
           placeholder="City, State (e.g., Austin, TX)"
@@ -581,6 +689,17 @@ function ContextFields({
           placeholder="Years in business (e.g., Since 2014)"
           className={inputCls}
         />
+        <select
+          value={form.server_type}
+          onChange={(e) => setField('server_type', e.target.value)}
+          className="flex h-9 w-full rounded-tenkai border border-tenkai-border bg-transparent px-3 py-1 text-sm text-charcoal shadow-xs transition-colors focus-visible:border-torii focus-visible:ring-torii/20 focus-visible:outline-none focus-visible:ring-[3px]"
+        >
+          {SERVER_TYPE_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
         <Textarea
           value={form.services}
           onChange={(e) => setField('services', e.target.value)}
@@ -599,6 +718,13 @@ function ContextFields({
           value={form.differentiators}
           onChange={(e) => setField('differentiators', e.target.value)}
           placeholder="What makes you different? Certifications, guarantees, response times..."
+          rows={3}
+          className={textCls}
+        />
+        <Textarea
+          value={form.conversion_goals}
+          onChange={(e) => setField('conversion_goals', e.target.value)}
+          placeholder="e.g., Contact form submissions, phone calls, online purchases, email signups"
           rows={3}
           className={textCls}
         />
@@ -640,6 +766,7 @@ export default function IntegrationsPage() {
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  const [activeTab, setActiveTab] = useState('connections')
 
   // Handle OAuth callback params
   useEffect(() => {
@@ -732,18 +859,21 @@ export default function IntegrationsPage() {
     oauthStatusMap[item.type] = item.status
   }
 
-  // Integration health calculation
-  const totalConnectors = 3 + 1 + CONTEXT_SECTIONS.length // oauth + cms + context
+  // Integration health — only real connections (OAuth + CMS), NOT business context
+  const totalConnectors = OAUTH_CONNECTORS.length + 1 // 3 oauth + 1 CMS
   const oauthConnected = OAUTH_CONNECTORS.filter(
     (c) => oauthStatusMap[c.type] === 'active'
   ).length
   const cmsConnected = hasValue(form.cms_url) ? 1 : 0
-  const contextConnected = CONTEXT_SECTIONS.filter((s) => s.isComplete(form)).length
-  const totalConnected = oauthConnected + cmsConnected + contextConnected
+  const totalConnected = oauthConnected + cmsConnected
   const healthPct = Math.round((totalConnected / totalConnectors) * 100)
 
+  // Business profile completion
+  const contextCompleted = CONTEXT_SECTIONS.filter((s) => s.isComplete(form)).length
+  const contextPct = Math.round((contextCompleted / CONTEXT_SECTIONS.length) * 100)
+
   return (
-    <div className="max-w-3xl mx-auto space-y-10 pb-16">
+    <div className="max-w-3xl mx-auto space-y-8 pb-16">
       {/* Header */}
       <div className="space-y-1">
         <h1 className="font-serif text-2xl text-charcoal">Integrations</h1>
@@ -752,111 +882,164 @@ export default function IntegrationsPage() {
         </p>
       </div>
 
-      {/* Integration Health */}
-      <div className="bg-cream rounded-tenkai border border-tenkai-border p-5 space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Wifi className="size-4 text-torii" />
-            <span className="text-sm font-medium text-charcoal">Integration Health</span>
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="bg-parchment/60 border border-tenkai-border rounded-tenkai">
+          <TabsTrigger
+            value="connections"
+            className="rounded-tenkai text-xs data-active:text-torii"
+          >
+            <Wifi className="size-3.5" />
+            Connections
+          </TabsTrigger>
+          <TabsTrigger
+            value="profile"
+            className="rounded-tenkai text-xs data-active:text-torii"
+          >
+            <Building className="size-3.5" />
+            Business Profile
+          </TabsTrigger>
+        </TabsList>
+
+        {/* ─── Connections Tab ─── */}
+        <TabsContent value="connections" className="mt-6 space-y-10">
+          {/* Integration Health Bar */}
+          <div className="bg-cream rounded-tenkai border border-tenkai-border p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Wifi className="size-4 text-torii" />
+                <span className="text-sm font-medium text-charcoal">Integration Health</span>
+              </div>
+              <span className="text-sm font-semibold text-torii">
+                {totalConnected} of {totalConnectors} connected
+              </span>
+            </div>
+            <div className="h-2 bg-parchment rounded-full overflow-hidden">
+              <div
+                className="h-full bg-torii rounded-full transition-all duration-700 ease-out"
+                style={{ width: `${healthPct}%` }}
+              />
+            </div>
+            <p className="text-xs text-warm-gray">
+              {healthPct < 100
+                ? 'Complete your connections to unlock full agent capabilities.'
+                : 'All connections active — agents running at full power.'}
+            </p>
           </div>
-          <span className="text-sm font-semibold text-torii">
-            {totalConnected} of {totalConnectors} connected
-          </span>
-        </div>
-        <div className="h-2 bg-parchment rounded-full overflow-hidden">
-          <div
-            className="h-full bg-torii rounded-full transition-all duration-700 ease-out"
-            style={{ width: `${healthPct}%` }}
-          />
-        </div>
-        <p className="text-xs text-warm-gray">
-          {healthPct < 100
-            ? 'Complete your connections to unlock full agent capabilities.'
-            : 'All connections active — agents running at full power.'}
-        </p>
-      </div>
 
-      {/* Section 1: Data Connections */}
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xs font-semibold uppercase tracking-widest text-warm-gray">
-            Data Connections
-          </h2>
-          <span className="text-xs text-warm-gray">
-            {oauthConnected}/{OAUTH_CONNECTORS.length} connected
-          </span>
-        </div>
-        <p className="text-xs text-warm-gray -mt-1">
-          Connect your Google accounts so our agents can pull live data and generate accurate insights.
-        </p>
-        <div className="space-y-2">
-          {OAUTH_CONNECTORS.map((connector) => (
-            <OAuthConnectorCard
-              key={connector.type}
-              connector={connector}
-              status={oauthStatusMap[connector.type] ?? 'not_connected'}
-              onDisconnect={fetchStatus}
-            />
-          ))}
-        </div>
-      </section>
+          {/* Data Connections (OAuth) */}
+          <section className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xs font-semibold uppercase tracking-widest text-warm-gray">
+                Data Connections
+              </h2>
+              <span className="text-xs text-warm-gray">
+                {oauthConnected}/{OAUTH_CONNECTORS.length} connected
+              </span>
+            </div>
+            <p className="text-xs text-warm-gray -mt-1">
+              Connect your Google accounts so our agents can pull live data and generate accurate insights.
+            </p>
+            <div className="space-y-2">
+              {OAUTH_CONNECTORS.map((connector) => (
+                <OAuthConnectorCard
+                  key={connector.type}
+                  connector={connector}
+                  status={oauthStatusMap[connector.type] ?? 'not_connected'}
+                  onDisconnect={fetchStatus}
+                />
+              ))}
+            </div>
+          </section>
 
-      {/* Section 2: Website Platform */}
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xs font-semibold uppercase tracking-widest text-warm-gray">
-            Website Platform
-          </h2>
-          {cmsConnected > 0 && (
-            <span className="text-xs text-[#4A7C59] flex items-center gap-1">
-              <CheckCircle2 className="size-3" />
-              Connected
-            </span>
-          )}
-        </div>
-        <p className="text-xs text-warm-gray -mt-1">
-          Connect your CMS so we can publish content and apply technical fixes directly.
-        </p>
-        <div className="border border-tenkai-border rounded-tenkai bg-cream p-4">
-          <CMSPlatformSection
-            form={form}
-            setField={setField}
-            saving={saving}
-            onSave={handleSave}
-            saveSuccess={saveSuccess}
-          />
-        </div>
-      </section>
+          {/* Website Platform (CMS) */}
+          <section className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xs font-semibold uppercase tracking-widest text-warm-gray">
+                Website Platform
+              </h2>
+              {cmsConnected > 0 && (
+                <span className="text-xs text-[#4A7C59] flex items-center gap-1">
+                  <CheckCircle2 className="size-3" />
+                  Connected
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-warm-gray -mt-1">
+              Connect your CMS so we can publish content and apply technical fixes directly.
+            </p>
+            <div className="border border-tenkai-border rounded-tenkai bg-cream p-4">
+              <CMSPlatformSection
+                form={form}
+                setField={setField}
+                saving={saving}
+                onSave={handleSave}
+                saveSuccess={saveSuccess}
+              />
+            </div>
+          </section>
 
-      {/* Section 3: Business Context */}
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xs font-semibold uppercase tracking-widest text-warm-gray">
-            Business Context
-          </h2>
-          <span className="text-xs text-warm-gray">
-            {contextConnected}/{CONTEXT_SECTIONS.length} complete
-          </span>
-        </div>
-        <p className="text-xs text-warm-gray -mt-1">
-          Fill these in to give your agents full context. The more detail, the better the output.
-        </p>
-        <div className="space-y-2">
-          {CONTEXT_SECTIONS.map((def) => (
-            <ContextSectionRow
-              key={def.id}
-              def={def}
-              form={form}
-              setField={setField}
-              expanded={expandedSection === def.id}
-              onToggle={() => toggleSection(def.id)}
-              onSave={handleSave}
-              saving={saving}
-              saveSuccess={saveSuccess}
-            />
-          ))}
-        </div>
-      </section>
+          {/* Future Integrations Roadmap */}
+          <FutureIntegrationsSection />
+        </TabsContent>
+
+        {/* ─── Business Profile Tab ─── */}
+        <TabsContent value="profile" className="mt-6 space-y-8">
+          {/* Profile Completion */}
+          <div className="bg-cream rounded-tenkai border border-tenkai-border p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Building className="size-4 text-torii" />
+                <span className="text-sm font-medium text-charcoal">Profile Completion</span>
+              </div>
+              <span className="text-sm font-semibold text-torii">
+                {contextCompleted} of {CONTEXT_SECTIONS.length} complete
+              </span>
+            </div>
+            <div className="h-2 bg-parchment rounded-full overflow-hidden">
+              <div
+                className="h-full bg-torii rounded-full transition-all duration-700 ease-out"
+                style={{ width: `${contextPct}%` }}
+              />
+            </div>
+            <p className="text-xs text-warm-gray">
+              {contextPct < 100
+                ? 'Fill in your business details to give your agents full context.'
+                : 'Profile complete — your agents have everything they need.'}
+            </p>
+          </div>
+
+          {/* Context Sections */}
+          <section className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xs font-semibold uppercase tracking-widest text-warm-gray">
+                Business Context
+              </h2>
+              <span className="text-xs text-warm-gray">
+                {contextCompleted}/{CONTEXT_SECTIONS.length} complete
+              </span>
+            </div>
+            <p className="text-xs text-warm-gray -mt-1">
+              Fill these in to give your agents full context. The more detail, the better the output.
+            </p>
+            <div className="space-y-2">
+              {CONTEXT_SECTIONS.map((def) => (
+                <ContextSectionRow
+                  key={def.id}
+                  def={def}
+                  form={form}
+                  setField={setField}
+                  expanded={expandedSection === def.id}
+                  onToggle={() => toggleSection(def.id)}
+                  onSave={handleSave}
+                  saving={saving}
+                  saveSuccess={saveSuccess}
+                />
+              ))}
+            </div>
+          </section>
+        </TabsContent>
+      </Tabs>
 
       {/* Toast */}
       {toast && (

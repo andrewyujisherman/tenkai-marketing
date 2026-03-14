@@ -16,6 +16,9 @@ export interface ClientContextForm {
   proof_points: string
   notes: string
   years_in_business: string
+  phone: string
+  server_type: string
+  conversion_goals: string
 }
 
 interface ClientRecordLike {
@@ -49,6 +52,9 @@ export const EMPTY_CLIENT_CONTEXT_FORM: ClientContextForm = {
   proof_points: '',
   notes: '',
   years_in_business: '',
+  phone: '',
+  server_type: '',
+  conversion_goals: '',
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -144,5 +150,8 @@ export function buildClientContextForm(
     notes: asString(businessInfo.notes) || asString(onboarding.challenge),
     years_in_business:
       asString(businessInfo.years_in_business) || asString(onboarding.years),
+    phone: asString(businessInfo.phone),
+    server_type: asString(businessInfo.server_type),
+    conversion_goals: asString(businessInfo.conversion_goals),
   }
 }
