@@ -34,7 +34,25 @@ export async function POST(request: Request) {
   }
 
   if (!client) {
-    return NextResponse.json({ error: 'Client not found' }, { status: 404 })
+    // Safety net: self-signup may have missed callback — create row on the fly
+    const name = user.user_metadata?.full_name ?? ''
+    const company_name = user.user_metadata?.company_name ?? ''
+    const { data: newClient, error: insertError } = await supabaseAdmin
+      .from('clients')
+      .insert({
+        email: (user.email ?? '').toLowerCase(),
+        auth_user_id: user.id,
+        name,
+        company_name,
+        status: 'onboarding',
+      })
+      .select('id, status, website_url')
+      .single()
+
+    if (insertError || !newClient) {
+      return NextResponse.json({ error: 'Client not found and could not be created' }, { status: 404 })
+    }
+    client = newClient
   }
 
   const { error: updateError } = await supabaseAdmin

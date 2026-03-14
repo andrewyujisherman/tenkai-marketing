@@ -71,11 +71,24 @@ export default async function DashboardPage() {
   } else if (user) {
     userName = user.user_metadata?.full_name ?? user.email ?? null
 
-    const { data: clientData } = await supabase
+    // Try auth_user_id first, fall back to email
+    let clientData = null
+    const { data: byId } = await supabaseAdmin
       .from('clients')
       .select('id, company_name, website_url')
-      .eq('email', user.email)
+      .eq('auth_user_id', user.id)
       .single()
+
+    if (byId) {
+      clientData = byId
+    } else {
+      const { data: byEmail } = await supabaseAdmin
+        .from('clients')
+        .select('id, company_name, website_url')
+        .eq('email', (user.email ?? '').toLowerCase())
+        .single()
+      clientData = byEmail
+    }
 
     clientRecord = clientData ?? null
   }
