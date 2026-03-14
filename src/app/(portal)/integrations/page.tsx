@@ -659,8 +659,17 @@ export default function IntegrationsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-warm-gray text-sm">Loading connectors…</div>
+      <div className="max-w-3xl mx-auto space-y-10 pb-16">
+        <div className="space-y-1">
+          <div className="h-8 w-48 bg-parchment rounded-tenkai animate-pulse" />
+          <div className="h-4 w-72 bg-parchment rounded-tenkai animate-pulse" />
+        </div>
+        <div className="h-16 bg-parchment rounded-tenkai animate-pulse" />
+        <div className="grid gap-4">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-20 bg-parchment rounded-tenkai animate-pulse" />
+          ))}
+        </div>
       </div>
     )
   }
@@ -685,7 +694,7 @@ export default function IntegrationsPage() {
     <div className="max-w-3xl mx-auto space-y-10 pb-16">
       {/* Header */}
       <div className="space-y-1">
-        <h1 className="font-serif text-2xl text-charcoal">Connectors</h1>
+        <h1 className="font-serif text-2xl text-charcoal">Integrations</h1>
         <p className="text-warm-gray text-sm">
           The more you connect, the smarter your SEO strategy.
         </p>

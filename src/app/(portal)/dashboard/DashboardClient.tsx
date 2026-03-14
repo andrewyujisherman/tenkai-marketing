@@ -520,7 +520,7 @@ export default function DashboardClient({
       </div>
 
       {/* ─── Request a Service ────────────────────────────────── */}
-      <section className="space-y-4">
+      <section id="services" className="space-y-4 scroll-mt-20">
         <div>
           <div className="flex items-center gap-2">
             <Zap className="size-5 text-torii" />

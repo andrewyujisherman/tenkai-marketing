@@ -22,9 +22,11 @@ const featureOrder = ['audit', 'content', 'reporting', 'gbp', 'keywords', 'strat
 export function PricingSection() {
   const router = useRouter()
   const [loadingTier, setLoadingTier] = useState<string | null>(null)
+  const [checkoutError, setCheckoutError] = useState<string | null>(null)
 
   async function handleCheckout(tierName: string) {
     setLoadingTier(tierName)
+    setCheckoutError(null)
     try {
       const res = await fetch('/api/checkout', {
         method: 'POST',
@@ -36,6 +38,8 @@ export function PricingSection() {
       router.push(url)
     } catch {
       setLoadingTier(null)
+      setCheckoutError('Something went wrong. Please try again or contact support@tenkai.marketing')
+      setTimeout(() => setCheckoutError(null), 8000)
     }
   }
 
@@ -134,6 +138,12 @@ export function PricingSection() {
             )
           })}
         </div>
+
+        {checkoutError && (
+          <div className="max-w-md mx-auto mb-8 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-center">
+            <p className="text-sm text-red-700">{checkoutError}</p>
+          </div>
+        )}
 
         {/* All plans include */}
         <div className="text-center animate-fade-up" style={{ animationDelay: '400ms' }}>

@@ -56,13 +56,14 @@ export function PortalHeader() {
         <button
           onClick={() => router.push('/settings?tab=notifications')}
           className="relative p-2 rounded-tenkai hover:bg-parchment transition-colors group"
+          aria-label="Notification settings"
         >
           <Bell className="size-[18px] text-warm-gray group-hover:text-charcoal transition-colors" />
         </button>
 
         {/* User dropdown */}
         <DropdownMenu>
-          <DropdownMenuTrigger className="flex items-center gap-2 px-2 py-1.5 rounded-tenkai hover:bg-parchment transition-colors outline-none">
+          <DropdownMenuTrigger className="flex items-center gap-2 px-2 py-1.5 rounded-tenkai hover:bg-parchment transition-colors outline-none" aria-label="Account menu">
             <div className="w-7 h-7 rounded-full bg-torii-subtle flex items-center justify-center">
               <span className="text-torii text-xs font-semibold">{userInitial || 'U'}</span>
             </div>

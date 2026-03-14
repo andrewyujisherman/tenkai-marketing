@@ -348,12 +348,14 @@ export default function OnboardingPage() {
               )}
             </div>
             <div className="flex items-center gap-3">
-              <button
-                onClick={handleSkip}
-                className="text-sm text-warm-gray hover:text-charcoal transition-colors"
-              >
-                Skip
-              </button>
+              {!(phase === 'round2' && step === stepsPerRound - 1) && (
+                <button
+                  onClick={handleSkip}
+                  className="text-sm text-warm-gray hover:text-charcoal transition-colors"
+                >
+                  Skip
+                </button>
+              )}
               <Button
                 onClick={handleNext}
                 disabled={isSubmitting}
