@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   CheckCircle2,
   AlertCircle,
@@ -112,15 +111,38 @@ const OAUTH_CONNECTORS = [
 function OAuthConnectorCard({
   connector,
   status,
+  onDisconnect,
 }: {
   connector: (typeof OAUTH_CONNECTORS)[number]
   status: OAuthStatus
+  onDisconnect?: () => void
 }) {
   const isConnected = status === 'active'
   const isError = status === 'expired' || status === 'error'
+  const [connecting, setConnecting] = useState(false)
+
+  const handleConnect = () => {
+    setConnecting(true)
+    window.location.href = `/api/auth/oauth/google?type=${connector.type}`
+  }
+
+  const handleDisconnect = async () => {
+    try {
+      await fetch('/api/portal/credentials', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: connector.type }),
+      })
+      onDisconnect?.()
+    } catch {
+      // ignore
+    }
+  }
 
   return (
-    <div className="border border-tenkai-border rounded-tenkai bg-cream p-4 flex items-center gap-4">
+    <div className={`border rounded-tenkai bg-cream p-4 flex items-center gap-4 ${
+      isConnected ? 'border-[#4A7C59]/30' : 'border-tenkai-border'
+    }`}>
       <div className="w-11 h-11 rounded-lg bg-torii/8 flex items-center justify-center text-xl flex-shrink-0">
         {connector.icon}
       </div>
@@ -143,29 +165,36 @@ function OAuthConnectorCard({
         ) : (
           <NotConnectedBadge />
         )}
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger render={
-              <Button
-                variant="outline"
-                size="sm"
-                disabled
-                className="text-xs rounded-tenkai border-tenkai-border text-warm-gray cursor-not-allowed opacity-60"
-              >
-                {isConnected ? 'Reconnect' : 'Connect'}
-              </Button>
-            } />
-            <TooltipContent
-              side="top"
-              className="max-w-[200px] text-center text-xs bg-charcoal text-cream border-0"
+        {isConnected ? (
+          <div className="flex items-center gap-1.5">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleConnect}
+              className="text-xs rounded-tenkai border-tenkai-border text-warm-gray"
             >
-              <div className="flex items-center gap-1.5">
-                <Clock className="size-3 text-torii flex-shrink-0" />
-                Coming soon — we&apos;ll notify you when ready
-              </div>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+              Reconnect
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleDisconnect}
+              className="text-xs text-warm-gray hover:text-torii"
+            >
+              Disconnect
+            </Button>
+          </div>
+        ) : (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleConnect}
+            disabled={connecting}
+            className="text-xs rounded-tenkai border-torii/30 text-torii hover:bg-torii/5"
+          >
+            {connecting ? 'Connecting…' : 'Connect'}
+          </Button>
+        )}
       </div>
     </div>
   )
@@ -610,6 +639,29 @@ export default function IntegrationsPage() {
   const [expandedSection, setExpandedSection] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+
+  // Handle OAuth callback params
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const connected = params.get('connected')
+    const error = params.get('error')
+    if (connected) {
+      const label = OAUTH_CONNECTORS.find((c) => c.type === connected)?.label ?? connected.replace(/_/g, ' ')
+      setToast({ message: `${label} connected successfully!`, type: 'success' })
+      window.history.replaceState({}, '', '/integrations')
+    } else if (error) {
+      setToast({ message: 'Connection failed. Please try again.', type: 'error' })
+      window.history.replaceState({}, '', '/integrations')
+    }
+  }, [])
+
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 6000)
+      return () => clearTimeout(timer)
+    }
+  }, [toast])
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -735,7 +787,7 @@ export default function IntegrationsPage() {
           </span>
         </div>
         <p className="text-xs text-warm-gray -mt-1">
-          OAuth connections to pull live data. OAuth setup coming soon.
+          Connect your Google accounts so our agents can pull live data and generate accurate insights.
         </p>
         <div className="space-y-2">
           {OAUTH_CONNECTORS.map((connector) => (
@@ -743,6 +795,7 @@ export default function IntegrationsPage() {
               key={connector.type}
               connector={connector}
               status={oauthStatusMap[connector.type] ?? 'not_connected'}
+              onDisconnect={fetchStatus}
             />
           ))}
         </div>
@@ -804,6 +857,31 @@ export default function IntegrationsPage() {
           ))}
         </div>
       </section>
+
+      {/* Toast */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 animate-in slide-in-from-bottom-4 fade-in">
+          <div className={`rounded-tenkai border px-4 py-3 shadow-lg text-sm font-medium flex items-center gap-2 ${
+            toast.type === 'error'
+              ? 'bg-red-50 border-red-200 text-red-700'
+              : 'bg-[#4A7C59]/10 border-[#4A7C59]/30 text-[#4A7C59]'
+          }`}>
+            {toast.type === 'error' ? (
+              <AlertCircle className="size-4" />
+            ) : (
+              <CheckCircle2 className="size-4" />
+            )}
+            {toast.message}
+            <button
+              onClick={() => setToast(null)}
+              className="ml-2 text-current opacity-60 hover:opacity-100"
+              aria-label="Dismiss"
+            >
+              &times;
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

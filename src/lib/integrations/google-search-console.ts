@@ -1,6 +1,8 @@
 import { google } from 'googleapis'
 import * as fs from 'fs'
 import * as path from 'path'
+import { supabaseAdmin } from '@/lib/supabase-admin'
+import { upsertClientIntegration } from '@/lib/integrations/client-store'
 
 export interface GSCData {
   topQueries: Array<{ query: string; clicks: number; impressions: number; ctr: number; position: number }>
@@ -23,7 +25,55 @@ function getDateRange(days: number): { startDate: string; endDate: string } {
   }
 }
 
-async function buildAuth() {
+async function buildAuth(clientId?: string) {
+  // --- DB-based path ---
+  if (clientId) {
+    const { data, error } = await supabaseAdmin
+      .from('client_integrations')
+      .select('credentials, status')
+      .eq('client_id', clientId)
+      .eq('integration_type', 'google_search_console')
+      .single()
+
+    if (!error && data && data.status === 'active') {
+      const creds = data.credentials as {
+        access_token?: string
+        refresh_token?: string
+        expiry_date?: number
+        client_id?: string
+        client_secret?: string
+      }
+
+      const oauthClientId = creds.client_id ?? process.env.GOOGLE_CLIENT_ID
+      const oauthClientSecret = creds.client_secret ?? process.env.GOOGLE_CLIENT_SECRET
+
+      if (oauthClientId && oauthClientSecret && creds.refresh_token) {
+        const oauth2Client = new google.auth.OAuth2(oauthClientId, oauthClientSecret)
+        oauth2Client.setCredentials({
+          access_token: creds.access_token,
+          refresh_token: creds.refresh_token,
+          expiry_date: creds.expiry_date,
+        })
+
+        if (!creds.expiry_date || Date.now() > creds.expiry_date - 60_000) {
+          try {
+            const { credentials } = await oauth2Client.refreshAccessToken()
+            oauth2Client.setCredentials(credentials)
+            await upsertClientIntegration(clientId, 'google_search_console', {
+              ...creds,
+              ...credentials,
+            })
+          } catch {
+            return null
+          }
+        }
+
+        return oauth2Client
+      }
+    }
+  }
+
+  // --- File-based fallback ---
   const tokenPath = process.env.GSC_TOKEN_PATH ?? path.join(process.cwd(), '.credentials', 'gsc-token.json')
 
   if (!fs.existsSync(tokenPath)) return null
@@ -41,24 +91,22 @@ async function buildAuth() {
     return null
   }
 
-  const clientId = tokenData.client_id ?? process.env.GOOGLE_CLIENT_ID
-  const clientSecret = tokenData.client_secret ?? process.env.GOOGLE_CLIENT_SECRET
+  const fileClientId = tokenData.client_id ?? process.env.GOOGLE_CLIENT_ID
+  const fileClientSecret = tokenData.client_secret ?? process.env.GOOGLE_CLIENT_SECRET
 
-  if (!clientId || !clientSecret || !tokenData.refresh_token) return null
+  if (!fileClientId || !fileClientSecret || !tokenData.refresh_token) return null
 
-  const oauth2Client = new google.auth.OAuth2(clientId, clientSecret)
+  const oauth2Client = new google.auth.OAuth2(fileClientId, fileClientSecret)
   oauth2Client.setCredentials({
     access_token: tokenData.access_token,
     refresh_token: tokenData.refresh_token,
     expiry_date: tokenData.expiry_date,
   })
 
-  // Refresh token if expired or about to expire
   if (!tokenData.expiry_date || Date.now() > tokenData.expiry_date - 60_000) {
     try {
       const { credentials } = await oauth2Client.refreshAccessToken()
       oauth2Client.setCredentials(credentials)
-      // Persist refreshed token
       const updated = { ...tokenData, ...credentials }
       fs.writeFileSync(tokenPath, JSON.stringify(updated, null, 2))
     } catch {
@@ -69,8 +117,8 @@ async function buildAuth() {
   return oauth2Client
 }
 
-export async function fetchGSCData(siteUrl: string, options: { days?: number } = {}): Promise<GSCData | null> {
-  const auth = await buildAuth()
+export async function fetchGSCData(siteUrl: string, options: { days?: number; clientId?: string } = {}): Promise<GSCData | null> {
+  const auth = await buildAuth(options.clientId)
   if (!auth) return null
 
   const days = options.days ?? 28

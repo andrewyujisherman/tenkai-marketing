@@ -22,6 +22,7 @@ export async function fetchAllSiteData(
     gscSiteUrl?: string
     ga4PropertyId?: string
     serpQuery?: string
+    clientId?: string
   }
 ): Promise<SiteData> {
   const hostname = (() => {
@@ -37,8 +38,8 @@ export async function fetchAllSiteData(
   const [pageSpeed, serp, gsc, ga4] = await Promise.all([
     fetchPageSpeed(url),
     searchSerp(serpQuery),
-    options?.gscSiteUrl ? fetchGSCData(options.gscSiteUrl) : Promise.resolve(null),
-    options?.ga4PropertyId ? fetchGA4Data(options.ga4PropertyId) : Promise.resolve(null),
+    options?.gscSiteUrl ? fetchGSCData(options.gscSiteUrl, { clientId: options.clientId }) : Promise.resolve(null),
+    options?.ga4PropertyId ? fetchGA4Data(options.ga4PropertyId, { clientId: options.clientId }) : Promise.resolve(null),
   ])
 
   return {

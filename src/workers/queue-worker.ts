@@ -302,6 +302,7 @@ async function processRequest(request: ServiceRequest): Promise<void> {
       fetchAllSiteData(request.target_url!, {
         gscSiteUrl: request.parameters?.gsc_site_url as string | undefined,
         ga4PropertyId: request.parameters?.ga4_property_id as string | undefined,
+        clientId: request.client_id,
       }).catch((err) => {
         log('warn', `Integration data fetch failed: ${err instanceof Error ? err.message : String(err)}`)
         return null
