@@ -354,9 +354,12 @@ export default function HealthClient({
               <div>
                 <p className="font-medium text-charcoal">No audit results yet</p>
                 <p className="text-sm text-warm-gray mt-1 max-w-sm">
-                  Kenji will run your first SEO audit after onboarding.
+                  Kenji will run your first SEO audit after onboarding. You can also request one now.
                 </p>
               </div>
+              <a href="/dashboard#services" className="inline-flex items-center gap-1.5 text-sm font-medium text-torii hover:text-torii-dark transition-colors">
+                Request an Audit →
+              </a>
             </div>
           )}
         </div>
@@ -389,9 +392,12 @@ export default function HealthClient({
               <div>
                 <p className="font-medium text-charcoal">No technical audits yet</p>
                 <p className="text-sm text-warm-gray mt-1 max-w-sm">
-                  Request a Technical Health Check from your Dashboard.
+                  Kenji can run a full technical health check on your site.
                 </p>
               </div>
+              <a href="/dashboard#services" className="inline-flex items-center gap-1.5 text-sm font-medium text-torii hover:text-torii-dark transition-colors">
+                Request Technical Audit →
+              </a>
             </div>
           )}
         </div>
@@ -424,9 +430,12 @@ export default function HealthClient({
               <div>
                 <p className="font-medium text-charcoal">No on-page analysis yet</p>
                 <p className="text-sm text-warm-gray mt-1 max-w-sm">
-                  Request Page-by-Page SEO from your Dashboard.
+                  Get a page-by-page SEO review from your team.
                 </p>
               </div>
+              <a href="/dashboard#services" className="inline-flex items-center gap-1.5 text-sm font-medium text-torii hover:text-torii-dark transition-colors">
+                Request On-Page Analysis →
+              </a>
             </div>
           )}
         </div>

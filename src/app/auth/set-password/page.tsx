@@ -44,7 +44,8 @@ export default function SetPasswordPage() {
       setError(updateError.message)
       setLoading(false)
     } else {
-      router.push('/dashboard')
+      // Send invited users to onboarding so they complete their business profile
+      router.push('/onboarding')
     }
   }
 
@@ -53,8 +54,8 @@ export default function SetPasswordPage() {
       <div className="w-full max-w-sm bg-white border border-tenkai-border rounded-2xl p-8 shadow-sm">
         <div className="text-center mb-8">
           <span className="text-torii font-serif text-3xl">天界</span>
-          <h2 className="font-serif text-xl text-charcoal mt-4">Set your password</h2>
-          <p className="text-warm-gray text-sm mt-2">Choose a password for your account</p>
+          <h2 className="font-serif text-xl text-charcoal mt-4">Welcome to Tenkai</h2>
+          <p className="text-warm-gray text-sm mt-2">Set a password, then we&apos;ll get your SEO team set up</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">

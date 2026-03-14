@@ -222,14 +222,14 @@ function ReportView({ report }: { report: ReportData }) {
       {/* Tier Upgrade Banner */}
       <div className="bg-parchment/50 rounded-tenkai border border-tenkai-border p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <p className="text-sm font-medium text-charcoal">Upgrade to Pro for deeper insights</p>
+          <p className="text-sm font-medium text-charcoal">Want deeper insights?</p>
           <p className="text-xs text-warm-gray mt-1">
-            Weekly reports, revenue attribution, and exportable data
+            Pro plans include weekly reports, revenue attribution, and exportable data
           </p>
         </div>
-        <a href="/settings?tab=billing">
+        <a href="mailto:support@tenkai.marketing?subject=Upgrade%20to%20Pro">
           <Button className="bg-torii text-white hover:bg-torii-dark rounded-tenkai text-sm gap-1.5 flex-shrink-0">
-            Upgrade to Pro
+            Contact Us to Upgrade
             <ArrowUpRight className="size-3.5" />
           </Button>
         </a>

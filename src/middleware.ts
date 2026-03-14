@@ -52,7 +52,16 @@ export async function middleware(request: NextRequest) {
   if (isProtected && !user && !isDemo) {
     const url = request.nextUrl.clone()
     url.pathname = '/auth/login'
-    url.searchParams.set('redirect', request.nextUrl.pathname)
+    // Preserve full path + query params so post-login redirect works (e.g. /onboarding?url=...)
+    const redirectPath = request.nextUrl.pathname + request.nextUrl.search
+    url.searchParams.set('redirect', redirectPath)
+    return NextResponse.redirect(url)
+  }
+
+  // Redirect /audit → /health (legacy route)
+  if (request.nextUrl.pathname.startsWith('/audit')) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/health'
     return NextResponse.redirect(url)
   }
 

@@ -26,9 +26,9 @@ function MockDashboard() {
   return (
     <div className="bg-white rounded-xl border border-tenkai-border shadow-lg p-4 max-w-sm w-full">
       <div className="flex items-center gap-2 mb-3">
-        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+        <div className="w-2 h-2 rounded-full bg-torii/60" />
         <span className="text-xs font-medium text-warm-gray uppercase tracking-wider">
-          Live Activity
+          Your Dashboard Preview
         </span>
       </div>
       <div className="space-y-3">
@@ -119,7 +119,7 @@ export function Hero() {
                 </span>
                 <span className="flex items-center gap-1">
                   <Clock className="size-3.5" />
-                  Results in 60 seconds
+                  Setup in under 5 minutes
                 </span>
               </p>
               <p className="text-sm text-muted-gray mt-2">

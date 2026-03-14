@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { agents } from '@/lib/design-system'
 import { StatCard } from '@/components/portal/StatCard'
 import { ActivityItem } from '@/components/portal/ActivityItem'
@@ -315,6 +315,14 @@ export default function DashboardClient({
     }
   }, [serviceDialog, serviceUrl, client?.website_url, refreshDeliverables])
 
+  // Auto-dismiss success toast after 5 seconds
+  useEffect(() => {
+    if (serviceSuccess && !serviceSuccess.startsWith('Error')) {
+      const timer = setTimeout(() => setServiceSuccess(null), 5000)
+      return () => clearTimeout(timer)
+    }
+  }, [serviceSuccess])
+
   const visibleApprovals = pendingApprovals.filter((a) => !resolvedApprovals.has(a.id))
 
   // Build stats cards from real data
@@ -349,8 +357,29 @@ export default function DashboardClient({
     },
   ]
 
+  const isNewCustomer = stats.totalContent === 0 && stats.publishedContent === 0 && stats.auditScore === null && activityPosts.length === 0 && deliverables.length === 0
+
   return (
     <div className="max-w-6xl mx-auto space-y-8">
+      {/* Welcome banner for new customers */}
+      {isNewCustomer && (
+        <section className="bg-gradient-to-r from-torii/5 to-torii/10 rounded-tenkai border border-torii/20 p-6 sm:p-8">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            <div className="w-12 h-12 rounded-full bg-torii/10 flex items-center justify-center shrink-0">
+              <Zap className="size-6 text-torii" />
+            </div>
+            <div className="space-y-1">
+              <h2 className="font-serif text-xl text-charcoal">
+                Welcome{displayName ? `, ${displayName}` : ''}! Your Tenkai team is getting started.
+              </h2>
+              <p className="text-warm-gray text-sm leading-relaxed">
+                Your AI SEO agents are analyzing your site and building your strategy. You&apos;ll see your first audit results and content recommendations here within 24-48 hours. In the meantime, make sure your <a href="/integrations" className="text-torii hover:text-torii-dark underline underline-offset-2">business profile is complete</a> so your team has everything they need.
+              </p>
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* Quick Stats */}
       <section>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -769,12 +798,12 @@ export default function DashboardClient({
         </DialogContent>
       </Dialog>
 
-      {/* Success/error notification */}
+      {/* Success/error notification — auto-dismisses after 5s */}
       {serviceSuccess && (
         <div className="fixed bottom-6 right-6 z-50 animate-in slide-in-from-bottom-4 fade-in">
           <div className={`rounded-tenkai border px-4 py-3 shadow-lg text-sm font-medium flex items-center gap-2 ${
             serviceSuccess.startsWith('Error')
-              ? 'bg-torii/10 border-torii/30 text-torii'
+              ? 'bg-red-50 border-red-200 text-red-700'
               : 'bg-[#4A7C59]/10 border-[#4A7C59]/30 text-[#4A7C59]'
           }`}>
             {serviceSuccess.startsWith('Error') ? (

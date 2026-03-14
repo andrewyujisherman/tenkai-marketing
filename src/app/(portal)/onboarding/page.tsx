@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ArrowRight, ArrowLeft, CheckCircle2, Sparkles } from 'lucide-react'
@@ -94,16 +95,29 @@ const round2: Question[] = [
 type Phase = 'round1' | 'transition' | 'round2' | 'complete' | 'error'
 
 export default function OnboardingPage() {
+  const searchParams = useSearchParams()
   const [phase, setPhase] = useState<Phase>('round1')
   const [step, setStep] = useState(0)
   const [answers, setAnswers] = useState<Record<string, string | Record<string, string>>>({})
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  // Pre-fill URL from hero CTA query param
+  useEffect(() => {
+    const urlParam = searchParams.get('url')
+    if (urlParam) {
+      setAnswers((prev) => ({
+        ...prev,
+        business: { ...((prev.business && typeof prev.business === 'object' ? prev.business : {}) as Record<string, string>), url: urlParam },
+      }))
+    }
+  }, [searchParams])
+
   const questions = phase === 'round1' ? round1 : round2
   const current = phase === 'round1' || phase === 'round2' ? questions[step] : null
-  const totalSteps = 5
-  const currentStepNum = step + 1
+  const stepsPerRound = 5
+  const totalQuestions = 10
+  const overallStep = phase === 'round1' ? step + 1 : phase === 'round2' ? 6 + step : phase === 'transition' ? 5 : 10
 
   const setAnswer = useCallback(
     (value: string | Record<string, string>) => {
@@ -114,7 +128,7 @@ export default function OnboardingPage() {
   )
 
   const handleNext = async () => {
-    if (step < totalSteps - 1) {
+    if (step < stepsPerRound - 1) {
       setStep(step + 1)
     } else if (phase === 'round1') {
       setPhase('transition')
@@ -140,6 +154,9 @@ export default function OnboardingPage() {
   const handleBack = () => {
     if (step > 0) {
       setStep(step - 1)
+    } else if (phase === 'round2') {
+      // Go back from round2 step 0 to the transition screen
+      setPhase('transition')
     }
   }
 
@@ -206,11 +223,27 @@ export default function OnboardingPage() {
           <div className="w-16 h-16 mx-auto rounded-full bg-[#4A7C59]/10 flex items-center justify-center">
             <CheckCircle2 className="size-8 text-[#4A7C59]" />
           </div>
-          <div className="space-y-2">
-            <h2 className="font-serif text-2xl text-charcoal">Your Tenkai team is ready!</h2>
+          <div className="space-y-3">
+            <h2 className="font-serif text-2xl text-charcoal">You&apos;re all set!</h2>
             <p className="text-warm-gray text-sm leading-relaxed">
-              Our AI agents are already analyzing your site and building your personalized
-              SEO strategy. Head to your dashboard to see what they find.
+              Your Tenkai team has everything they need. Here&apos;s what happens next:
+            </p>
+            <div className="text-left bg-parchment/50 rounded-tenkai p-4 space-y-2.5">
+              <div className="flex items-start gap-2.5">
+                <span className="text-torii font-semibold text-sm mt-0.5">1.</span>
+                <p className="text-sm text-charcoal"><span className="font-medium">Within 24 hours</span> — Kenji runs your first technical SEO audit</p>
+              </div>
+              <div className="flex items-start gap-2.5">
+                <span className="text-torii font-semibold text-sm mt-0.5">2.</span>
+                <p className="text-sm text-charcoal"><span className="font-medium">Within 48 hours</span> — Haruki delivers your keyword strategy</p>
+              </div>
+              <div className="flex items-start gap-2.5">
+                <span className="text-torii font-semibold text-sm mt-0.5">3.</span>
+                <p className="text-sm text-charcoal"><span className="font-medium">First content drafts</span> — Sakura starts writing within the week</p>
+              </div>
+            </div>
+            <p className="text-warm-gray text-xs">
+              We&apos;ll notify you when results are ready for review.
             </p>
           </div>
           <Link href="/dashboard">
@@ -229,20 +262,20 @@ export default function OnboardingPage() {
 
   return (
     <div className="min-h-[80vh] flex flex-col px-4">
-      {/* Progress Bar */}
+      {/* Progress Bar — continuous 1-10 across both rounds */}
       <div className="max-w-xl mx-auto w-full pt-8 space-y-2">
         <div className="flex items-center justify-between text-xs text-warm-gray">
           <span>
             {phase === 'round1' ? 'Getting Started' : 'Personalizing Your Strategy'}
           </span>
           <span>
-            {currentStepNum} of {totalSteps}
+            {overallStep} of {totalQuestions}
           </span>
         </div>
         <div className="h-1.5 bg-parchment rounded-full overflow-hidden">
           <div
             className="h-full bg-torii rounded-full transition-all duration-500 ease-out"
-            style={{ width: `${(currentStepNum / totalSteps) * 100}%` }}
+            style={{ width: `${(overallStep / totalQuestions) * 100}%` }}
           />
         </div>
       </div>
@@ -301,7 +334,7 @@ export default function OnboardingPage() {
           {/* Navigation */}
           <div className="flex items-center justify-between pt-4">
             <div>
-              {step > 0 ? (
+              {(step > 0 || phase === 'round2') ? (
                 <Button
                   variant="ghost"
                   onClick={handleBack}
@@ -326,7 +359,7 @@ export default function OnboardingPage() {
                 disabled={isSubmitting}
                 className="bg-torii text-white hover:bg-torii-dark rounded-tenkai gap-1.5"
               >
-                {isSubmitting ? 'Submitting…' : phase === 'round2' && step === totalSteps - 1 ? 'Submit' : 'Next'}
+                {isSubmitting ? 'Submitting…' : phase === 'round2' && step === stepsPerRound - 1 ? 'Submit' : 'Next'}
                 <ArrowRight className="size-4" />
               </Button>
             </div>

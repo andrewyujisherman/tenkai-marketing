@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { Suspense, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,12 +14,20 @@ function getSupabase() {
   )
 }
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  function friendlyError(msg: string): string {
+    if (msg.includes('Invalid login credentials')) return 'Incorrect email or password. Please try again.'
+    if (msg.includes('Email not confirmed')) return 'Please check your email and confirm your account first.'
+    if (msg.includes('too many requests')) return 'Too many attempts. Please wait a moment and try again.'
+    return msg
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -29,17 +37,17 @@ export default function LoginPage() {
     const { error: authError } = await getSupabase().auth.signInWithPassword({ email, password })
 
     if (authError) {
-      setError(authError.message)
+      setError(friendlyError(authError.message))
       setLoading(false)
     } else {
-      router.push('/dashboard')
+      const redirect = searchParams.get('redirect') || '/dashboard'
+      router.push(redirect)
     }
   }
 
   return (
     <div className="min-h-screen bg-cream flex items-center justify-center px-4">
       <div className="w-full max-w-sm bg-white border border-tenkai-border rounded-2xl p-8 shadow-sm">
-        {/* Logo */}
         <div className="text-center mb-8">
           <span className="text-torii font-serif text-3xl">天界</span>
           <p className="text-warm-gray text-sm mt-2">Sign in to your account</p>
@@ -96,5 +104,13 @@ export default function LoginPage() {
         </p>
       </div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
   )
 }

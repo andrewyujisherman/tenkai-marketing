@@ -38,6 +38,9 @@ function EmptyTab({ message }: { message: string }) {
     <div className="flex flex-col items-center justify-center rounded-tenkai border border-tenkai-border bg-white p-12 text-center gap-3">
       <FolderOpen className="size-10 text-muted-gray" />
       <p className="text-sm text-warm-gray max-w-sm">{message}</p>
+      <a href="/dashboard#services" className="inline-flex items-center gap-1.5 text-sm font-medium text-torii hover:text-torii-dark transition-colors mt-1">
+        Request from Dashboard →
+      </a>
     </div>
   )
 }

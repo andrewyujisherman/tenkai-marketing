@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { Bell, ChevronDown } from 'lucide-react'
 import {
@@ -14,16 +15,30 @@ import { supabase } from '@/lib/supabase-browser'
 const pageTitles: Record<string, string> = {
   '/dashboard': 'Dashboard',
   '/content': 'Content',
-  '/audit': 'Audit Results',
   '/health': 'Website Health',
+  '/links': 'Link Building',
+  '/local': 'Local & Reviews',
   '/reports': 'Reports',
+  '/integrations': 'Integrations',
   '/settings': 'Settings',
+  '/onboarding': 'Getting Started',
 }
 
 export function PortalHeader() {
   const pathname = usePathname()
   const router = useRouter()
   const title = pageTitles[pathname] || 'Dashboard'
+  const [userInitial, setUserInitial] = useState('')
+
+  useEffect(() => {
+    fetch('/api/portal/profile')
+      .then((r) => r.json())
+      .then((data) => {
+        const name = data.client?.name || data.client?.company_name || data.email || ''
+        setUserInitial(name.charAt(0).toUpperCase() || 'U')
+      })
+      .catch(() => setUserInitial('U'))
+  }, [])
 
   async function handleSignOut() {
     await supabase.auth.signOut()
@@ -43,14 +58,13 @@ export function PortalHeader() {
           className="relative p-2 rounded-tenkai hover:bg-parchment transition-colors group"
         >
           <Bell className="size-[18px] text-warm-gray group-hover:text-charcoal transition-colors" />
-          {/* Notification dot — hidden until we have real unread count */}
         </button>
 
         {/* User dropdown */}
         <DropdownMenu>
           <DropdownMenuTrigger className="flex items-center gap-2 px-2 py-1.5 rounded-tenkai hover:bg-parchment transition-colors outline-none">
             <div className="w-7 h-7 rounded-full bg-torii-subtle flex items-center justify-center">
-              <span className="text-torii text-xs font-semibold">S</span>
+              <span className="text-torii text-xs font-semibold">{userInitial || 'U'}</span>
             </div>
             <ChevronDown className="size-3.5 text-warm-gray" />
           </DropdownMenuTrigger>
