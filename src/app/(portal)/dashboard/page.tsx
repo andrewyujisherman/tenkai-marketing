@@ -32,6 +32,7 @@ export interface Deliverable {
   score: number | null
   status: string | null
   created_at: string
+  content: Record<string, unknown> | string | null
 }
 
 export interface DashboardStats {
@@ -127,7 +128,7 @@ export default async function DashboardPage() {
 
       db
         .from('deliverables')
-        .select('id, request_id, agent_name, deliverable_type, title, summary, score, status, created_at')
+        .select('id, request_id, agent_name, deliverable_type, title, summary, score, status, content, created_at')
         .eq('client_id', clientId)
         .order('created_at', { ascending: false })
         .limit(10),
@@ -169,6 +170,7 @@ export default async function DashboardPage() {
       score: d.score ?? null,
       status: d.status ?? null,
       created_at: d.created_at,
+      content: (d.content as Record<string, unknown> | string | null) ?? null,
     }))
   }
 

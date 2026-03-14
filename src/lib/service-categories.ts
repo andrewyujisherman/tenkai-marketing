@@ -144,3 +144,113 @@ export function getServiceByKey(key: string): ServiceItem | undefined {
 export function getCategoryForService(key: string): ServiceCategory | undefined {
   return SERVICE_CATEGORIES.find((cat) => cat.services.some((s) => s.key === key))
 }
+
+// ─── Service Input Config ─────────────────────────────────
+
+export interface ServiceField {
+  key: string
+  label: string
+  placeholder: string
+  type: 'url' | 'textarea'
+  required: boolean
+}
+
+export interface ServiceInputConfig {
+  fields: ServiceField[]
+  description: string
+}
+
+/** Returns the appropriate input fields for a given service key */
+export function getServiceInputs(serviceKey: string): ServiceInputConfig {
+  const urlOnly = [
+    'site_audit', 'technical_audit', 'on_page_audit', 'meta_optimization',
+    'schema_generation', 'redirect_map', 'robots_sitemap',
+    'link_analysis', 'local_seo_audit', 'gbp_optimization',
+    'keyword_research', 'geo_audit', 'entity_optimization',
+    'analytics_audit', 'monthly_report', 'directory_submissions',
+    'content_decay_audit',
+  ]
+  const contentServices = ['content_article', 'content_rewrite', 'content_brief']
+  const outreachServices = ['outreach_emails', 'guest_post_draft']
+  const reviewServices = ['review_responses', 'review_campaign']
+  const strategyServices = ['content_calendar', 'topic_cluster_map']
+  const competitorServices = ['competitor_analysis']
+
+  if (urlOnly.includes(serviceKey)) {
+    return {
+      description: 'Enter the target URL for this service request.',
+      fields: [
+        { key: 'target_url', label: 'Target URL', placeholder: 'https://example.com', type: 'url', required: true },
+      ],
+    }
+  }
+
+  if (contentServices.includes(serviceKey)) {
+    return {
+      description: 'Provide a topic or title for the content, plus the target URL.',
+      fields: [
+        { key: 'target_url', label: 'Website URL', placeholder: 'https://example.com', type: 'url', required: true },
+        { key: 'topic', label: 'Topic or Title', placeholder: 'e.g. "10 best SEO tools for small businesses"', type: 'textarea', required: true },
+      ],
+    }
+  }
+
+  if (outreachServices.includes(serviceKey)) {
+    return {
+      description: 'Enter your website URL and target domains or context for the outreach.',
+      fields: [
+        { key: 'target_url', label: 'Your Website URL', placeholder: 'https://example.com', type: 'url', required: true },
+        { key: 'context', label: 'Target Domains or Context', placeholder: 'e.g. "techblog.com, marketingweek.com — guest post about SEO strategy"', type: 'textarea', required: true },
+      ],
+    }
+  }
+
+  if (reviewServices.includes(serviceKey)) {
+    const isResponses = serviceKey === 'review_responses'
+    return {
+      description: isResponses
+        ? 'Paste the reviews you need responses for.'
+        : 'Describe the review campaign context and goals.',
+      fields: [
+        { key: 'target_url', label: 'Website or Business URL', placeholder: 'https://example.com', type: 'url', required: false },
+        {
+          key: 'context',
+          label: isResponses ? 'Reviews to Respond To' : 'Campaign Context',
+          placeholder: isResponses
+            ? 'Paste the review text here, one per paragraph...'
+            : 'Describe your campaign goals, target audience, and any specific messaging...',
+          type: 'textarea',
+          required: true,
+        },
+      ],
+    }
+  }
+
+  if (strategyServices.includes(serviceKey)) {
+    return {
+      description: 'Provide your focus areas or target keywords. Website URL is optional.',
+      fields: [
+        { key: 'target_url', label: 'Website URL (optional)', placeholder: 'https://example.com', type: 'url', required: false },
+        { key: 'context', label: 'Focus Areas or Keywords', placeholder: 'e.g. "SaaS marketing, content strategy, B2B lead generation"', type: 'textarea', required: true },
+      ],
+    }
+  }
+
+  if (competitorServices.includes(serviceKey)) {
+    return {
+      description: 'Enter your website URL and the competitor domains to analyze.',
+      fields: [
+        { key: 'target_url', label: 'Your Website URL', placeholder: 'https://example.com', type: 'url', required: true },
+        { key: 'context', label: 'Competitor Domains', placeholder: 'e.g. "competitor1.com, competitor2.com, competitor3.com"', type: 'textarea', required: true },
+      ],
+    }
+  }
+
+  // Default fallback
+  return {
+    description: 'Enter the target URL for this service request.',
+    fields: [
+      { key: 'target_url', label: 'Target URL', placeholder: 'https://example.com', type: 'url', required: true },
+    ],
+  }
+}

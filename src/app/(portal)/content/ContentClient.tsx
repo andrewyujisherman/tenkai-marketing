@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import {
@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/dialog'
 import { TopicCard, type TopicCardProps } from '@/components/portal/TopicCard'
 import { DraftCard, type DraftCardProps } from '@/components/portal/DraftCard'
-import { CheckCircle2, FileText, Globe, Lightbulb, Clock, CalendarDays, HeartPulse, ChevronDown, ChevronUp } from 'lucide-react'
+import { CheckCircle2, FileText, Globe, Lightbulb, Clock, CalendarDays, HeartPulse, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react'
 import type { ContentDeliverable, PlanningDeliverable, HealthDeliverable } from './page'
 
 interface FeedbackDialogProps {
@@ -25,39 +25,59 @@ interface FeedbackDialogProps {
 function FeedbackDialog({ open, onClose, onSubmit, title }: FeedbackDialogProps) {
   const [text, setText] = useState('')
   const [loading, setLoading] = useState(false)
+  const [success, setSuccess] = useState(false)
 
   const handleSubmit = async () => {
     if (!text.trim()) return
     setLoading(true)
     await onSubmit(text.trim())
     setLoading(false)
+    setSuccess(true)
+    setTimeout(() => {
+      setSuccess(false)
+      setText('')
+      onClose()
+    }, 1200)
+  }
+
+  const handleClose = () => {
     setText('')
+    setSuccess(false)
     onClose()
   }
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose() }}>
+    <Dialog open={open} onOpenChange={(o) => { if (!o) handleClose() }}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="font-serif text-charcoal">{title}</DialogTitle>
         </DialogHeader>
-        <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="Describe what you'd like changed..."
-          rows={4}
-          className="w-full px-4 py-3 text-sm border border-tenkai-border rounded-tenkai bg-transparent outline-none resize-none focus:border-torii focus:ring-2 focus:ring-torii/20 placeholder:text-muted-gray"
-          autoFocus
-        />
-        <DialogFooter showCloseButton>
-          <Button
-            onClick={handleSubmit}
-            disabled={loading || !text.trim()}
-            className="bg-torii text-white hover:bg-torii-dark rounded-tenkai"
-          >
-            {loading ? 'Sending…' : 'Send Feedback'}
-          </Button>
-        </DialogFooter>
+        {success ? (
+          <div className="flex items-center gap-2 py-6 justify-center text-[#4A7C59]">
+            <CheckCircle2 className="size-5" />
+            <span className="text-sm font-medium">Feedback sent</span>
+          </div>
+        ) : (
+          <>
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="Describe what you'd like changed..."
+              rows={4}
+              className="w-full px-4 py-3 text-sm border border-tenkai-border rounded-tenkai bg-transparent outline-none resize-none focus:border-torii focus:ring-2 focus:ring-torii/20 placeholder:text-muted-gray"
+              autoFocus
+            />
+            <DialogFooter showCloseButton>
+              <Button
+                onClick={handleSubmit}
+                disabled={loading || !text.trim()}
+                className="bg-torii text-white hover:bg-torii-dark rounded-tenkai"
+              >
+                {loading ? 'Sending…' : 'Send Feedback'}
+              </Button>
+            </DialogFooter>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   )
@@ -185,36 +205,40 @@ function ContentHealthTab({ healthDeliverables }: { healthDeliverables: HealthDe
               {decayRows.map((row) => {
                 const isExpanded = expandedRows.has(row.id)
                 return (
-                  <tr key={row.id} className="border-b border-tenkai-border-light last:border-none group">
-                    <td className="py-3 px-4">
-                      <button onClick={() => toggleRow(row.id)} className="text-warm-gray hover:text-charcoal transition-colors">
-                        {isExpanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
-                      </button>
-                    </td>
-                    <td className="py-3 px-4 font-medium text-charcoal max-w-xs truncate">{row.url}</td>
-                    <td className="py-3 px-4 text-right text-charcoal tabular-nums hidden sm:table-cell">
-                      {row.traffic.toLocaleString()}
-                    </td>
-                    <td className="py-3 px-4 text-right">
-                      <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${severityColor(row.change)}`}>
-                        {row.change >= 0 ? '+' : ''}{row.change}%
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-right hidden md:table-cell">
-                      <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${severityColor(row.change)}`}>
-                        {row.severity || severityLabel(row.change)}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-warm-gray hidden lg:table-cell max-w-xs truncate">{row.action}</td>
-                    {isExpanded && (
-                      <td colSpan={6} className="px-4 pb-4">
-                        <div className="bg-parchment/50 rounded-tenkai p-4 mt-2">
-                          <p className="text-sm text-charcoal font-medium mb-1">Full Recommendation</p>
-                          <p className="text-sm text-warm-gray leading-relaxed">{row.recommendation}</p>
-                        </div>
+                  <>
+                    <tr key={row.id} className="border-b border-tenkai-border-light group">
+                      <td className="py-3 px-4">
+                        <button onClick={() => toggleRow(row.id)} className="text-warm-gray hover:text-charcoal transition-colors">
+                          {isExpanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+                        </button>
                       </td>
+                      <td className="py-3 px-4 font-medium text-charcoal max-w-xs truncate">{row.url}</td>
+                      <td className="py-3 px-4 text-right text-charcoal tabular-nums hidden sm:table-cell">
+                        {row.traffic.toLocaleString()}
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${severityColor(row.change)}`}>
+                          {row.change >= 0 ? '+' : ''}{row.change}%
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-right hidden md:table-cell">
+                        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${severityColor(row.change)}`}>
+                          {row.severity || severityLabel(row.change)}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-warm-gray hidden lg:table-cell max-w-xs truncate">{row.action}</td>
+                    </tr>
+                    {isExpanded && (
+                      <tr key={`${row.id}-expanded`} className="border-b border-tenkai-border-light">
+                        <td colSpan={6} className="px-4 pb-4 pt-0">
+                          <div className="bg-parchment/50 rounded-tenkai p-4">
+                            <p className="text-sm text-charcoal font-medium mb-1">Full Recommendation</p>
+                            <p className="text-sm text-warm-gray leading-relaxed">{row.recommendation}</p>
+                          </div>
+                        </td>
+                      </tr>
                     )}
-                  </tr>
+                  </>
                 )
               })}
             </tbody>
@@ -266,31 +290,73 @@ export default function ContentClient({ initialTopics, initialDrafts, publishedP
   const [drafts, setDrafts] = useState(initialDrafts)
   const [topicFeedbackId, setTopicFeedbackId] = useState<string | null>(null)
   const [draftFeedbackId, setDraftFeedbackId] = useState<string | null>(null)
+  const [errorToast, setErrorToast] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (errorToast) {
+      const t = setTimeout(() => setErrorToast(null), 5000)
+      return () => clearTimeout(t)
+    }
+  }, [errorToast])
 
   const handleTopicApprove = async (id: string) => {
-    setTopics((prev) => prev.map((t) => t.id === id ? { ...t, status: 'approved' as const } : t))
-    await fetch(`/api/content/${id}/approve`, { method: 'POST' })
+    const prev = topics.find((t) => t.id === id)
+    setTopics((ts) => ts.map((t) => t.id === id ? { ...t, status: 'approved' as const } : t))
+    try {
+      const res = await fetch(`/api/content/${id}/approve`, { method: 'POST' })
+      if (!res.ok) throw new Error()
+    } catch {
+      setTopics((ts) => ts.map((t) => t.id === id ? { ...t, status: prev?.status ?? 'pending' } : t))
+      setErrorToast('Failed to approve topic. Please try again.')
+    }
   }
 
   const handleTopicDeny = async (id: string) => {
-    setTopics((prev) => prev.map((t) => t.id === id ? { ...t, status: 'denied' as const } : t))
-    await fetch(`/api/content/${id}/reject`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: 'Denied by client' }) })
+    const prev = topics.find((t) => t.id === id)
+    setTopics((ts) => ts.map((t) => t.id === id ? { ...t, status: 'denied' as const } : t))
+    try {
+      const res = await fetch(`/api/content/${id}/reject`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: 'Denied by client' }) })
+      if (!res.ok) throw new Error()
+    } catch {
+      setTopics((ts) => ts.map((t) => t.id === id ? { ...t, status: prev?.status ?? 'pending' } : t))
+      setErrorToast('Failed to deny topic. Please try again.')
+    }
   }
 
   const handleApproveAll = async () => {
-    const pendingIds = topics.filter((t) => t.status === 'pending').map((t) => t.id)
-    setTopics((prev) => prev.map((t) => t.status === 'pending' ? { ...t, status: 'approved' as const } : t))
-    await Promise.all(pendingIds.map((id) => fetch(`/api/content/${id}/approve`, { method: 'POST' })))
+    const pendingTopics = topics.filter((t) => t.status === 'pending')
+    const pendingIds = pendingTopics.map((t) => t.id)
+    setTopics((ts) => ts.map((t) => t.status === 'pending' ? { ...t, status: 'approved' as const } : t))
+    const results = await Promise.allSettled(pendingIds.map((id) => fetch(`/api/content/${id}/approve`, { method: 'POST' }).then((r) => { if (!r.ok) throw new Error(id); return id })))
+    const failedIds = new Set(results.filter((r): r is PromiseRejectedResult => r.status === 'rejected').map((r) => String(r.reason?.message ?? '')))
+    if (failedIds.size > 0) {
+      setTopics((ts) => ts.map((t) => failedIds.has(t.id) ? { ...t, status: 'pending' as const } : t))
+      setErrorToast(`${failedIds.size} topic(s) failed to approve. Please try again.`)
+    }
   }
 
   const handleDraftApprove = async (id: string) => {
-    setDrafts((prev) => prev.filter((d) => d.id !== id))
-    await fetch(`/api/content/${id}/approve`, { method: 'POST' })
+    const draft = drafts.find((d) => d.id === id)
+    setDrafts((ds) => ds.filter((d) => d.id !== id))
+    try {
+      const res = await fetch(`/api/content/${id}/approve`, { method: 'POST' })
+      if (!res.ok) throw new Error()
+    } catch {
+      if (draft) setDrafts((ds) => [draft, ...ds])
+      setErrorToast('Failed to approve draft. Please try again.')
+    }
   }
 
   const handleDraftDeny = async (id: string) => {
-    setDrafts((prev) => prev.filter((d) => d.id !== id))
-    await fetch(`/api/content/${id}/reject`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: 'Denied by client' }) })
+    const draft = drafts.find((d) => d.id === id)
+    setDrafts((ds) => ds.filter((d) => d.id !== id))
+    try {
+      const res = await fetch(`/api/content/${id}/reject`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: 'Denied by client' }) })
+      if (!res.ok) throw new Error()
+    } catch {
+      if (draft) setDrafts((ds) => [draft, ...ds])
+      setErrorToast('Failed to deny draft. Please try again.')
+    }
   }
 
   const handleTopicFeedback = async (id: string, feedback: string) => {
@@ -748,6 +814,17 @@ export default function ContentClient({ initialTopics, initialDrafts, publishedP
         onSubmit={(feedback) => handleDraftFeedback(draftFeedbackId!, feedback)}
         title="Request Edit on Draft"
       />
+
+      {/* Error toast */}
+      {errorToast && (
+        <div className="fixed bottom-6 right-6 z-50 animate-in slide-in-from-bottom-4 fade-in">
+          <div className="rounded-tenkai border px-4 py-3 shadow-lg text-sm font-medium flex items-center gap-2 bg-red-50 border-red-200 text-red-700">
+            <AlertCircle className="size-4" />
+            {errorToast}
+            <button onClick={() => setErrorToast(null)} className="ml-2 text-current opacity-60 hover:opacity-100">&times;</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

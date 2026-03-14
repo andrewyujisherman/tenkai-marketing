@@ -27,7 +27,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
-import { SERVICE_CATEGORIES, QUICK_ACTIONS, ALL_SERVICES } from '@/lib/service-categories'
+import { SERVICE_CATEGORIES, QUICK_ACTIONS, ALL_SERVICES, getServiceInputs } from '@/lib/service-categories'
 import type { ActivityPost, PendingApproval, DashboardStats, Deliverable } from './page'
 
 const agentMap = Object.fromEntries(agents.map((a) => [a.name, a]))
@@ -135,42 +135,36 @@ export default function DashboardClient({
   recentDeliverables,
 }: DashboardClientProps) {
   const [dateFilter, setDateFilter] = useState<DateFilter>('today')
-  // Track which approvals have been acted on (optimistic UI)
   const [resolvedApprovals, setResolvedApprovals] = useState<Set<string>>(new Set())
-  // Track which activity posts have been acted on (optimistic UI)
   const [resolvedPosts, setResolvedPosts] = useState<Set<string>>(new Set())
-  // Feedback dialog state
   const [feedbackTarget, setFeedbackTarget] = useState<{ id: string; title: string } | null>(null)
   const [feedbackText, setFeedbackText] = useState('')
   const [feedbackLoading, setFeedbackLoading] = useState(false)
 
-  // Service request dialog state
+  // Service request dialog — tracks all field values dynamically
   const [serviceDialog, setServiceDialog] = useState<{ key: string; label: string } | null>(null)
-  const [serviceUrl, setServiceUrl] = useState(client?.website_url ?? '')
+  const [serviceFields, setServiceFields] = useState<Record<string, string>>({})
   const [serviceLoading, setServiceLoading] = useState(false)
   const [serviceSuccess, setServiceSuccess] = useState<string | null>(null)
 
   // Deliverable detail dialog
   const [selectedDeliverable, setSelectedDeliverable] = useState<Deliverable | null>(null)
+  const [reportExpanded, setReportExpanded] = useState(false)
 
-  // Deliverables list (supports refresh after new request)
   const [deliverables, setDeliverables] = useState<Deliverable[]>(recentDeliverables)
 
   const displayName = client?.company_name || userName || null
 
-  // Filter activity posts by date
   const threshold = getDateThreshold(dateFilter)
   const filteredPosts = activityPosts.filter(
     (p) => new Date(p.created_at) >= threshold && !resolvedPosts.has(p.id)
   )
 
   const handleApprovePost = useCallback(async (postId: string) => {
-    // Optimistic update
     setResolvedPosts((prev) => new Set(prev).add(postId))
     try {
       const res = await fetch(`/api/content/${postId}/approve`, { method: 'POST' })
       if (!res.ok) {
-        // Rollback
         setResolvedPosts((prev) => {
           const next = new Set(prev)
           next.delete(postId)
@@ -282,27 +276,34 @@ export default function DashboardClient({
         setDeliverables(data.deliverables ?? [])
       }
     } catch {
-      // silent fail — deliverables will refresh on next page load
+      // silent fail
     }
   }, [])
 
   const handleServiceRequest = useCallback(async () => {
-    if (!serviceDialog || !serviceUrl.trim()) return
+    if (!serviceDialog) return
+    const config = getServiceInputs(serviceDialog.key)
+    const missingRequired = config.fields.some((f) => f.required && !serviceFields[f.key]?.trim())
+    if (missingRequired) return
     setServiceLoading(true)
     try {
+      const extra: Record<string, string> = {}
+      for (const [k, v] of Object.entries(serviceFields)) {
+        if (k !== 'target_url') extra[k] = v.trim()
+      }
       const res = await fetch('/api/services/request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           request_type: serviceDialog.key,
-          target_url: serviceUrl.trim(),
+          target_url: serviceFields.target_url?.trim() ?? '',
+          ...extra,
         }),
       })
       if (res.ok) {
         setServiceSuccess(`${serviceDialog.label} request submitted successfully!`)
         setServiceDialog(null)
-        setServiceUrl(client?.website_url ?? '')
-        // Auto-refresh deliverables after a short delay
+        setServiceFields({ target_url: client?.website_url ?? '' })
         setTimeout(() => refreshDeliverables(), 2000)
       } else {
         const err = await res.json().catch(() => ({ error: 'Request failed' }))
@@ -313,9 +314,8 @@ export default function DashboardClient({
     } finally {
       setServiceLoading(false)
     }
-  }, [serviceDialog, serviceUrl, client?.website_url, refreshDeliverables])
+  }, [serviceDialog, serviceFields, client?.website_url, refreshDeliverables])
 
-  // Auto-dismiss success toast after 5 seconds
   useEffect(() => {
     if (serviceSuccess && !serviceSuccess.startsWith('Error')) {
       const timer = setTimeout(() => setServiceSuccess(null), 5000)
@@ -325,7 +325,6 @@ export default function DashboardClient({
 
   const visibleApprovals = pendingApprovals.filter((a) => !resolvedApprovals.has(a.id))
 
-  // Build stats cards from real data
   const statsCards = [
     {
       label: 'Total Content',
@@ -390,7 +389,7 @@ export default function DashboardClient({
       </section>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-        {/* Activity Feed — 2/3 width */}
+        {/* Activity Feed */}
         <section className="xl:col-span-2 space-y-4">
           <div className="flex items-center justify-between">
             <div>
@@ -450,7 +449,7 @@ export default function DashboardClient({
           </div>
         </section>
 
-        {/* Pending Approvals — 1/3 width */}
+        {/* Pending Approvals */}
         <section className="space-y-4">
           <div>
             <h2 className="font-serif text-lg text-charcoal">Pending Approvals</h2>
@@ -512,7 +511,6 @@ export default function DashboardClient({
               ))
             )}
 
-            {/* Summary note */}
             <div className="bg-parchment/50 rounded-tenkai px-4 py-3 text-center">
               <p className="text-warm-gray text-xs">
                 <span className="font-semibold text-torii">
@@ -537,7 +535,6 @@ export default function DashboardClient({
           </p>
         </div>
 
-        {/* Quick Actions */}
         <div className="space-y-4">
           <h3 className="font-serif text-lg text-charcoal">Quick Actions</h3>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -548,7 +545,7 @@ export default function DashboardClient({
                   key={key}
                   onClick={() => {
                     setServiceDialog({ key, label: svc.label })
-                    setServiceUrl(client?.website_url ?? '')
+                    setServiceFields({ target_url: client?.website_url ?? '' })
                   }}
                   className="flex flex-col items-start gap-2 p-4 rounded-tenkai border border-tenkai-border hover:border-torii/30 hover:bg-parchment/50 transition-colors text-left"
                 >
@@ -561,7 +558,6 @@ export default function DashboardClient({
           </div>
         </div>
 
-        {/* All Services — collapsible categories */}
         <div className="space-y-3 mt-8">
           <h3 className="font-serif text-lg text-charcoal">All Services</h3>
           {SERVICE_CATEGORIES.map((cat) => {
@@ -580,7 +576,7 @@ export default function DashboardClient({
                       key={svc.key}
                       onClick={() => {
                         setServiceDialog({ key: svc.key, label: svc.label })
-                        setServiceUrl(client?.website_url ?? '')
+                        setServiceFields({ target_url: client?.website_url ?? '' })
                       }}
                       className="flex items-start gap-2 p-3 rounded-tenkai border border-tenkai-border-light hover:border-torii/20 hover:bg-parchment/30 transition-colors text-left"
                     >
@@ -671,7 +667,7 @@ export default function DashboardClient({
                     </td>
                     <td className="py-3 px-4 text-right">
                       <button
-                        onClick={() => setSelectedDeliverable(d)}
+                        onClick={() => { setSelectedDeliverable(d); setReportExpanded(false) }}
                         className="inline-flex items-center gap-1 text-xs text-torii hover:text-torii-dark transition-colors"
                       >
                         <Eye className="size-3.5" />
@@ -714,91 +710,289 @@ export default function DashboardClient({
         </DialogContent>
       </Dialog>
 
-      {/* Service request dialog */}
+      {/* Service request dialog — context-aware fields per service type */}
       <Dialog open={serviceDialog !== null} onOpenChange={(o) => { if (!o) { setServiceDialog(null); setServiceLoading(false) } }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="font-serif text-charcoal">
               {serviceDialog?.label}
             </DialogTitle>
-            <DialogDescription>
-              Enter the target URL for this service request.
-            </DialogDescription>
+            {serviceDialog && (
+              <DialogDescription>
+                {getServiceInputs(serviceDialog.key).description}
+              </DialogDescription>
+            )}
           </DialogHeader>
-          <div className="space-y-3">
-            <label className="text-sm font-medium text-charcoal">Target URL</label>
-            <Input
-              value={serviceUrl}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setServiceUrl(e.target.value)}
-              placeholder="https://example.com"
-              className="border-tenkai-border rounded-tenkai"
-            />
-          </div>
-          <DialogFooter showCloseButton>
-            <Button
-              onClick={handleServiceRequest}
-              disabled={serviceLoading || !serviceUrl.trim()}
-              className="bg-torii text-white hover:bg-torii-dark rounded-tenkai"
-            >
-              {serviceLoading ? (
-                <>
-                  <Loader2 className="size-4 animate-spin mr-1.5" />
-                  Submitting...
-                </>
-              ) : (
-                'Submit Request'
-              )}
-            </Button>
-          </DialogFooter>
+          {serviceDialog && (() => {
+            const config = getServiceInputs(serviceDialog.key)
+            const isSubmitDisabled = serviceLoading || config.fields.some((f) => f.required && !serviceFields[f.key]?.trim())
+            return (
+              <>
+                <div className="space-y-4">
+                  {config.fields.map((field) => (
+                    <div key={field.key} className="space-y-1.5">
+                      <label className="text-sm font-medium text-charcoal">
+                        {field.label}
+                        {!field.required && <span className="text-warm-gray font-normal ml-1">(optional)</span>}
+                      </label>
+                      {field.type === 'url' ? (
+                        <Input
+                          value={serviceFields[field.key] ?? ''}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                            setServiceFields((prev) => ({ ...prev, [field.key]: e.target.value }))
+                          }
+                          placeholder={field.placeholder}
+                          className="border-tenkai-border rounded-tenkai"
+                        />
+                      ) : (
+                        <textarea
+                          value={serviceFields[field.key] ?? ''}
+                          onChange={(e) =>
+                            setServiceFields((prev) => ({ ...prev, [field.key]: e.target.value }))
+                          }
+                          placeholder={field.placeholder}
+                          rows={3}
+                          className="w-full px-4 py-3 text-sm border border-tenkai-border rounded-tenkai bg-transparent outline-none resize-none focus:border-torii focus:ring-2 focus:ring-torii/20 placeholder:text-muted-gray"
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <DialogFooter showCloseButton>
+                  <Button
+                    onClick={handleServiceRequest}
+                    disabled={isSubmitDisabled}
+                    className="bg-torii text-white hover:bg-torii-dark rounded-tenkai"
+                  >
+                    {serviceLoading ? (
+                      <>
+                        <Loader2 className="size-4 animate-spin mr-1.5" />
+                        Submitting...
+                      </>
+                    ) : (
+                      'Submit Request'
+                    )}
+                  </Button>
+                </DialogFooter>
+              </>
+            )
+          })()}
         </DialogContent>
       </Dialog>
 
-      {/* Deliverable detail dialog */}
-      <Dialog open={selectedDeliverable !== null} onOpenChange={(o) => { if (!o) setSelectedDeliverable(null) }}>
-        <DialogContent className="sm:max-w-lg">
+      {/* Deliverable detail dialog — summary + expandable full report */}
+      <Dialog open={selectedDeliverable !== null} onOpenChange={(o) => { if (!o) { setSelectedDeliverable(null); setReportExpanded(false) } }}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="font-serif text-charcoal">
               {selectedDeliverable?.title ?? 'Deliverable Details'}
             </DialogTitle>
           </DialogHeader>
-          {selectedDeliverable && (
-            <div className="space-y-4 text-sm">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <span className="text-warm-gray text-xs">Agent</span>
-                  <p className="font-medium text-charcoal">{selectedDeliverable.agent_name ?? '—'}</p>
+          {selectedDeliverable && (() => {
+            const d = selectedDeliverable
+            const rawContent = d.content
+            const content: Record<string, unknown> | null = rawContent == null
+              ? null
+              : typeof rawContent === 'object'
+                ? rawContent as Record<string, unknown>
+                : (() => { try { return JSON.parse(rawContent as string) } catch { return null } })()
+
+            const recommendations = Array.isArray(content?.recommendations) ? content!.recommendations as string[] : null
+            const keywords = Array.isArray(content?.keywords) ? content!.keywords as Array<Record<string, unknown>> : null
+            const issues = Array.isArray(content?.issues) ? content!.issues as Array<Record<string, unknown>> : null
+            const contentScore = content?.score != null ? Number(content.score) : null
+            const otherKeys = content
+              ? Object.keys(content).filter((k) => !['recommendations', 'keywords', 'issues', 'score'].includes(k))
+              : []
+
+            return (
+              <div className="space-y-4 text-sm">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <span className="text-warm-gray text-xs">Agent</span>
+                    <p className="font-medium text-charcoal">{d.agent_name ?? '—'}</p>
+                  </div>
+                  <div>
+                    <span className="text-warm-gray text-xs">Type</span>
+                    <p className="font-medium text-charcoal">{(d.deliverable_type ?? 'other').replace(/_/g, ' ')}</p>
+                  </div>
+                  <div>
+                    <span className="text-warm-gray text-xs">Score</span>
+                    <p className="font-medium text-charcoal">{d.score != null ? `${d.score}/100` : '—'}</p>
+                  </div>
+                  <div>
+                    <span className="text-warm-gray text-xs">Status</span>
+                    <p className="font-medium text-charcoal flex items-center gap-1.5">
+                      {deliverableStatusIcon(d.status)}
+                      {deliverableStatusLabel(d.status)}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-warm-gray text-xs">Type</span>
-                  <p className="font-medium text-charcoal">{(selectedDeliverable.deliverable_type ?? 'other').replace(/_/g, ' ')}</p>
-                </div>
-                <div>
-                  <span className="text-warm-gray text-xs">Score</span>
-                  <p className="font-medium text-charcoal">{selectedDeliverable.score != null ? `${selectedDeliverable.score}/100` : '—'}</p>
-                </div>
-                <div>
-                  <span className="text-warm-gray text-xs">Status</span>
-                  <p className="font-medium text-charcoal flex items-center gap-1.5">
-                    {deliverableStatusIcon(selectedDeliverable.status)}
-                    {deliverableStatusLabel(selectedDeliverable.status)}
-                  </p>
-                </div>
+
+                {d.summary && (
+                  <div>
+                    <span className="text-warm-gray text-xs">Summary</span>
+                    <p className="text-charcoal leading-relaxed mt-1">{d.summary}</p>
+                  </div>
+                )}
+
+                {content && (
+                  <div className="border border-tenkai-border rounded-tenkai overflow-hidden">
+                    <button
+                      onClick={() => setReportExpanded((v) => !v)}
+                      className="w-full flex items-center justify-between px-4 py-3 bg-parchment/50 hover:bg-parchment/80 transition-colors text-left"
+                    >
+                      <span className="text-sm font-medium text-charcoal">Full Report</span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            const blob = new Blob([JSON.stringify(content, null, 2)], { type: 'application/json' })
+                            const url = URL.createObjectURL(blob)
+                            const a = document.createElement('a')
+                            a.href = url
+                            a.download = `${d.title ?? 'deliverable'}.json`
+                            a.click()
+                            URL.revokeObjectURL(url)
+                          }}
+                          className="text-xs text-torii hover:text-torii-dark transition-colors px-2 py-1 rounded-tenkai border border-torii/20 hover:border-torii/40"
+                        >
+                          Download JSON
+                        </button>
+                        <ChevronDown className={`size-4 text-warm-gray transition-transform ${reportExpanded ? 'rotate-180' : ''}`} />
+                      </div>
+                    </button>
+
+                    {reportExpanded && (
+                      <div className="p-4 space-y-4">
+                        {contentScore != null && (
+                          <div className="flex items-center gap-3">
+                            <div className={`w-12 h-12 rounded-full flex items-center justify-center text-sm font-semibold ${
+                              contentScore >= 80 ? 'bg-[#4A7C59]/10 text-[#4A7C59]' : contentScore >= 50 ? 'bg-[#C49A3C]/10 text-[#C49A3C]' : 'bg-torii/10 text-torii'
+                            }`}>
+                              {contentScore}
+                            </div>
+                            <span className="text-xs text-warm-gray">Overall Score</span>
+                          </div>
+                        )}
+
+                        {recommendations && recommendations.length > 0 && (
+                          <div>
+                            <p className="text-xs font-medium text-charcoal mb-2">Recommendations</p>
+                            <ul className="space-y-1.5">
+                              {recommendations.map((rec, i) => (
+                                <li key={i} className="flex items-start gap-2 text-sm text-warm-gray leading-relaxed">
+                                  <span className="text-torii mt-0.5 shrink-0">&#8226;</span>
+                                  {String(rec)}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {keywords && keywords.length > 0 && (
+                          <div>
+                            <p className="text-xs font-medium text-charcoal mb-2">Keywords</p>
+                            <div className="rounded-tenkai border border-tenkai-border overflow-hidden">
+                              <table className="w-full text-xs">
+                                <thead>
+                                  <tr className="border-b border-tenkai-border bg-parchment/50">
+                                    <th className="text-left py-2 px-3 font-medium text-warm-gray">Keyword</th>
+                                    <th className="text-right py-2 px-3 font-medium text-warm-gray">Volume</th>
+                                    <th className="text-right py-2 px-3 font-medium text-warm-gray hidden sm:table-cell">Difficulty</th>
+                                    <th className="text-left py-2 px-3 font-medium text-warm-gray hidden md:table-cell">Intent</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {keywords.map((kw, i) => (
+                                    <tr key={i} className="border-b border-tenkai-border-light last:border-none">
+                                      <td className="py-2 px-3 font-medium text-charcoal">{String(kw.keyword ?? kw.term ?? '—')}</td>
+                                      <td className="py-2 px-3 text-right text-charcoal tabular-nums">{Number(kw.volume ?? kw.search_volume ?? 0).toLocaleString()}</td>
+                                      <td className="py-2 px-3 text-right hidden sm:table-cell">
+                                        <span className={`rounded-full px-1.5 py-0.5 font-medium ${
+                                          Number(kw.difficulty ?? 0) <= 30 ? 'bg-[#4A7C59]/10 text-[#4A7C59]' : Number(kw.difficulty ?? 0) <= 60 ? 'bg-[#C49A3C]/10 text-[#C49A3C]' : 'bg-torii/10 text-torii'
+                                        }`}>{String(kw.difficulty ?? kw.kd ?? '—')}</span>
+                                      </td>
+                                      <td className="py-2 px-3 text-warm-gray hidden md:table-cell capitalize">{String(kw.intent ?? '—')}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+
+                        {issues && issues.length > 0 && (
+                          <div>
+                            <p className="text-xs font-medium text-charcoal mb-2">Issues</p>
+                            <div className="space-y-2">
+                              {issues.map((issue, i) => {
+                                const severity = String(issue.severity ?? issue.priority ?? 'medium').toLowerCase()
+                                const severityClass = severity === 'high' || severity === 'critical'
+                                  ? 'bg-torii/10 text-torii'
+                                  : severity === 'medium' || severity === 'warning'
+                                    ? 'bg-[#C49A3C]/10 text-[#C49A3C]'
+                                    : 'bg-[#4A7C59]/10 text-[#4A7C59]'
+                                return (
+                                  <div key={i} className="flex items-start gap-2 p-2.5 rounded-tenkai bg-parchment/30 border border-tenkai-border-light">
+                                    <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase shrink-0 ${severityClass}`}>
+                                      {severity}
+                                    </span>
+                                    <p className="text-sm text-charcoal leading-relaxed">{String(issue.description ?? issue.message ?? issue.title ?? JSON.stringify(issue))}</p>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {otherKeys.map((key) => {
+                          const val = content![key]
+                          if (val == null) return null
+                          const label = key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+                          if (Array.isArray(val)) {
+                            return (
+                              <div key={key}>
+                                <p className="text-xs font-medium text-charcoal mb-1.5">{label}</p>
+                                <ul className="space-y-1">
+                                  {(val as unknown[]).map((item, i) => (
+                                    <li key={i} className="text-sm text-warm-gray leading-relaxed">
+                                      &#8226; {typeof item === 'object' ? JSON.stringify(item) : String(item)}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )
+                          }
+                          if (typeof val === 'object') {
+                            return (
+                              <div key={key}>
+                                <p className="text-xs font-medium text-charcoal mb-1.5">{label}</p>
+                                <pre className="text-xs text-warm-gray bg-parchment/50 rounded-tenkai p-3 overflow-x-auto">{JSON.stringify(val, null, 2)}</pre>
+                              </div>
+                            )
+                          }
+                          return (
+                            <div key={key}>
+                              <p className="text-xs font-medium text-charcoal mb-1">{label}</p>
+                              <p className="text-sm text-warm-gray leading-relaxed">{String(val)}</p>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
-              {selectedDeliverable.summary && (
-                <div>
-                  <span className="text-warm-gray text-xs">Summary</span>
-                  <p className="text-charcoal leading-relaxed mt-1">{selectedDeliverable.summary}</p>
-                </div>
-              )}
-            </div>
-          )}
+            )
+          })()}
           <DialogFooter showCloseButton>
             <span />
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Success/error notification — auto-dismisses after 5s */}
+      {/* Success/error notification */}
       {serviceSuccess && (
         <div className="fixed bottom-6 right-6 z-50 animate-in slide-in-from-bottom-4 fade-in">
           <div className={`rounded-tenkai border px-4 py-3 shadow-lg text-sm font-medium flex items-center gap-2 ${

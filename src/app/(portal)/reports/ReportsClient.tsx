@@ -112,33 +112,33 @@ function ReportView({ report }: { report: ReportData }) {
         <MetricCard
           title="Organic Traffic"
           value={(m.organic_traffic ?? 0).toLocaleString()}
-          change="up"
-          changePercent="+15%"
-          period="vs prior period"
+          change="neutral"
+          changePercent="—"
+          period="no comparison data"
           detail="Visits from search engines"
         />
         <MetricCard
           title="Keyword Rankings"
           value={String(m.keyword_rankings ?? 0)}
-          change="up"
-          changePercent="12 improved"
-          period="3 declined"
+          change="neutral"
+          changePercent="—"
+          period="no comparison data"
           detail="Tracked keywords"
         />
         <MetricCard
           title="Content Published"
           value={String(m.content_published ?? 0)}
           change="neutral"
-          changePercent="avg 1,200 words"
-          period="This period"
+          changePercent="—"
+          period="this period"
           detail="Blog posts published"
         />
         <MetricCard
           title="Domain Authority"
           value={String(m.domain_authority ?? 0)}
-          change="up"
-          changePercent="+2"
-          period="vs last month"
+          change="neutral"
+          changePercent="—"
+          period="no comparison data"
         />
       </div>
 
