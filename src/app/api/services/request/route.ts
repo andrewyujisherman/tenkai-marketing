@@ -3,6 +3,7 @@ import { createServerClient } from '@/lib/supabase'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { getAgentForRequest, REQUEST_TYPES } from '@/lib/agents'
 import { processServiceRequest } from '@/lib/process-service-request'
+import { tierAllowsRequestType, getRequiredTierForRequest } from '@/lib/tier-gates'
 
 const VALID_REQUEST_TYPES = new Set(REQUEST_TYPES)
 
@@ -20,7 +21,7 @@ export async function POST(request: Request) {
   // Find the client record for this user
   const { data: client } = await supabaseAdmin
     .from('clients')
-    .select('id, website_url')
+    .select('id, website_url, tier')
     .eq('auth_user_id', user.id)
     .single()
 
@@ -28,7 +29,7 @@ export async function POST(request: Request) {
     // Fallback to email match
     const { data: clientByEmail } = await supabaseAdmin
       .from('clients')
-      .select('id, website_url')
+      .select('id, website_url, tier')
       .eq('email', (user.email ?? '').toLowerCase())
       .single()
 
@@ -42,7 +43,7 @@ export async function POST(request: Request) {
 }
 
 async function createRequest(
-  client: { id: string; website_url: string | null },
+  client: { id: string; website_url: string | null; tier: string | null },
   request: Request
 ) {
   let body: Record<string, unknown>
@@ -64,6 +65,15 @@ async function createRequest(
     return NextResponse.json(
       { error: `Invalid request_type. Must be one of: ${Array.from(VALID_REQUEST_TYPES).join(', ')}` },
       { status: 400 }
+    )
+  }
+
+  // Tier gating
+  if (!tierAllowsRequestType(client.tier, request_type)) {
+    const required = getRequiredTierForRequest(request_type)
+    return NextResponse.json(
+      { error: `Your ${client.tier ?? 'starter'} plan does not include ${request_type}. Upgrade to ${required} or higher.` },
+      { status: 403 }
     )
   }
 

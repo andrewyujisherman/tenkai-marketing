@@ -62,7 +62,11 @@ export async function GET(request: NextRequest) {
           }
           if (website_url) insertData.website_url = website_url
 
-          await supabaseAdmin.from('clients').insert(insertData)
+          const { error: insertError } = await supabaseAdmin.from('clients').insert(insertData)
+
+          if (insertError) {
+            console.error('[auth/callback] Failed to create client row:', insertError.message)
+          }
 
           // New client — needs onboarding
           return NextResponse.redirect(`${origin}/onboarding`)

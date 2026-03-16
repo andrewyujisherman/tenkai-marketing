@@ -25,7 +25,7 @@ export default function PrivacyPage() {
             {/* Intro */}
             <section className="mb-10">
               <p className="text-warm-gray leading-relaxed">
-                Tenkai Marketing is operated by Alegius AI (&ldquo;Alegius,&rdquo; &ldquo;we,&rdquo; &ldquo;us,&rdquo; or &ldquo;our&rdquo;). This Privacy Policy explains how we collect, use, disclose, and safeguard information when you use our platform at tenkai.alegius.com (the &ldquo;Service&rdquo;). By using the Service, you agree to the practices described in this policy.
+                Tenkai Marketing is operated by Alegius AI (&ldquo;Alegius,&rdquo; &ldquo;we,&rdquo; &ldquo;us,&rdquo; or &ldquo;our&rdquo;). This Privacy Policy explains how we collect, use, disclose, and safeguard information when you use our platform at tenkai-marketing.vercel.app (the &ldquo;Service&rdquo;). By using the Service, you agree to the practices described in this policy.
               </p>
             </section>
 

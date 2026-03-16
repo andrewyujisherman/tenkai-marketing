@@ -142,7 +142,7 @@ export function Hero() {
             >
               <div className="flex items-center gap-2 text-sm text-warm-gray">
                 <Zap className="size-4 text-torii" />
-                <span>9 AI agents included</span>
+                <span>6 AI specialists included</span>
               </div>
               <div className="w-px h-4 bg-tenkai-border" />
               <div className="text-sm text-warm-gray">

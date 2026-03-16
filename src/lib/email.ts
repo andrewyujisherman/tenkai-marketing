@@ -7,8 +7,8 @@ function getResend(): Resend | null {
   return _resend
 }
 
-const FROM_EMAIL = 'Tenkai Marketing <onboarding@resend.dev>'
-const SUPPORT_EMAIL = 'rookbot.mini@gmail.com'
+const FROM_EMAIL = process.env.EMAIL_FROM || 'Tenkai Marketing <onboarding@resend.dev>'
+const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || 'support@alegius.com'
 
 export async function sendWelcomeEmail(to: string, name: string, tempPassword?: string) {
   const resend = getResend()

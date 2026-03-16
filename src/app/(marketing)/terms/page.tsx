@@ -25,7 +25,7 @@ export default function TermsPage() {
             {/* Intro */}
             <section className="mb-10">
               <p className="text-warm-gray leading-relaxed">
-                These Terms of Service (&ldquo;Terms&rdquo;) constitute a legally binding agreement between you (&ldquo;Customer,&rdquo; &ldquo;you,&rdquo; or &ldquo;your&rdquo;) and Alegius AI (&ldquo;Alegius,&rdquo; &ldquo;we,&rdquo; &ldquo;us,&rdquo; or &ldquo;our&rdquo;), the operator of Tenkai Marketing at tenkai.alegius.com (the &ldquo;Service&rdquo;). By creating an account or using the Service, you agree to be bound by these Terms. If you do not agree, do not use the Service.
+                These Terms of Service (&ldquo;Terms&rdquo;) constitute a legally binding agreement between you (&ldquo;Customer,&rdquo; &ldquo;you,&rdquo; or &ldquo;your&rdquo;) and Alegius AI (&ldquo;Alegius,&rdquo; &ldquo;we,&rdquo; &ldquo;us,&rdquo; or &ldquo;our&rdquo;), the operator of Tenkai Marketing at tenkai-marketing.vercel.app (the &ldquo;Service&rdquo;). By creating an account or using the Service, you agree to be bound by these Terms. If you do not agree, do not use the Service.
               </p>
             </section>
 

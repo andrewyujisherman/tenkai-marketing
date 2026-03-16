@@ -28,6 +28,15 @@ export async function POST(request: NextRequest) {
 
   const supabase = getSupabase()
 
+  // Idempotency: skip if we've already processed this event
+  const { error: idempotencyError } = await supabase
+    .from('stripe_events')
+    .insert({ event_id: event.id, event_type: event.type })
+  if (idempotencyError?.code === '23505') {
+    // Duplicate key — already processed
+    return NextResponse.json({ received: true, duplicate: true })
+  }
+
   const tierByPrice: Record<string, string> = {
     [process.env.STRIPE_PRICE_STARTER ?? '']: 'starter',
     [process.env.STRIPE_PRICE_GROWTH ?? '']: 'growth',

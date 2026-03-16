@@ -102,6 +102,30 @@ export default function OnboardingPage() {
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  // Restore draft from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('tenkai_onboarding_draft')
+      if (saved) {
+        const draft = JSON.parse(saved)
+        if (draft.answers) setAnswers(draft.answers)
+        if (draft.phase && draft.phase !== 'complete') setPhase(draft.phase)
+        if (typeof draft.step === 'number') setStep(draft.step)
+      }
+    } catch { /* ignore parse errors */ }
+  }, [])
+
+  // Save draft to localStorage on every change
+  useEffect(() => {
+    if (phase === 'complete') {
+      localStorage.removeItem('tenkai_onboarding_draft')
+      return
+    }
+    try {
+      localStorage.setItem('tenkai_onboarding_draft', JSON.stringify({ answers, phase, step }))
+    } catch { /* ignore quota errors */ }
+  }, [answers, phase, step])
+
   // Pre-fill URL from hero CTA query param
   useEffect(() => {
     const urlParam = searchParams.get('url')

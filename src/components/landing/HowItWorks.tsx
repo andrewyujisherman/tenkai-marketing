@@ -7,7 +7,7 @@ const steps = [
     num: 1,
     title: 'Free Audit',
     description:
-      'Enter your URL. Get a comprehensive SEO analysis in 60 seconds.',
+      'Enter your URL. Get a comprehensive SEO analysis within minutes.',
     icon: Search,
   },
   {
