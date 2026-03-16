@@ -2,8 +2,11 @@ import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { getAgentForRequest, REQUEST_TYPES } from '@/lib/agents'
+import { processServiceRequest } from '@/lib/process-service-request'
 
 const VALID_REQUEST_TYPES = new Set(REQUEST_TYPES)
+
+export const maxDuration = 120 // Allow up to 120s for Gemini processing on Vercel
 
 export async function POST(request: Request) {
   // Authenticate
@@ -95,5 +98,32 @@ async function createRequest(
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  return NextResponse.json({ request: serviceRequest }, { status: 201 })
+  // Process the request inline (no queue worker needed)
+  // Fire-and-forget: start processing but return immediately so the UI
+  // can show "processing" status and poll for completion.
+  const processPromise = processServiceRequest({
+    id: serviceRequest.id,
+    client_id: client.id,
+    request_type,
+    target_url: url,
+    parameters: parameters ?? {},
+    assigned_agent: agentId,
+  }).catch((err) => {
+    console.error(`[services/request] Background processing failed for ${serviceRequest.id}:`, err)
+  })
+
+  // On Vercel, we need to wait for the promise to complete since
+  // the runtime kills the function after the response is sent.
+  // Use waitUntil if available (Vercel Edge), otherwise await.
+  // For Node.js runtime, we must await to ensure completion.
+  await processPromise
+
+  // Re-fetch the updated status
+  const { data: updated } = await supabaseAdmin
+    .from('service_requests')
+    .select('id, status, assigned_agent, created_at, completed_at')
+    .eq('id', serviceRequest.id)
+    .single()
+
+  return NextResponse.json({ request: updated ?? serviceRequest }, { status: 201 })
 }

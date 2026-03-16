@@ -149,6 +149,7 @@ export default function DashboardClient({
   const [serviceFields, setServiceFields] = useState<Record<string, string>>({})
   const [serviceLoading, setServiceLoading] = useState(false)
   const [serviceSuccess, setServiceSuccess] = useState<string | null>(null)
+  const [urlCollapsed, setUrlCollapsed] = useState(true)
 
   // Deliverable detail dialog
   const [selectedDeliverable, setSelectedDeliverable] = useState<Deliverable | null>(null)
@@ -282,9 +283,9 @@ export default function DashboardClient({
     if (missingRequired) return
     setServiceLoading(true)
     try {
-      const extra: Record<string, string> = {}
+      const parameters: Record<string, string> = {}
       for (const [k, v] of Object.entries(serviceFields)) {
-        if (k !== 'target_url') extra[k] = v.trim()
+        if (k !== 'target_url') parameters[k] = v.trim()
       }
       const res = await fetch('/api/services/request', {
         method: 'POST',
@@ -292,7 +293,7 @@ export default function DashboardClient({
         body: JSON.stringify({
           request_type: serviceDialog.key,
           target_url: serviceFields.target_url?.trim() ?? '',
-          ...extra,
+          parameters,
         }),
       })
       if (res.ok) {
@@ -542,6 +543,7 @@ export default function DashboardClient({
                   onClick={() => {
                     setServiceDialog({ key, label: svc.label })
                     setServiceFields({ target_url: client?.website_url ?? '' })
+                    setUrlCollapsed(true)
                   }}
                   className="flex flex-col items-start gap-2 p-4 rounded-tenkai border border-tenkai-border hover:border-torii/30 hover:bg-parchment/50 transition-colors text-left"
                 >
@@ -573,6 +575,7 @@ export default function DashboardClient({
                       onClick={() => {
                         setServiceDialog({ key: svc.key, label: svc.label })
                         setServiceFields({ target_url: client?.website_url ?? '' })
+                        setUrlCollapsed(true)
                       }}
                       className="flex items-start gap-2 p-3 rounded-tenkai border border-tenkai-border-light hover:border-torii/20 hover:bg-parchment/30 transition-colors text-left"
                     >
@@ -756,34 +759,56 @@ export default function DashboardClient({
             return (
               <>
                 <div className="space-y-4">
-                  {config.fields.map((field) => (
-                    <div key={field.key} className="space-y-1.5">
-                      <label className="text-sm font-medium text-charcoal">
-                        {field.label}
-                        {!field.required && <span className="text-warm-gray font-normal ml-1">(optional)</span>}
-                      </label>
-                      {field.type === 'url' ? (
-                        <Input
-                          value={serviceFields[field.key] ?? ''}
-                          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                            setServiceFields((prev) => ({ ...prev, [field.key]: e.target.value }))
-                          }
-                          placeholder={field.placeholder}
-                          className="border-tenkai-border rounded-tenkai"
-                        />
-                      ) : (
-                        <textarea
-                          value={serviceFields[field.key] ?? ''}
-                          onChange={(e) =>
-                            setServiceFields((prev) => ({ ...prev, [field.key]: e.target.value }))
-                          }
-                          placeholder={field.placeholder}
-                          rows={3}
-                          className="w-full px-4 py-3 text-sm border border-tenkai-border rounded-tenkai bg-transparent outline-none resize-none focus:border-torii focus:ring-2 focus:ring-torii/20 placeholder:text-muted-gray"
-                        />
-                      )}
-                    </div>
-                  ))}
+                  {config.fields.map((field) => {
+                    // Collapse URL fields when pre-filled from client profile
+                    const isUrlField = field.type === 'url' && field.key === 'target_url'
+                    const hasPrefilledUrl = isUrlField && !!client?.website_url && serviceFields[field.key] === client.website_url
+
+                    if (isUrlField && hasPrefilledUrl && urlCollapsed) {
+                      return (
+                        <div key={field.key} className="flex items-center gap-2 text-sm">
+                          <span className="text-warm-gray">Using:</span>
+                          <span className="text-charcoal font-medium truncate">{client?.website_url}</span>
+                          <button
+                            type="button"
+                            onClick={() => setUrlCollapsed(false)}
+                            className="text-torii hover:text-torii-dark text-xs font-medium shrink-0"
+                          >
+                            change
+                          </button>
+                        </div>
+                      )
+                    }
+
+                    return (
+                      <div key={field.key} className="space-y-1.5">
+                        <label className="text-sm font-medium text-charcoal">
+                          {field.label}
+                          {!field.required && <span className="text-warm-gray font-normal ml-1">(optional)</span>}
+                        </label>
+                        {field.type === 'url' ? (
+                          <Input
+                            value={serviceFields[field.key] ?? ''}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                              setServiceFields((prev) => ({ ...prev, [field.key]: e.target.value }))
+                            }
+                            placeholder={field.placeholder}
+                            className="border-tenkai-border rounded-tenkai"
+                          />
+                        ) : (
+                          <textarea
+                            value={serviceFields[field.key] ?? ''}
+                            onChange={(e) =>
+                              setServiceFields((prev) => ({ ...prev, [field.key]: e.target.value }))
+                            }
+                            placeholder={field.placeholder}
+                            rows={3}
+                            className="w-full px-4 py-3 text-sm border border-tenkai-border rounded-tenkai bg-transparent outline-none resize-none focus:border-torii focus:ring-2 focus:ring-torii/20 placeholder:text-muted-gray"
+                          />
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
                 <DialogFooter showCloseButton>
                   <Button
@@ -794,10 +819,10 @@ export default function DashboardClient({
                     {serviceLoading ? (
                       <>
                         <Loader2 className="size-4 animate-spin mr-1.5" />
-                        Submitting...
+                        Processing... (this may take a minute)
                       </>
                     ) : (
-                      'Submit Request'
+                      'Run Service'
                     )}
                   </Button>
                 </DialogFooter>
