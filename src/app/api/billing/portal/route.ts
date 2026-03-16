@@ -32,9 +32,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No billing account found' }, { status: 404 })
     }
 
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-      apiVersion: '2026-02-25.clover',
-    })
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!)
 
     const origin =
       request.headers.get('origin') ??

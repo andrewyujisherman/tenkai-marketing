@@ -2,7 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-const ADMIN_EMAILS = ['andrewyujisherman@gmail.com']
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS ?? 'andrewyujisherman@gmail.com').split(',').map(e => e.trim().toLowerCase())
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
@@ -45,7 +45,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Protected routes — redirect to login if not authenticated (demo mode bypasses)
-  const protectedPaths = ['/dashboard', '/content', '/audit', '/health', '/reports', '/settings', '/onboarding']
+  const protectedPaths = ['/dashboard', '/content', '/audit', '/health', '/reports', '/settings', '/onboarding', '/integrations', '/links', '/local']
   const isProtected = protectedPaths.some(path => request.nextUrl.pathname.startsWith(path))
   const isDemo = request.cookies.get('demo_mode')?.value === 'true'
 
@@ -76,5 +76,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/content/:path*', '/audit/:path*', '/health/:path*', '/reports/:path*', '/settings/:path*', '/onboarding/:path*', '/auth/:path*', '/admin/:path*'],
+  matcher: ['/dashboard/:path*', '/content/:path*', '/audit/:path*', '/health/:path*', '/reports/:path*', '/settings/:path*', '/onboarding/:path*', '/integrations/:path*', '/links/:path*', '/local/:path*', '/auth/:path*', '/admin/:path*'],
 }

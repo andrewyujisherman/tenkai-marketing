@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { isAdmin } from '@/lib/admin'
+import { sendWelcomeEmail } from '@/lib/email'
 import crypto from 'crypto'
 
 async function requireAdmin() {
@@ -108,8 +109,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: clientError?.message ?? 'Failed to create client' }, { status: 500 })
   }
 
-  // TODO: Send welcome email with temp password via Resend/email provider
-  // For now, return temp password so admin can share it manually
+  // Send welcome email with temp password
+  await sendWelcomeEmail(email.toLowerCase(), name, tempPassword)
+
   return NextResponse.json({
     success: true,
     client: {

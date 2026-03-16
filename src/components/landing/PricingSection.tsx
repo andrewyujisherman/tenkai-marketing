@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { createBrowserClient } from '@supabase/ssr'
 import { tiers } from '@/lib/design-system'
 import { Button } from '@/components/ui/button'
 import { Check, Minus, Lock } from 'lucide-react'
@@ -27,6 +28,19 @@ export function PricingSection() {
   async function handleCheckout(tierName: string) {
     setLoadingTier(tierName)
     setCheckoutError(null)
+
+    // Check if user is authenticated
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) {
+      router.push(`/auth/signup?tier=${tierName.toLowerCase()}`)
+      setLoadingTier(null)
+      return
+    }
+
     try {
       const res = await fetch('/api/checkout', {
         method: 'POST',
@@ -38,7 +52,7 @@ export function PricingSection() {
       router.push(url)
     } catch {
       setLoadingTier(null)
-      setCheckoutError('Something went wrong. Please try again or contact support@tenkai.marketing')
+      setCheckoutError('Something went wrong. Please try again or contact rookbot.mini@gmail.com')
       setTimeout(() => setCheckoutError(null), 8000)
     }
   }

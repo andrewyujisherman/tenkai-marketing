@@ -355,10 +355,10 @@ function BillingTab() {
               Questions about your plan or invoices? We&apos;re happy to help:
             </p>
             <a
-              href="mailto:support@tenkai.marketing?subject=Billing%20Question"
+              href="mailto:rookbot.mini@gmail.com?subject=Billing%20Question"
               className="inline-flex items-center gap-2 text-sm font-medium text-torii hover:text-torii-dark transition-colors"
             >
-              support@tenkai.marketing
+              rookbot.mini@gmail.com
               <span className="text-xs text-warm-gray">(usually replies within a few hours)</span>
             </a>
           </div>
@@ -382,21 +382,21 @@ function TeamTab() {
           </div>
           <div>
             <h3 className="font-serif text-lg text-charcoal">Team Management</h3>
-            <p className="text-warm-gray text-xs">Multi-seat access is launching soon</p>
+            <p className="text-warm-gray text-xs">Add teammates to your Tenkai account</p>
           </div>
         </div>
         <div className="bg-parchment/40 rounded-tenkai p-4 space-y-3">
           <p className="text-sm text-charcoal">
-            Need to give a teammate access now? We can set it up for you manually:
+            To add a teammate, send us their email address:
           </p>
           <a
-            href="mailto:support@tenkai.marketing?subject=Team%20Access%20Request"
+            href="mailto:rookbot.mini@gmail.com?subject=Team%20Access%20Request"
             className="inline-flex items-center gap-2 text-sm font-medium text-torii hover:text-torii-dark transition-colors"
           >
-            support@tenkai.marketing
+            rookbot.mini@gmail.com
           </a>
           <p className="text-xs text-warm-gray">
-            Include the email addresses and we&apos;ll send invites within a business day.
+            We&apos;ll send them an invite within one business day.
           </p>
         </div>
       </div>
@@ -435,7 +435,7 @@ const notificationSettings: NotificationSetting[] = [
   {
     id: 'audit-findings',
     label: 'New audit findings',
-    description: 'Notified when Yuki finds new technical SEO issues on your site',
+    description: 'Notified when Kenji finds new technical SEO issues on your site',
     defaultOn: false,
   },
   {
@@ -531,6 +531,9 @@ function NotificationsTab() {
       <p className={`text-xs transition-opacity duration-300 flex items-center gap-1 ${saved ? 'text-green-600 opacity-100' : saving ? 'text-warm-gray opacity-100' : 'opacity-0'}`}>
         <Check className="size-3.5" />
         {saving ? 'Saving…' : 'Preferences saved'}
+      </p>
+      <p className="text-xs text-warm-gray mt-2">
+        Email notifications are delivered to your account email. Manage delivery preferences above.
       </p>
     </div>
   )

@@ -227,7 +227,7 @@ function ReportView({ report }: { report: ReportData }) {
             Pro plans include weekly reports, revenue attribution, and exportable data
           </p>
         </div>
-        <a href="mailto:support@tenkai.marketing?subject=Upgrade%20to%20Pro">
+        <a href="mailto:rookbot.mini@gmail.com?subject=Upgrade%20to%20Pro">
           <Button className="bg-torii text-white hover:bg-torii-dark rounded-tenkai text-sm gap-1.5 flex-shrink-0">
             Contact Us to Upgrade
             <ArrowUpRight className="size-3.5" />

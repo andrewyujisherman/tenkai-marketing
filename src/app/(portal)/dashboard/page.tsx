@@ -104,6 +104,7 @@ export default async function DashboardPage() {
       { data: postsData },
       { data: auditData },
       { data: deliverablesData },
+      { data: auditDeliverableData },
     ] = await Promise.all([
       db
         .from('content_posts')
@@ -137,7 +138,7 @@ export default async function DashboardPage() {
         .eq('client_id', clientId)
         .order('created_at', { ascending: false })
         .limit(1)
-        .single(),
+        .maybeSingle(),
 
       db
         .from('deliverables')
@@ -145,12 +146,22 @@ export default async function DashboardPage() {
         .eq('client_id', clientId)
         .order('created_at', { ascending: false })
         .limit(10),
+
+      // Fallback: get audit score from deliverables if audits table is empty
+      db
+        .from('deliverables')
+        .select('score')
+        .eq('client_id', clientId)
+        .eq('deliverable_type', 'audit_report')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
     ])
 
     stats = {
       totalContent: totalCount ?? 0,
       pendingApprovals: pendingCount ?? 0,
-      auditScore: auditData?.overall_score ?? null,
+      auditScore: auditData?.overall_score ?? auditDeliverableData?.score ?? null,
       publishedContent: publishedCount ?? 0,
     }
 
@@ -170,7 +181,7 @@ export default async function DashboardPage() {
       agent_name: p.agent_author ?? null,
       content_type: p.content_type ?? null,
       created_at: p.created_at,
-      needs_approval: p.status === 'draft' || p.status === 'pending_review',
+      needs_approval: p.status === 'draft' || p.status === 'pending_approval',
     }))
 
     recentDeliverables = (deliverablesData ?? []).map((d) => ({

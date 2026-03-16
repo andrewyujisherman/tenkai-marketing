@@ -67,6 +67,7 @@ export default async function HealthPage() {
     { data: audit },
     { data: technicalData },
     { data: onPageData },
+    { data: auditDeliverable },
   ] = await Promise.all([
     db
       .from('audits')
@@ -79,7 +80,7 @@ export default async function HealthPage() {
       .from('deliverables')
       .select('id, agent_name, deliverable_type, title, content, summary, score, status, created_at')
       .eq('client_id', clientId)
-      .in('deliverable_type', ['technical_report', 'schema_code', 'redirect_config', 'robots_config'])
+      .in('deliverable_type', ['technical_report', 'schema_code', 'redirect_config', 'robots_config', 'audit_report'])
       .order('created_at', { ascending: false })
       .limit(20),
     db
@@ -89,6 +90,15 @@ export default async function HealthPage() {
       .in('deliverable_type', ['on_page_report', 'meta_report'])
       .order('created_at', { ascending: false })
       .limit(20),
+    // Fallback: get audit data from deliverables if audits table is empty
+    db
+      .from('deliverables')
+      .select('id, agent_name, deliverable_type, title, content, summary, score, status, created_at')
+      .eq('client_id', clientId)
+      .eq('deliverable_type', 'audit_report')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   ])
 
   const mapDeliverable = (d: Record<string, unknown>): HealthDeliverable => ({
@@ -106,19 +116,62 @@ export default async function HealthPage() {
   const technicalDeliverables: HealthDeliverable[] = (technicalData ?? []).map(mapDeliverable)
   const onPageDeliverables: HealthDeliverable[] = (onPageData ?? []).map(mapDeliverable)
 
-  if (!audit && technicalDeliverables.length === 0 && onPageDeliverables.length === 0) {
+  // Parse audit_report deliverable content as fallback for audit data
+  const auditContent = auditDeliverable?.content as Record<string, unknown> | null
+  const categories = auditContent?.categories as Record<string, { score?: number; issues?: DbIssue[] }> | undefined
+
+  const hasAuditSource = !!audit || !!auditDeliverable
+
+  if (!hasAuditSource && technicalDeliverables.length === 0 && onPageDeliverables.length === 0) {
     return <HealthEmptyState />
   }
 
-  // Overview data from audit
-  const overallScore: number = audit?.overall_score ?? 0
-  const categoryScores = audit ? [
-    { label: 'Technical', score: audit.technical_score ?? 0 },
-    { label: 'Content', score: audit.content_score ?? 0 },
-    { label: 'Authority', score: audit.authority_score ?? 0 },
-  ] : []
+  // Overview data — prefer audits table, fall back to audit_report deliverable
+  let overallScore: number
+  let categoryScores: { label: string; score: number }[]
+  let allIssues: DbIssue[]
+  let recommendations: DbRecommendation[]
 
-  const allIssues: DbIssue[] = audit && Array.isArray(audit.issues) ? audit.issues : []
+  if (audit) {
+    overallScore = audit.overall_score ?? 0
+    categoryScores = [
+      { label: 'Technical', score: audit.technical_score ?? 0 },
+      { label: 'Content', score: audit.content_score ?? 0 },
+      { label: 'Authority', score: audit.authority_score ?? 0 },
+    ]
+    allIssues = Array.isArray(audit.issues) ? audit.issues : []
+    recommendations = Array.isArray(audit.recommendations) ? audit.recommendations : []
+  } else if (categories) {
+    // Extract from audit_report deliverable content
+    const techScore = categories.technical?.score ?? 0
+    const contentScore = categories.content?.score ?? 0
+    const authorityScore = categories.authority?.score ?? 0
+    const uxScore = categories.user_experience?.score ?? 0
+    overallScore = auditDeliverable?.score ?? Math.round((techScore + contentScore + authorityScore + uxScore) / 4)
+    categoryScores = [
+      { label: 'Technical', score: techScore },
+      { label: 'Content', score: contentScore },
+      { label: 'Authority', score: authorityScore },
+    ]
+    // Collect issues from all categories
+    allIssues = Object.values(categories).flatMap((cat) =>
+      Array.isArray(cat.issues) ? cat.issues : []
+    )
+    // Extract recommendations from issues
+    recommendations = allIssues
+      .filter((i) => i.severity === 'critical' || i.severity === 'warning')
+      .map((i) => ({
+        priority: i.severity === 'critical' ? 'high' : 'medium',
+        title: i.title,
+        description: (i as DbIssue & { recommendation?: string }).recommendation ?? i.description,
+        agent: i.agent ?? 'Kenji',
+      }))
+  } else {
+    overallScore = 0
+    categoryScores = []
+    allIssues = []
+    recommendations = []
+  }
 
   const toIssueCard = (issue: DbIssue): IssueCardProps => ({
     severity: issue.severity,
@@ -138,10 +191,6 @@ export default async function HealthPage() {
   const warningIssues = allIssues.filter((i) => i.severity === 'warning').map(toIssueCard)
   const passedIssues = allIssues.filter((i) => i.severity === 'passed').map(toIssueCard)
 
-  const recommendations: DbRecommendation[] = audit && Array.isArray(audit.recommendations)
-    ? audit.recommendations
-    : []
-
   return (
     <HealthClient
       overallScore={overallScore}
@@ -152,7 +201,7 @@ export default async function HealthPage() {
       recommendations={recommendations}
       technicalDeliverables={technicalDeliverables}
       onPageDeliverables={onPageDeliverables}
-      hasAudit={!!audit}
+      hasAudit={hasAuditSource}
     />
   )
 }

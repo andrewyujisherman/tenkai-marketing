@@ -3,9 +3,7 @@ import Stripe from 'stripe'
 import { createClient } from '@supabase/supabase-js'
 
 function getStripe() {
-  return new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    apiVersion: '2026-02-25.clover',
-  })
+  return new Stripe(process.env.STRIPE_SECRET_KEY!)
 }
 
 function getSupabase() {
@@ -47,7 +45,7 @@ export async function POST(request: NextRequest) {
       const tier = tierByPrice[priceId] ?? 'starter'
 
       const clientId = session.metadata?.client_id
-      const updateData = { stripe_customer_id: customerId, tier, status: 'active' }
+      const updateData = { stripe_customer_id: customerId, stripe_subscription_id: subscriptionId, tier, status: 'active' }
 
       if (clientId) {
         // Preferred: match by client_id UUID (reliable)

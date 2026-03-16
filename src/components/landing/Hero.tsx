@@ -59,8 +59,8 @@ export function Hero() {
 
   function handleAnalyze() {
     const dest = url.trim()
-      ? `/onboarding?url=${encodeURIComponent(url.trim())}`
-      : '/onboarding'
+      ? `/auth/signup?url=${encodeURIComponent(url.trim())}`
+      : '/auth/signup'
     router.push(dest)
   }
 
@@ -142,7 +142,7 @@ export function Hero() {
             >
               <div className="flex items-center gap-2 text-sm text-warm-gray">
                 <Zap className="size-4 text-torii" />
-                <span>6 AI experts included</span>
+                <span>9 AI agents included</span>
               </div>
               <div className="w-px h-4 bg-tenkai-border" />
               <div className="text-sm text-warm-gray">

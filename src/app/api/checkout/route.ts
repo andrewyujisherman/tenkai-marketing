@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
+import { createServerClient } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/supabase-admin'
 
 const tierPriceEnvMap: Record<string, string> = {
   starter: 'STRIPE_PRICE_STARTER',
@@ -8,10 +10,16 @@ const tierPriceEnvMap: Record<string, string> = {
 }
 
 export async function POST(request: NextRequest) {
+  // Authenticate
+  const supabase = await createServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   try {
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-      apiVersion: '2026-02-25.clover',
-    })
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!)
 
     const { priceId, tier, clientId } = await request.json()
 
@@ -27,13 +35,29 @@ export async function POST(request: NextRequest) {
       process.env.NEXT_PUBLIC_APP_URL ??
       'https://tenkai-marketing.vercel.app'
 
-    const session = await stripe.checkout.sessions.create({
+    // Look up existing client for customer dedup
+    const { data: client } = await supabaseAdmin
+      .from('clients')
+      .select('id, stripe_customer_id')
+      .eq('auth_user_id', user.id)
+      .single()
+
+    const sessionParams: Stripe.Checkout.SessionCreateParams = {
       mode: 'subscription',
       line_items: [{ price: resolvedPriceId, quantity: 1 }],
       success_url: `${origin}/dashboard?welcome=true`,
       cancel_url: `${origin}/?canceled=true`,
-      ...(clientId ? { metadata: { client_id: clientId } } : {}),
-    })
+      metadata: { client_id: client?.id ?? clientId },
+    }
+
+    // Reuse existing Stripe customer if available
+    if (client?.stripe_customer_id) {
+      sessionParams.customer = client.stripe_customer_id
+    } else {
+      sessionParams.customer_email = user.email!
+    }
+
+    const session = await stripe.checkout.sessions.create(sessionParams)
 
     return NextResponse.json({ url: session.url })
   } catch (err: unknown) {

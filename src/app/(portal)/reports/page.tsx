@@ -61,7 +61,7 @@ export default async function ReportsPage() {
     db.from('deliverables')
       .select('id, agent_name, deliverable_type, title, summary, score, status, content, created_at')
       .eq('client_id', clientId)
-      .in('deliverable_type', ['analytics_report', 'performance_report'])
+      .in('deliverable_type', ['analytics_report', 'performance_report', 'audit_report'])
       .order('created_at', { ascending: false })
       .limit(20),
     db.from('deliverables')

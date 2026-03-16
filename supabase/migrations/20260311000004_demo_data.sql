@@ -128,7 +128,7 @@ INSERT INTO public.audits (id, client_id, url, overall_score, technical_score, c
     {"priority": "medium", "title": "Image optimization sprint", "description": "Add descriptive alt text to all 22 flagged images. Compress images to reduce load time.", "agent": "Kenji"},
     {"priority": "medium", "title": "Launch targeted link-building campaign", "description": "Secure 5-8 high-quality backlinks from industry publications to raise DA above 40.", "agent": "Kenji"}
   ]'::jsonb,
-  'complete',
+  'completed',
   NOW() - INTERVAL '14 days'
 ) ON CONFLICT (id) DO NOTHING;
 

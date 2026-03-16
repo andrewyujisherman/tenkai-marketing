@@ -22,9 +22,10 @@ export const metadata: Metadata = {
     description: "Your dedicated team of AI marketing agents. SEO, content, social media — working 24/7.",
     siteName: "Tenkai",
     type: "website",
+    images: [{ url: '/og-image.png', width: 1200, height: 630 }],
   },
   twitter: {
-    card: "summary",
+    card: "summary_large_image",
     title: "Tenkai — AI-Powered Digital Marketing",
     description: "Your dedicated team of AI marketing agents. SEO, content, social media — working 24/7.",
   },

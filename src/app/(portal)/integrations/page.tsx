@@ -8,7 +8,6 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import {
   CheckCircle2,
   AlertCircle,
-  Clock,
   ChevronDown,
   ChevronUp,
   Save,
@@ -20,11 +19,6 @@ import {
   Wifi,
   WifiOff,
   Info,
-  Mail,
-  Star,
-  Link,
-  Share2,
-  Bell,
 } from 'lucide-react'
 import { EMPTY_CLIENT_CONTEXT_FORM, type ClientContextForm } from '@/lib/client-context'
 
@@ -210,10 +204,6 @@ function OAuthConnectorCard({
 
 const CMS_PLATFORMS = [
   { id: 'wordpress', label: 'WordPress', icon: '🔵', available: true },
-  { id: 'shopify', label: 'Shopify', icon: '🛍️', available: false },
-  { id: 'wix', label: 'Wix', icon: '🟡', available: false },
-  { id: 'squarespace', label: 'Squarespace', icon: '⬛', available: false },
-  { id: 'webflow', label: 'Webflow', icon: '🌐', available: false },
   { id: 'other', label: 'Other / Custom', icon: '⚙️', available: true },
 ]
 
@@ -333,99 +323,7 @@ function CMSPlatformSection({
         </div>
       )}
 
-      {selectedPlatform &&
-        !['wordpress', 'other'].includes(selectedPlatform) && (
-          <div className="border border-tenkai-border rounded-tenkai bg-parchment/40 p-4 flex items-center gap-3 text-sm text-warm-gray">
-            <Clock className="size-4 text-torii flex-shrink-0" />
-            <span>
-              {CMS_PLATFORMS.find((p) => p.id === selectedPlatform)?.label} integration coming soon —
-              we&apos;ll notify you when it&apos;s ready.
-            </span>
-          </div>
-        )}
     </div>
-  )
-}
-
-// ─── Future Integrations Roadmap ──────────────────────────────────────────────
-
-const ROADMAP_ITEMS = [
-  {
-    icon: <Mail className="size-4" />,
-    name: 'Email & Outreach',
-    services: 'Gmail, Mailchimp',
-    description: 'Automate outreach campaigns and track email-driven conversions.',
-    eta: 'Coming Q2 2026',
-  },
-  {
-    icon: <Star className="size-4" />,
-    name: 'Review Platforms',
-    services: 'Yelp, Google Reviews',
-    description: 'Monitor and respond to reviews across platforms.',
-    eta: 'Coming Q2 2026',
-  },
-  {
-    icon: <Link className="size-4" />,
-    name: 'Backlink Tools',
-    services: 'Ahrefs, SEMrush',
-    description: 'Track your backlink profile and find link-building opportunities.',
-    eta: 'Coming Q3 2026',
-  },
-  {
-    icon: <Share2 className="size-4" />,
-    name: 'Social Media',
-    services: 'Facebook, Instagram',
-    description: 'Sync social performance data with your SEO strategy.',
-    eta: 'Coming Q3 2026',
-  },
-]
-
-function FutureIntegrationsSection() {
-  return (
-    <section className="space-y-3">
-      <div>
-        <h2 className="text-xs font-semibold uppercase tracking-widest text-warm-gray">
-          Coming Soon
-        </h2>
-        <p className="text-xs text-warm-gray mt-1">
-          We&apos;re building more integrations to supercharge your SEO. Get notified when they launch.
-        </p>
-      </div>
-      <div className="grid gap-2">
-        {ROADMAP_ITEMS.map((item) => (
-          <div
-            key={item.name}
-            className="border border-tenkai-border rounded-tenkai bg-cream p-4 flex items-center gap-4"
-          >
-            <div className="w-10 h-10 rounded-lg bg-parchment flex items-center justify-center text-warm-gray flex-shrink-0">
-              {item.icon}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm font-medium text-charcoal">{item.name}</span>
-                <span className="text-[10px] text-torii/70 border border-torii/20 rounded-full px-2 py-0.5 font-medium">
-                  {item.eta}
-                </span>
-              </div>
-              <p className="text-xs text-warm-gray mt-0.5">
-                <span className="font-medium">{item.services}</span> — {item.description}
-              </p>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                window.location.href = `mailto:support@tenkai.marketing?subject=Notify me: ${encodeURIComponent(item.name)}`
-              }}
-              className="text-xs rounded-tenkai border-tenkai-border text-warm-gray hover:text-torii hover:border-torii/30 gap-1.5 flex-shrink-0"
-            >
-              <Bell className="size-3" />
-              Notify Me
-            </Button>
-          </div>
-        ))}
-      </div>
-    </section>
   )
 }
 
@@ -979,8 +877,6 @@ export default function IntegrationsPage() {
             </div>
           </section>
 
-          {/* Future Integrations Roadmap */}
-          <FutureIntegrationsSection />
         </TabsContent>
 
         {/* ─── Business Profile Tab ─── */}
