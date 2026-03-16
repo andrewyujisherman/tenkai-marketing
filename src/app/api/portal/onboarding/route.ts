@@ -55,9 +55,22 @@ export async function POST(request: Request) {
     client = newClient
   }
 
+  // Sync website_url from onboarding answers to the client record
+  const websiteUrlFromOnboarding =
+    (onboarding_data?.business?.url as string | undefined) ?? null
+  const resolvedWebsiteUrl = websiteUrlFromOnboarding
+    ? (websiteUrlFromOnboarding.startsWith('http')
+      ? websiteUrlFromOnboarding
+      : `https://${websiteUrlFromOnboarding}`)
+    : null
+
   const { error: updateError } = await supabaseAdmin
     .from('clients')
-    .update({ onboarding_data, status: 'active' })
+    .update({
+      onboarding_data,
+      status: 'active',
+      ...(resolvedWebsiteUrl && !client.website_url ? { website_url: resolvedWebsiteUrl } : {}),
+    })
     .eq('id', client.id)
 
   if (updateError) {
