@@ -45,7 +45,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Protected routes — redirect to login if not authenticated (demo mode bypasses)
-  const protectedPaths = ['/dashboard', '/content', '/audit', '/health', '/reports', '/settings', '/onboarding', '/integrations', '/links', '/local']
+  const protectedPaths = ['/dashboard', '/content', '/audit', '/health', '/reports', '/settings', '/onboarding', '/integrations', '/links', '/local', '/rankings', '/metrics', '/business']
   const isProtected = protectedPaths.some(path => request.nextUrl.pathname.startsWith(path))
   const isDemo = request.cookies.get('demo_mode')?.value === 'true'
 
@@ -76,5 +76,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/content/:path*', '/audit/:path*', '/health/:path*', '/reports/:path*', '/settings/:path*', '/onboarding/:path*', '/integrations/:path*', '/links/:path*', '/local/:path*', '/auth/:path*', '/admin/:path*'],
+  matcher: ['/dashboard/:path*', '/content/:path*', '/audit/:path*', '/health/:path*', '/reports/:path*', '/settings/:path*', '/onboarding/:path*', '/integrations/:path*', '/links/:path*', '/local/:path*', '/rankings/:path*', '/metrics/:path*', '/business/:path*', '/auth/:path*', '/admin/:path*'],
 }

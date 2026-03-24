@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ArrowRight, Zap, Clock, Shield } from 'lucide-react'
 
@@ -79,16 +78,16 @@ export function Hero() {
           {/* Left: Copy */}
           <div className="lg:col-span-3 space-y-8">
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-serif leading-tight text-charcoal animate-fade-up">
-              Your heavenly SEO team,{' '}
-              <span className="text-torii">working 24/7</span>
+              Your AI SEO Team —{' '}
+              <span className="text-torii">Working 24/7 So You Don&apos;t Have To</span>
             </h1>
 
             <p
               className="text-lg sm:text-xl text-warm-gray max-w-xl leading-relaxed animate-fade-up"
               style={{ animationDelay: '100ms' }}
             >
-              AI-powered SEO experts with Japanese names and real expertise.
-              From $150/mo — no contracts, no jargon, no autopilot.
+              9 AI specialists handle your SEO around the clock — audits, content,
+              rankings, and reports. You just review and approve.
             </p>
 
             {/* CTA: URL input */}
@@ -97,20 +96,21 @@ export function Hero() {
               style={{ animationDelay: '200ms' }}
             >
               <div className="flex flex-col sm:flex-row gap-3 max-w-lg">
+                <a
+                  href="#pricing"
+                  className="inline-flex items-center justify-center gap-2 bg-torii hover:bg-torii-dark text-white h-12 px-8 text-base font-medium rounded-xl shrink-0 transition-colors duration-fast"
+                >
+                  Meet Your Team
+                  <ArrowRight className="size-4" />
+                </a>
                 <Input
                   type="url"
                   placeholder="Enter your website URL"
                   value={url}
                   onChange={(e) => setUrl(e.target.value)}
                   className="h-12 px-4 text-base bg-white border-tenkai-border rounded-xl focus-visible:border-torii focus-visible:ring-torii/20"
+                  onKeyDown={(e) => e.key === 'Enter' && handleAnalyze()}
                 />
-                <Button
-                  onClick={handleAnalyze}
-                  className="bg-torii hover:bg-torii-dark text-white h-12 px-6 text-base font-medium rounded-xl gap-2 shrink-0"
-                >
-                  Analyze My Site
-                  <ArrowRight className="size-4" />
-                </Button>
               </div>
               <p className="text-sm text-muted-gray mt-3 flex items-center gap-4">
                 <span className="flex items-center gap-1">
@@ -142,7 +142,7 @@ export function Hero() {
             >
               <div className="flex items-center gap-2 text-sm text-warm-gray">
                 <Zap className="size-4 text-torii" />
-                <span>6 AI specialists included</span>
+                <span>9 AI specialists included</span>
               </div>
               <div className="w-px h-4 bg-tenkai-border" />
               <div className="text-sm text-warm-gray">

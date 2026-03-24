@@ -94,7 +94,7 @@ export function PricingSection() {
                 <div className="mb-6">
                   <div className="flex items-baseline gap-2 mb-1">
                     <h3 className="font-serif text-2xl text-charcoal">
-                      {tier.name}
+                      {tier.displayName}
                     </h3>
                     <span className="text-sm text-torii/60 font-serif">
                       {tier.nameJp}
@@ -146,7 +146,7 @@ export function PricingSection() {
                       : 'bg-charcoal hover:bg-charcoal/90 text-white'
                   }`}
                 >
-                  {loadingTier === tier.name ? 'Redirecting…' : `Start with ${tier.name}`}
+                  {loadingTier === tier.name ? 'Redirecting…' : `Get Started`}
                 </Button>
               </div>
             )

@@ -74,7 +74,7 @@ export function DraftCard({
   const [previewOpen, setPreviewOpen] = useState(false)
 
   return (
-    <div className="rounded-tenkai border border-tenkai-border bg-white p-5">
+    <div className="rounded-tenkai border border-tenkai-border bg-ivory p-5">
       {/* Header */}
       <div className="flex items-start justify-between gap-4 mb-3">
         <div>

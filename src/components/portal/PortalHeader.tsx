@@ -14,14 +14,18 @@ import { supabase } from '@/lib/supabase-browser'
 
 const pageTitles: Record<string, string> = {
   '/dashboard': 'Dashboard',
-  '/content': 'Content',
+  '/rankings': 'My Rankings',
+  '/content': 'My Content',
   '/health': 'Website Health',
   '/links': 'Link Building',
   '/local': 'Local & Reviews',
-  '/reports': 'Reports',
+  '/reports': 'My Reports',
+  '/metrics': 'My Metrics',
+  '/business': 'My Business',
   '/integrations': 'Integrations',
   '/settings': 'Settings',
   '/onboarding': 'Getting Started',
+  '/audit': 'Audit',
 }
 
 export function PortalHeader() {
@@ -46,9 +50,9 @@ export function PortalHeader() {
   }
 
   return (
-    <header className="h-16 bg-white border-b border-tenkai-border flex items-center justify-between px-6 lg:px-8 sticky top-0 z-20">
+    <header className="h-16 bg-ivory border-b border-tenkai-border flex items-center justify-between px-6 lg:px-8 sticky top-0 z-20">
       {/* Page title */}
-      <h1 className="font-serif text-xl text-charcoal">{title}</h1>
+      <h1 className="font-serif text-[22px] text-charcoal">{title}</h1>
 
       {/* Right actions */}
       <div className="flex items-center gap-3">

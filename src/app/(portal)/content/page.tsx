@@ -2,63 +2,42 @@ import { createServerClient } from '@/lib/supabase'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { isDemoMode, DEMO_CLIENT_ID } from '@/lib/demo'
 import ContentClient from './ContentClient'
-import type { TopicCardProps } from '@/components/portal/TopicCard'
-import type { DraftCardProps } from '@/components/portal/DraftCard'
-
-type TopicItem = Omit<TopicCardProps, 'onApprove' | 'onEdit' | 'onDeny'> & { id: string }
-type DraftItem = Omit<DraftCardProps, 'onApprove' | 'onRequestEdit' | 'onDeny'> & { id: string }
-type PublishedItem = { id: string; title: string; date: string; seoScore: number | null; status: string; published_url: string | null }
-
-export interface ContentDeliverable {
-  id: string
-  agent_name: string | null
-  deliverable_type: string | null
-  title: string | null
-  summary: string | null
-  score: number | null
-  status: string | null
-  created_at: string
-  content?: Record<string, unknown> | string | null
-}
-
-export interface PlanningDeliverable {
-  id: string
-  agent_name: string | null
-  deliverable_type: string | null
-  title: string | null
-  summary: string | null
-  score: number | null
-  status: string | null
-  content: Record<string, unknown> | string | null
-  created_at: string
-}
-
-export interface HealthDeliverable {
-  id: string
-  agent_name: string | null
-  deliverable_type: string | null
-  title: string | null
-  summary: string | null
-  score: number | null
-  status: string | null
-  content: Record<string, unknown> | string | null
-  created_at: string
-}
 
 async function getClientId(userId: string, email: string): Promise<string | null> {
   const { data: byId } = await supabaseAdmin
     .from('clients')
-    .select('id')
+    .select('id, tier')
     .eq('auth_user_id', userId)
     .single()
   if (byId) return byId.id
 
   const { data: byEmail } = await supabaseAdmin
     .from('clients')
-    .select('id')
+    .select('id, tier')
     .eq('email', email.toLowerCase())
     .single()
   return byEmail?.id ?? null
+}
+
+async function getClientTier(clientId: string): Promise<string> {
+  const { data } = await supabaseAdmin
+    .from('clients')
+    .select('tier')
+    .eq('id', clientId)
+    .single()
+  return data?.tier ?? 'starter'
+}
+
+export interface ContentPost {
+  id: string
+  title: string
+  status: string
+  agent_author: string
+  content_type: string
+  created_at: string
+  excerpt: string
+  seo_score: number | null
+  keywords: string[]
 }
 
 export default async function ContentPage() {
@@ -88,126 +67,42 @@ export default async function ContentPage() {
     }
   }
 
-  const [topicsRes, draftsRes, publishedRes, contentDeliverablesRes, planningRes, healthRes] = await Promise.all([
-    supabaseAdmin
-      .from('content_posts')
-      .select('id, title, keywords, created_at')
-      .eq('client_id', clientId)
-      .eq('status', 'draft')
-      .order('created_at', { ascending: false }),
-    supabaseAdmin
-      .from('content_posts')
-      .select('id, title, agent_author, content, seo_score, ai_detection_score, created_at')
-      .eq('client_id', clientId)
-      .eq('status', 'pending_approval')
-      .order('created_at', { ascending: false }),
-    supabaseAdmin
-      .from('content_posts')
-      .select('id, title, status, seo_score, published_url, created_at')
-      .eq('client_id', clientId)
-      .in('status', ['approved', 'published'])
-      .order('created_at', { ascending: false }),
-    supabaseAdmin
-      .from('deliverables')
-      .select('id, agent_name, deliverable_type, title, summary, score, status, created_at')
-      .eq('client_id', clientId)
-      .in('deliverable_type', ['content_draft', 'keyword_list'])
-      .order('created_at', { ascending: false })
-      .limit(20),
-    supabaseAdmin
-      .from('deliverables')
-      .select('id, agent_name, deliverable_type, title, summary, score, status, content, created_at')
-      .eq('client_id', clientId)
-      .in('deliverable_type', ['content_plan', 'cluster_map'])
-      .order('created_at', { ascending: false })
-      .limit(20),
-    supabaseAdmin
-      .from('deliverables')
-      .select('id, agent_name, deliverable_type, title, summary, score, status, content, created_at')
-      .eq('client_id', clientId)
-      .in('deliverable_type', ['decay_report'])
-      .order('created_at', { ascending: false })
-      .limit(20),
-  ])
+  const tier = await getClientTier(clientId)
 
-  const topics: TopicItem[] = (topicsRes.data ?? []).map((p) => ({
+  // Fetch all content posts for the library grid
+  const { data: rows } = await supabaseAdmin
+    .from('content_posts')
+    .select('id, title, status, agent_author, content_type, created_at, content, seo_score, keywords')
+    .eq('client_id', clientId)
+    .order('created_at', { ascending: false })
+    .limit(50)
+
+  const posts: ContentPost[] = (rows ?? []).map((p) => ({
     id: p.id,
-    title: p.title,
+    title: p.title ?? 'Untitled',
+    status: p.status === 'pending_approval' ? 'pending_review' : (p.status ?? 'draft'),
+    agent_author: (p.agent_author as string) ?? 'Sakura',
+    content_type: (p.content_type as string) ?? 'blog_post',
+    created_at: p.created_at,
+    excerpt: p.content ? String(p.content).slice(0, 200) : '',
+    seo_score: p.seo_score as number | null,
     keywords: (p.keywords as string[]) ?? [],
-    difficulty: 'Medium' as const,
-    volume: '',
-    status: 'pending' as const,
   }))
 
-  const drafts: DraftItem[] = (draftsRes.data ?? []).map((p) => {
-    const wordCount = p.content ? (p.content as string).split(/\s+/).filter(Boolean).length : 0
-    return {
-      id: p.id,
-      title: p.title,
-      author: (p.agent_author as string) ?? 'Sakura',
-      wordCount,
-      readingTime: Math.ceil(wordCount / 225) || 1,
-      seoScore: (p.seo_score as number) ?? 0,
-      aiScore: (p.ai_detection_score as number) ?? 0,
-      eeatStatus: 'needs-input' as const,
-      excerpt: p.content ? (p.content as string).slice(0, 250) : '',
-      fullContent: (p.content as string) ?? '',
-      checklist: [],
-    }
-  })
-
-  const published: PublishedItem[] = (publishedRes.data ?? []).map((p) => ({
-    id: p.id,
-    title: p.title,
-    date: new Date(p.created_at as string).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-    seoScore: p.seo_score as number | null,
-    status: p.status as string,
-    published_url: p.published_url as string | null,
-  }))
-
-  const contentDeliverables: ContentDeliverable[] = (contentDeliverablesRes.data ?? []).map((d) => ({
-    id: d.id,
-    agent_name: d.agent_name ?? null,
-    deliverable_type: d.deliverable_type ?? null,
-    title: d.title ?? null,
-    summary: d.summary ?? null,
-    score: d.score ?? null,
-    status: d.status ?? null,
-    created_at: d.created_at,
-  }))
-
-  const planningDeliverables: PlanningDeliverable[] = (planningRes.data ?? []).map((d) => ({
-    id: d.id,
-    agent_name: d.agent_name ?? null,
-    deliverable_type: d.deliverable_type ?? null,
-    title: d.title ?? null,
-    summary: d.summary ?? null,
-    score: d.score ?? null,
-    status: d.status ?? null,
-    content: (d.content as Record<string, unknown> | string) ?? null,
-    created_at: d.created_at,
-  }))
-
-  const healthDeliverables: HealthDeliverable[] = (healthRes.data ?? []).map((d) => ({
-    id: d.id,
-    agent_name: d.agent_name ?? null,
-    deliverable_type: d.deliverable_type ?? null,
-    title: d.title ?? null,
-    summary: d.summary ?? null,
-    score: d.score ?? null,
-    status: d.status ?? null,
-    content: (d.content as Record<string, unknown> | string) ?? null,
-    created_at: d.created_at,
-  }))
+  // Get monthly content generation count for quota display
+  const now = new Date()
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+  const { count: monthlyCount } = await supabaseAdmin
+    .from('content_posts')
+    .select('id', { count: 'exact', head: true })
+    .eq('client_id', clientId)
+    .gte('created_at', monthStart)
 
   return (
     <ContentClient
-      initialTopics={topics}
-      initialDrafts={drafts}
-      publishedPosts={published}
-      contentDeliverables={contentDeliverables}
-      planningDeliverables={planningDeliverables}
-      healthDeliverables={healthDeliverables}
+      initialPosts={posts}
+      tier={tier}
+      monthlyContentCount={monthlyCount ?? 0}
     />
   )
 }

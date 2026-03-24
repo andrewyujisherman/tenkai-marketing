@@ -13,7 +13,7 @@ interface StatCardProps {
 
 export function StatCard({ label, value, trend, trendValue, icon }: StatCardProps) {
   return (
-    <div className="bg-white rounded-tenkai shadow-sm border border-tenkai-border p-5 flex flex-col gap-2">
+    <div className="bg-ivory rounded-tenkai shadow-tenkai-sm border border-tenkai-border p-5 flex flex-col gap-2">
       <div className="flex items-center justify-between">
         <span className="text-warm-gray text-sm font-medium">{label}</span>
         {icon && <span className="text-warm-gray">{icon}</span>}

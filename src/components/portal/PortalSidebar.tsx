@@ -8,13 +8,10 @@ import {
   LayoutDashboard,
   FileText,
   ShieldCheck,
-  Link2,
   MapPin,
   BarChart3,
-  Plug,
   Settings,
   Menu,
-  ChevronDown,
   Shield,
 } from 'lucide-react'
 import {
@@ -26,21 +23,21 @@ import {
 
 const navItems = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { label: 'Content', href: '/content', icon: FileText },
+  { label: 'My Rankings', href: '/rankings', icon: BarChart3 },
   { label: 'Website Health', href: '/health', icon: ShieldCheck },
-  { label: 'Link Building', href: '/links', icon: Link2 },
-  { label: 'Local & Reviews', href: '/local', icon: MapPin },
-  { label: 'Reports', href: '/reports', icon: BarChart3 },
-  { label: 'Integrations', href: '/integrations', icon: Plug },
+  { label: 'My Content', href: '/content', icon: FileText },
+  { label: 'My Reports', href: '/reports', icon: FileText },
+  { label: 'Metrics', href: '/metrics', icon: BarChart3 },
+  { label: 'My Business', href: '/business', icon: MapPin },
   { label: 'Settings', href: '/settings', icon: Settings },
 ]
 
 type Tier = 'Starter' | 'Growth' | 'Pro'
 
-const tierColors: Record<Tier, string> = {
-  Starter: 'bg-warm-gray/15 text-warm-gray border-warm-gray/20',
-  Growth: 'bg-torii/10 text-torii border-torii/20',
-  Pro: 'bg-[#C49A3C]/10 text-[#C49A3C] border-[#C49A3C]/20',
+const tierDisplayNames: Record<Tier, string> = {
+  Starter: 'Visibility',
+  Growth: 'Growth',
+  Pro: 'Done-For-You',
 }
 
 function SidebarNav({ pathname, isAdmin }: { pathname: string; isAdmin: boolean }) {
@@ -49,7 +46,7 @@ function SidebarNav({ pathname, isAdmin }: { pathname: string; isAdmin: boolean 
     : navItems
 
   return (
-    <nav className="flex flex-col gap-1 px-3">
+    <nav className="flex flex-col py-3">
       {allItems.map((item) => {
         const isActive = item.href === '/dashboard'
           ? pathname === '/dashboard'
@@ -60,10 +57,10 @@ function SidebarNav({ pathname, isAdmin }: { pathname: string; isAdmin: boolean 
             key={item.href}
             href={item.href}
             className={cn(
-              'flex items-center gap-3 px-3 py-2.5 rounded-tenkai text-sm font-medium transition-colors',
+              'flex items-center gap-[10px] px-5 py-2.5 text-[13px] font-medium transition-all border-l-[3px] border-l-transparent',
               isActive
-                ? 'bg-torii-subtle text-torii border-l-[3px] border-l-torii -ml-px'
-                : 'text-charcoal/70 hover:bg-parchment/60 hover:text-charcoal'
+                ? 'bg-torii-subtle text-torii border-l-torii'
+                : 'text-warm-gray hover:bg-parchment hover:text-charcoal'
             )}
           >
             <Icon className="size-[18px] flex-shrink-0" />
@@ -89,11 +86,12 @@ function SidebarContent({
   return (
     <div className="flex flex-col h-full">
       {/* Logo */}
-      <div className="px-5 pt-6 pb-8">
+      <div className="px-5 py-6 border-b border-tenkai-border-light">
         <Link href="/dashboard" className="flex items-center gap-2.5">
           <span className="text-2xl font-serif text-torii leading-none">天界</span>
-          <span className="font-serif text-xl text-charcoal tracking-wide">Tenkai</span>
+          <span className="font-serif text-lg text-torii tracking-[0.5px]">Tenkai</span>
         </Link>
+        <span className="text-[11px] text-warm-gray block mt-0.5">SEO Intelligence Platform</span>
       </div>
 
       {/* Navigation */}
@@ -103,26 +101,16 @@ function SidebarContent({
       <div className="flex-1" />
 
       {/* User section */}
-      <div className="px-3 pb-5">
-        <div className="flex items-center gap-3 px-3 py-3 rounded-tenkai bg-parchment/50">
-          <div className="w-8 h-8 rounded-full bg-torii-subtle flex items-center justify-center">
-            <span className="text-torii text-sm font-semibold">
-              {userName.charAt(0).toUpperCase()}
-            </span>
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-charcoal truncate">{userName}</p>
-            <span
-              className={cn(
-                'inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider border',
-                tierColors[userTier]
-              )}
-            >
-              {userTier}
-            </span>
-          </div>
-          <ChevronDown className="size-4 text-warm-gray flex-shrink-0" />
-        </div>
+      <div className="px-5 pb-5 border-t border-tenkai-border-light pt-4">
+        <p className="text-xs text-warm-gray truncate">{userName}</p>
+        <span
+          className={cn(
+            'inline-block mt-1 px-2 py-0.5 rounded text-[11px] font-semibold',
+            'bg-torii-subtle text-torii'
+          )}
+        >
+          {tierDisplayNames[userTier]} Plan
+        </span>
       </div>
     </div>
   )
@@ -159,7 +147,7 @@ export function PortalSidebar({ isAdmin = false }: { isAdmin?: boolean }) {
   return (
     <>
       {/* Desktop sidebar */}
-      <aside className="hidden lg:flex fixed left-0 top-0 bottom-0 w-sidebar bg-cream border-r border-tenkai-border flex-col z-30">
+      <aside className="hidden lg:fixed lg:flex lg:flex-col lg:left-0 lg:top-0 lg:bottom-0 lg:w-sidebar lg:bg-ivory lg:border-r lg:border-tenkai-border lg:z-30">
         <SidebarContent pathname={pathname} userName={displayName} userTier={userTier} isAdmin={isAdmin} />
       </aside>
 
@@ -173,7 +161,7 @@ export function PortalSidebar({ isAdmin = false }: { isAdmin?: boolean }) {
           >
             <Menu className="size-5 text-charcoal" />
           </SheetTrigger>
-          <SheetContent side="left" className="w-sidebar p-0 bg-cream border-r-tenkai-border">
+          <SheetContent side="left" className="w-sidebar p-0 bg-ivory border-r-tenkai-border">
             <SheetTitle className="sr-only">Navigation</SheetTitle>
             <SidebarContent pathname={pathname} userName={displayName} userTier={userTier} isAdmin={isAdmin} />
           </SheetContent>

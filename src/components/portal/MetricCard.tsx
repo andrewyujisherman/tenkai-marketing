@@ -25,7 +25,7 @@ export function MetricCard({
   return (
     <div
       className={cn(
-        'bg-white rounded-tenkai shadow-sm border border-tenkai-border p-5 flex flex-col gap-2',
+        'bg-ivory rounded-tenkai shadow-tenkai-sm border border-tenkai-border p-5 flex flex-col gap-2',
         className
       )}
     >

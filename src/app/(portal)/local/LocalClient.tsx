@@ -179,7 +179,7 @@ function parseGbpFields(data: Record<string, unknown>): GbpField[] {
 function LocalAuditTab({ items }: { items: LocalDeliverable[] }) {
   if (items.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-tenkai border border-tenkai-border bg-white p-16 text-center gap-4">
+      <div className="flex flex-col items-center justify-center rounded-tenkai border border-tenkai-border bg-ivory p-16 text-center gap-4">
         <MapPin className="size-12 text-warm-gray/40" />
         <div>
           <p className="font-medium text-charcoal">No local audit yet</p>
@@ -202,7 +202,7 @@ function LocalAuditTab({ items }: { items: LocalDeliverable[] }) {
         return (
           <div
             key={item.id}
-            className="rounded-tenkai border border-tenkai-border bg-white p-6 space-y-5"
+            className="rounded-tenkai border border-tenkai-border bg-ivory p-6 space-y-5"
           >
             {/* Header row */}
             <div className="flex items-start justify-between gap-4">
@@ -307,7 +307,7 @@ function LocalAuditTab({ items }: { items: LocalDeliverable[] }) {
 function GoogleProfileTab({ items }: { items: LocalDeliverable[] }) {
   if (items.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-tenkai border border-tenkai-border bg-white p-16 text-center gap-4">
+      <div className="flex flex-col items-center justify-center rounded-tenkai border border-tenkai-border bg-ivory p-16 text-center gap-4">
         <Building2 className="size-12 text-warm-gray/40" />
         <div>
           <p className="font-medium text-charcoal">No GBP analysis yet</p>
@@ -337,7 +337,7 @@ function GoogleProfileTab({ items }: { items: LocalDeliverable[] }) {
         return (
           <div
             key={item.id}
-            className="rounded-tenkai border border-tenkai-border bg-white p-6 space-y-5"
+            className="rounded-tenkai border border-tenkai-border bg-ivory p-6 space-y-5"
           >
             {/* Header */}
             <div className="flex items-start justify-between gap-4">
@@ -462,7 +462,7 @@ function ReviewsTab({ items }: { items: LocalDeliverable[] }) {
 
   if (responses.length === 0 && campaigns.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-tenkai border border-tenkai-border bg-white p-16 text-center gap-4">
+      <div className="flex flex-col items-center justify-center rounded-tenkai border border-tenkai-border bg-ivory p-16 text-center gap-4">
         <Star className="size-12 text-warm-gray/40" />
         <div>
           <p className="font-medium text-charcoal">No review strategies yet</p>
@@ -526,7 +526,7 @@ function ReviewsTab({ items }: { items: LocalDeliverable[] }) {
                   {replyEntries.map((entry) => (
                     <div
                       key={entry.id}
-                      className="rounded-tenkai border border-tenkai-border bg-white p-4 space-y-3"
+                      className="rounded-tenkai border border-tenkai-border bg-ivory p-4 space-y-3"
                     >
                       {/* Review context */}
                       {entry.context && (
@@ -645,7 +645,7 @@ function ReviewsTab({ items }: { items: LocalDeliverable[] }) {
                   {templates.map((tpl) => (
                     <div
                       key={tpl.id}
-                      className="rounded-tenkai border border-tenkai-border bg-white p-4"
+                      className="rounded-tenkai border border-tenkai-border bg-ivory p-4"
                     >
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
@@ -766,7 +766,7 @@ export function LocalEmptyState() {
           Your local visibility, Google Business Profile, and review management
         </p>
       </div>
-      <div className="flex flex-col items-center justify-center rounded-tenkai border border-tenkai-border bg-white p-16 text-center gap-4">
+      <div className="flex flex-col items-center justify-center rounded-tenkai border border-tenkai-border bg-ivory p-16 text-center gap-4">
         <SearchX className="size-12 text-warm-gray/40" />
         <div>
           <p className="font-medium text-charcoal">No local data yet</p>

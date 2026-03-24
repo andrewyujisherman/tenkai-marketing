@@ -14,7 +14,7 @@ interface EmptyStateProps {
 
 export function EmptyState({ icon, title, description, actionLabel, actionHref }: EmptyStateProps) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-tenkai border border-tenkai-border bg-white p-12 text-center gap-4">
+    <div className="flex flex-col items-center justify-center rounded-tenkai border border-tenkai-border bg-ivory p-12 text-center gap-4">
       <div className="text-warm-gray/50">{icon}</div>
       <div className="space-y-1">
         <p className="font-medium text-charcoal">{title}</p>

@@ -37,7 +37,7 @@ export default async function PortalLayout({ children }: { children: React.React
       <div className="lg:ml-sidebar flex flex-col min-h-screen">
         {demo && <DemoBanner />}
         <PortalHeader />
-        <main className="flex-1 p-6 lg:p-8">{children}</main>
+        <main className="flex-1 px-6 py-6 lg:px-8 lg:py-6 max-w-[1200px]">{children}</main>
       </div>
     </div>
   )

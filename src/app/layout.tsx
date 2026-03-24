@@ -24,8 +24,8 @@ const organizationSchema = {
   offers: {
     '@type': 'AggregateOffer',
     priceCurrency: 'USD',
-    lowPrice: '150',
-    highPrice: '500',
+    lowPrice: '149',
+    highPrice: '499',
     offerCount: '3',
   },
   publisher: {
@@ -37,13 +37,13 @@ const organizationSchema = {
 
 export const metadata: Metadata = {
   title: "Tenkai — AI SEO Agency | Automated SEO for Small Business",
-  description: "Your dedicated team of AI SEO agents. Audits, content, and link building — working 24/7 from $150/mo.",
+  description: "Your dedicated team of AI SEO agents. Audits, content, and link building — working 24/7 from $149/mo.",
   alternates: {
     canonical: 'https://tenkai-marketing.vercel.app',
   },
   openGraph: {
     title: "Tenkai — AI SEO Agency | Automated SEO for Small Business",
-    description: "Your dedicated team of AI SEO agents. Audits, content, and link building — working 24/7 from $150/mo.",
+    description: "Your dedicated team of AI SEO agents. Audits, content, and link building — working 24/7 from $149/mo.",
     siteName: "Tenkai",
     type: "website",
     url: 'https://tenkai-marketing.vercel.app',
@@ -52,7 +52,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "Tenkai — AI SEO Agency | Automated SEO for Small Business",
-    description: "Your dedicated team of AI SEO agents. Audits, content, and link building — working 24/7 from $150/mo.",
+    description: "Your dedicated team of AI SEO agents. Audits, content, and link building — working 24/7 from $149/mo.",
     images: ['https://tenkai-marketing.vercel.app/og-image.png'],
   },
 };

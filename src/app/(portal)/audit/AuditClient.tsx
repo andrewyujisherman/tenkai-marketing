@@ -16,7 +16,7 @@ export function AuditEmptyState() {
           This page has moved to Website Health.
         </p>
       </div>
-      <div className="flex flex-col items-center justify-center rounded-tenkai border border-tenkai-border bg-white p-16 text-center gap-4">
+      <div className="flex flex-col items-center justify-center rounded-tenkai border border-tenkai-border bg-ivory p-16 text-center gap-4">
         <SearchX className="size-12 text-warm-gray/50" />
         <div>
           <p className="font-medium text-charcoal">Redirecting to Website Health...</p>

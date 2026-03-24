@@ -1,7 +1,29 @@
 import { createServerClient } from '@/lib/supabase'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { isDemoMode, DEMO_CLIENT_ID } from '@/lib/demo'
-import ReportsClient, { type ReportData, type ReportDeliverable } from './ReportsClient'
+import ReportsClient from './ReportsClient'
+
+export interface ReportData {
+  id: string
+  type: string
+  period_start: string
+  period_end: string
+  metrics: Record<string, unknown>
+  insights: string[]
+  agent_commentary: { recommendations: string[] }
+}
+
+export interface ReportDeliverable {
+  id: string
+  agent_name: string | null
+  deliverable_type: string | null
+  title: string | null
+  summary: string | null
+  score: number | null
+  status: string | null
+  content: Record<string, unknown> | string | null
+  created_at: string
+}
 
 export default async function ReportsPage() {
   const supabase = await createServerClient()
@@ -15,19 +37,19 @@ export default async function ReportsPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return <ReportsClient reports={[]} />
 
-    const { data: client } = await supabase
+    const { data: client } = await supabaseAdmin
       .from('clients')
       .select('id')
       .eq('auth_user_id', user.id)
-      .maybeSingle()
+      .single()
 
     clientId =
       client?.id ??
-      (await supabase
+      (await supabaseAdmin
         .from('clients')
         .select('id')
-        .eq('email', user.email ?? '')
-        .maybeSingle()
+        .eq('email', (user.email ?? '').toLowerCase())
+        .single()
         .then((r) => r.data?.id)) ?? null
 
     if (!clientId) return <ReportsClient reports={[]} />

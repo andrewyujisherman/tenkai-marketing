@@ -35,7 +35,7 @@ function DateLabel({ iso }: { iso: string }) {
 
 function EmptyTab({ message }: { message: string }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-tenkai border border-tenkai-border bg-white p-12 text-center gap-3">
+    <div className="flex flex-col items-center justify-center rounded-tenkai border border-tenkai-border bg-ivory p-12 text-center gap-3">
       <FolderOpen className="size-10 text-muted-gray" />
       <p className="text-sm text-warm-gray max-w-sm">{message}</p>
       <a href="/dashboard#services" className="inline-flex items-center gap-1.5 text-sm font-medium text-torii hover:text-torii-dark transition-colors mt-1">
@@ -60,7 +60,7 @@ function OutreachCard({ d }: { d: LinkDeliverable }) {
   }, [copyText])
 
   return (
-    <div className="rounded-tenkai border border-tenkai-border bg-white p-6">
+    <div className="rounded-tenkai border border-tenkai-border bg-ivory p-6">
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-2">
@@ -175,7 +175,7 @@ export default function LinksClient({
             profileDeliverables.map((d) => (
               <div
                 key={d.id}
-                className="rounded-tenkai border border-tenkai-border bg-white p-6"
+                className="rounded-tenkai border border-tenkai-border bg-ivory p-6"
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
@@ -230,7 +230,7 @@ export default function LinksClient({
             directoryDeliverables.map((d) => (
               <div
                 key={d.id}
-                className="rounded-tenkai border border-tenkai-border bg-white p-6"
+                className="rounded-tenkai border border-tenkai-border bg-ivory p-6"
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
@@ -275,7 +275,7 @@ export function LinksEmptyState() {
           Backlink analysis, outreach campaigns, and directory submissions
         </p>
       </div>
-      <div className="flex flex-col items-center justify-center rounded-tenkai border border-tenkai-border bg-white p-16 text-center gap-4">
+      <div className="flex flex-col items-center justify-center rounded-tenkai border border-tenkai-border bg-ivory p-16 text-center gap-4">
         <SearchX className="size-12 text-muted-gray" />
         <div>
           <p className="font-medium text-charcoal">No link building data yet</p>

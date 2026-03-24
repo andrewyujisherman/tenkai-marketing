@@ -40,7 +40,7 @@ export function TopicCard({
   return (
     <div
       className={cn(
-        'rounded-tenkai border bg-white p-5 transition-colors',
+        'rounded-tenkai border bg-ivory p-5 transition-colors',
         statusColor[status]
       )}
     >

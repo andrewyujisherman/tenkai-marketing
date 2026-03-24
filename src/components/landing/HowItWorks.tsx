@@ -5,23 +5,23 @@ import { Search, BarChart3, Rocket } from 'lucide-react'
 const steps = [
   {
     num: 1,
-    title: 'Free Audit',
+    title: 'Sign Up',
     description:
-      'Enter your URL. Get a comprehensive SEO analysis within minutes.',
+      'Pick a plan, tell us about your business, and meet your AI team.',
     icon: Search,
   },
   {
     num: 2,
-    title: 'Custom Strategy',
+    title: 'Your Team Gets to Work',
     description:
-      'Your Tenkai team builds a tailored plan based on your gaps.',
+      'Your AI specialists start auditing, writing, and optimizing — 24/7.',
     icon: BarChart3,
   },
   {
     num: 3,
-    title: 'Execution & Growth',
+    title: 'Review & Approve',
     description:
-      'Sit back while your team handles content, technical fixes, and monitoring.',
+      'Everything lands in your dashboard. Approve, request changes, or ask questions.',
     icon: Rocket,
   },
 ]
