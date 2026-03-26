@@ -5,7 +5,7 @@ import { ArrowLeft, ArrowRight } from 'lucide-react'
 import { StepWelcome } from '@/components/onboarding/step-welcome'
 import { StepBusinessInfo, type BusinessInfoData } from '@/components/onboarding/step-business-info'
 import { StepMeetTeam } from '@/components/onboarding/step-meet-team'
-import { StepIntegrations } from '@/components/onboarding/step-integrations'
+import { StepIntegrations, OAUTH_TO_WIZARD_ID } from '@/components/onboarding/step-integrations'
 import { StepComplete } from '@/components/onboarding/step-complete'
 
 const TOTAL_STEPS = 5
@@ -38,6 +38,42 @@ const defaultDraft: OnboardingDraft = {
 export default function OnboardingPage() {
   const [draft, setDraft] = useState<OnboardingDraft>(defaultDraft)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [finishError, setFinishError] = useState<string | null>(null)
+  const [oauthToast, setOauthToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+
+  // Handle OAuth return — detect ?connected= or ?error= from callback redirect
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const connected = params.get('connected')
+    const error = params.get('error')
+    if (connected) {
+      const wizardId = OAUTH_TO_WIZARD_ID[connected]
+      if (wizardId) {
+        setDraft((d) => ({
+          ...d,
+          step: 3, // Return to integrations step
+          connectedIntegrations: d.connectedIntegrations.includes(wizardId)
+            ? d.connectedIntegrations
+            : [...d.connectedIntegrations, wizardId],
+        }))
+        const label = connected.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+        setOauthToast({ message: `${label} connected!`, type: 'success' })
+      }
+      window.history.replaceState({}, '', '/onboarding')
+    } else if (error) {
+      setDraft((d) => ({ ...d, step: 3 }))
+      setOauthToast({ message: 'Connection failed. Please try again.', type: 'error' })
+      window.history.replaceState({}, '', '/onboarding')
+    }
+  }, [])
+
+  // Auto-dismiss toast
+  useEffect(() => {
+    if (oauthToast) {
+      const timer = setTimeout(() => setOauthToast(null), 5000)
+      return () => clearTimeout(timer)
+    }
+  }, [oauthToast])
 
   // Fetch user tier from profile API
   useEffect(() => {
@@ -90,8 +126,9 @@ export default function OnboardingPage() {
 
   async function handleFinish() {
     setIsSubmitting(true)
+    setFinishError(null)
     try {
-      await fetch('/api/portal/onboarding', {
+      const res = await fetch('/api/portal/onboarding', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -105,9 +142,21 @@ export default function OnboardingPage() {
           },
         }),
       })
-    } catch { /* continue to completion regardless */ }
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        if (res.status === 401) {
+          setFinishError('Your session has expired. Please refresh the page and log in again.')
+        } else {
+          setFinishError(data.error || 'Something went wrong. Please try again.')
+        }
+        setIsSubmitting(false)
+        return
+      }
+      goTo(TOTAL_STEPS - 1)
+    } catch {
+      setFinishError('Network error. Please check your connection and try again.')
+    }
     setIsSubmitting(false)
-    goTo(TOTAL_STEPS - 1)
   }
 
   function canContinue(): boolean {
@@ -126,7 +175,7 @@ export default function OnboardingPage() {
       {draft.step > 0 && draft.step < TOTAL_STEPS - 1 && (
         <div className="max-w-xl mx-auto w-full pt-8 space-y-2">
           <div className="flex items-center justify-between text-xs text-warm-gray">
-            <span>Setting Up</span>
+            <span className="section-label">Setting Up</span>
             <span>Step {draft.step} of {TOTAL_STEPS - 1}</span>
           </div>
           <div className="h-1.5 bg-parchment rounded-full overflow-hidden">
@@ -141,46 +190,59 @@ export default function OnboardingPage() {
       {/* Step content */}
       <div className="flex-1 py-8">
         {draft.step === 0 && (
-          <StepWelcome onContinue={handleContinue} />
+          <div className="onboarding-step-card max-w-xl mx-auto">
+            <StepWelcome onContinue={handleContinue} />
+          </div>
         )}
 
         {draft.step === 1 && (
-          <StepBusinessInfo
-            data={draft.businessInfo}
-            onChange={(info) => setDraft((d) => ({ ...d, businessInfo: info }))}
-          />
+          <div className="portal-card max-w-xl mx-auto">
+            <StepBusinessInfo
+              data={draft.businessInfo}
+              onChange={(info) => setDraft((d) => ({ ...d, businessInfo: info }))}
+            />
+          </div>
         )}
 
         {draft.step === 2 && (
-          <StepMeetTeam
-            tier={draft.tier}
-            customNames={draft.customNames}
-            onRename={(agentId, newName) =>
-              setDraft((d) => ({
-                ...d,
-                customNames: { ...d.customNames, [agentId]: newName },
-              }))
-            }
-          />
+          <div className="portal-card max-w-xl mx-auto">
+            <StepMeetTeam
+              tier={draft.tier}
+              customNames={draft.customNames}
+              onRename={(agentId, newName) =>
+                setDraft((d) => ({
+                  ...d,
+                  customNames: { ...d.customNames, [agentId]: newName },
+                }))
+              }
+            />
+          </div>
         )}
 
         {draft.step === 3 && (
-          <StepIntegrations
-            connectedIds={draft.connectedIntegrations}
-            onConnect={(id) =>
-              setDraft((d) => ({
-                ...d,
-                connectedIntegrations: [...d.connectedIntegrations, id],
-              }))
-            }
-            tier={draft.tier}
-          />
+          <div className="portal-card max-w-xl mx-auto">
+            <StepIntegrations
+              connectedIds={draft.connectedIntegrations}
+              tier={draft.tier}
+            />
+          </div>
         )}
 
         {draft.step === 4 && (
-          <StepComplete businessName={draft.businessInfo.businessName || undefined} />
+          <div className="onboarding-step-card max-w-xl mx-auto">
+            <StepComplete businessName={draft.businessInfo.businessName || undefined} />
+          </div>
         )}
       </div>
+
+      {/* Error display */}
+      {finishError && (
+        <div className="max-w-xl mx-auto w-full px-4">
+          <div className="rounded-tenkai border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+            {finishError}
+          </div>
+        </div>
+      )}
 
       {/* Navigation */}
       {showNav && (
@@ -204,11 +266,24 @@ export default function OnboardingPage() {
             <button
               onClick={isLastBeforeComplete ? handleFinish : handleContinue}
               disabled={!canContinue() || isSubmitting}
-              className="inline-flex items-center gap-1.5 bg-torii hover:bg-torii-dark text-white px-6 py-2.5 rounded-tenkai text-sm font-medium transition-colors duration-fast disabled:opacity-50 disabled:cursor-not-allowed"
+              className="tk-btn tk-btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSubmitting ? 'Saving...' : isLastBeforeComplete ? 'Finish Setup' : 'Continue'}
               <ArrowRight className="size-4" />
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* OAuth toast */}
+      {oauthToast && (
+        <div className="fixed bottom-6 right-6 z-50 animate-in slide-in-from-bottom-4 fade-in">
+          <div className={`rounded-tenkai border px-4 py-3 shadow-lg text-sm font-medium ${
+            oauthToast.type === 'error'
+              ? 'bg-red-50 border-red-200 text-red-700'
+              : 'bg-[#4A7C59]/10 border-[#4A7C59]/30 text-[#4A7C59]'
+          }`}>
+            {oauthToast.message}
           </div>
         </div>
       )}

@@ -13,10 +13,12 @@ export async function GET(req: NextRequest) {
 
   let clientId: string
   let type: string
+  let returnTo: string = '/integrations'
   try {
     const decoded = JSON.parse(Buffer.from(stateParam, 'base64').toString('utf-8'))
     clientId = decoded.client_id
     type = decoded.type
+    if (decoded.return_to) returnTo = decoded.return_to
     if (!clientId || !type) throw new Error('missing fields')
   } catch {
     return NextResponse.redirect(`${appUrl}/integrations?error=oauth_failed`)
@@ -57,9 +59,9 @@ export async function GET(req: NextRequest) {
       {}
     )
 
-    return NextResponse.redirect(`${appUrl}/integrations?connected=${type}`)
+    return NextResponse.redirect(`${appUrl}${returnTo}?connected=${type}`)
   } catch (err) {
     console.error('[oauth/callback] error:', err)
-    return NextResponse.redirect(`${appUrl}/integrations?error=oauth_failed`)
+    return NextResponse.redirect(`${appUrl}${returnTo}?error=oauth_failed`)
   }
 }

@@ -1,10 +1,12 @@
 'use client'
 
+import { useState } from 'react'
 import { cn } from '@/lib/utils'
-import { ExternalLink, Check, Calendar } from 'lucide-react'
+import { ExternalLink, Check, Calendar, Loader2 } from 'lucide-react'
 
 interface Integration {
   id: string
+  oauthType: string
   name: string
   description: string
   instructions: string
@@ -13,32 +15,48 @@ interface Integration {
 const integrations: Integration[] = [
   {
     id: 'gsc',
+    oauthType: 'google_search_console',
     name: 'Google Search Console',
     description: 'See which keywords bring visitors to your site and track your rankings.',
     instructions: 'Connect your Google account to share Search Console data with your AI team.',
   },
   {
     id: 'ga4',
+    oauthType: 'google_analytics',
     name: 'Google Analytics',
     description: 'Track visitor behavior and measure the impact of SEO improvements.',
     instructions: 'Connect your Google account to share Analytics data with your AI team.',
   },
   {
     id: 'gbp',
+    oauthType: 'google_business_profile',
     name: 'Google Business Profile',
     description: 'Manage your local presence and respond to reviews.',
     instructions: 'Connect your Google account to let your AI team manage your Business Profile.',
   },
 ]
 
+// Map OAuth types back to wizard IDs (used by parent on return)
+export const OAUTH_TO_WIZARD_ID: Record<string, string> = {
+  google_search_console: 'gsc',
+  google_analytics: 'ga4',
+  google_business_profile: 'gbp',
+}
+
 interface StepIntegrationsProps {
   connectedIds: string[]
-  onConnect: (integrationId: string) => void
   tier: string
 }
 
-export function StepIntegrations({ connectedIds, onConnect, tier }: StepIntegrationsProps) {
+export function StepIntegrations({ connectedIds, tier }: StepIntegrationsProps) {
   const showScheduleCall = tier.toLowerCase() === 'pro'
+  const [connectingId, setConnectingId] = useState<string | null>(null)
+
+  const handleConnect = (integration: Integration) => {
+    setConnectingId(integration.id)
+    // Navigate to real OAuth flow — return_to brings user back to onboarding after Google consent
+    window.location.href = `/api/auth/oauth/google?type=${integration.oauthType}&return_to=/onboarding`
+  }
 
   return (
     <div className="max-w-lg mx-auto space-y-6 animate-fade-up">
@@ -52,6 +70,7 @@ export function StepIntegrations({ connectedIds, onConnect, tier }: StepIntegrat
       <div className="space-y-3">
         {integrations.map((integration) => {
           const isConnected = connectedIds.includes(integration.id)
+          const isConnecting = connectingId === integration.id
 
           return (
             <div
@@ -76,11 +95,16 @@ export function StepIntegrations({ connectedIds, onConnect, tier }: StepIntegrat
                 </div>
                 {!isConnected && (
                   <button
-                    onClick={() => onConnect(integration.id)}
-                    className="flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-tenkai border border-torii/30 text-torii text-xs font-medium hover:bg-torii/5 transition-colors duration-fast"
+                    onClick={() => handleConnect(integration)}
+                    disabled={isConnecting}
+                    className="flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-tenkai border border-torii/30 text-torii text-xs font-medium hover:bg-torii/5 transition-colors duration-fast disabled:opacity-50"
                   >
-                    <ExternalLink className="size-3" />
-                    Connect
+                    {isConnecting ? (
+                      <Loader2 className="size-3 animate-spin" />
+                    ) : (
+                      <ExternalLink className="size-3" />
+                    )}
+                    {isConnecting ? 'Redirecting…' : 'Connect'}
                   </button>
                 )}
               </div>

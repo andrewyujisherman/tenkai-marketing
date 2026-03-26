@@ -39,6 +39,7 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url)
   const type = searchParams.get('type') ?? ''
+  const returnTo = searchParams.get('return_to') ?? ''
 
   const scope = SCOPE_MAP[type]
   if (!scope) {
@@ -49,7 +50,9 @@ export async function GET(req: NextRequest) {
   }
 
   const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/oauth/callback`
-  const state = Buffer.from(JSON.stringify({ client_id: clientId, type })).toString('base64')
+  const statePayload: Record<string, string> = { client_id: clientId, type }
+  if (returnTo) statePayload.return_to = returnTo
+  const state = Buffer.from(JSON.stringify(statePayload)).toString('base64')
 
   const params = new URLSearchParams({
     client_id: process.env.GOOGLE_OAUTH_WEB_CLIENT_ID ?? '',
