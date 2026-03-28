@@ -32,6 +32,9 @@ const defaultBusinessInfo: BusinessInfoData = {
   businessType: '',
   services: '',
   serviceArea: '',
+  competitors: ['', '', ''],
+  businessGoals: [],
+  targetGeography: '',
 }
 
 const defaultDraft: OnboardingDraft = {
@@ -222,6 +225,9 @@ export default function OnboardingPage() {
             industry: draft.businessInfo.businessType,
             products: draft.businessInfo.services,
             location: draft.businessInfo.serviceArea,
+            competitors: draft.businessInfo.competitors.filter(c => c.trim()),
+            businessGoals: draft.businessInfo.businessGoals,
+            targetGeography: draft.businessInfo.targetGeography,
             customNames: draft.customNames,
             connectedIntegrations: draft.connectedIntegrations,
           },

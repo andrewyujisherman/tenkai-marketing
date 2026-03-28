@@ -2,6 +2,8 @@ import { createServerClient } from '@/lib/supabase'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { isDemoMode, DEMO_CLIENT_ID } from '@/lib/demo'
 import { TENKAI_AGENTS, type AgentId } from '@/lib/agents'
+import { fetchGA4Data } from '@/lib/integrations/google-analytics'
+import { fetchGSCData } from '@/lib/integrations/google-search-console'
 import DashboardClient from './DashboardClient'
 
 // Types shared with DashboardClient
@@ -19,6 +21,7 @@ export interface CompletedTask {
   id: string
   title: string
   agent_name: string
+  agent_role: string
   content_type: string
   completed_at: string
   deliverable_id: string
@@ -45,6 +48,13 @@ export interface DashboardMetric {
   link_to: string
 }
 
+export interface ProgressSnapshot {
+  keywordsInTop10: number | null
+  healthScore: number | null
+  contentPublished: number
+  asOf: string
+}
+
 export interface DashboardData {
   userName: string | null
   companyName: string | null
@@ -58,6 +68,41 @@ export interface DashboardData {
   actionItems: ActionItem[]
   actionItemCount: number
   metrics: DashboardMetric[]
+  isNewUser: boolean
+  processingCount: number
+  firstAuditDate: string | null
+  progress: {
+    initial: ProgressSnapshot | null
+    current: ProgressSnapshot | null
+  }
+  clientStartDate: string | null
+}
+
+function cleanTitle(title: string, contentType?: string, agentName?: string): string {
+  const prefixMap: Record<string, string> = {
+    'Outreach Emails:': 'Completed outreach email campaign',
+    'Review Responses:': 'Reviewed and responded to business reviews',
+    'Schema Markup:': 'Updated schema markup for SEO',
+  }
+
+  for (const [prefix, replacement] of Object.entries(prefixMap)) {
+    if (title.startsWith(prefix)) return replacement
+  }
+
+  // Strip URLs
+  const stripped = title.replace(/https?:\/\/[^\s]+/g, '').trim()
+  if (stripped.length >= 10) return stripped
+
+  // Fallback: generate from content type / agent name
+  const ct = (contentType ?? '').toLowerCase()
+  const ag = (agentName ?? '').toLowerCase()
+  if (ct.includes('outreach') || ag.includes('outreach')) return 'Completed outreach campaign'
+  if (ct.includes('blog') || ct.includes('article')) return 'Published blog post'
+  if (ct.includes('schema')) return 'Updated schema markup for SEO'
+  if (ct.includes('review')) return 'Reviewed and responded to business reviews'
+  if (ct.includes('audit')) return 'Completed SEO audit report'
+  if (ct.includes('report')) return 'Generated SEO performance report'
+  return stripped.length > 0 ? stripped : 'Completed SEO task'
 }
 
 export default async function DashboardPage() {
@@ -117,6 +162,11 @@ export default async function DashboardPage() {
     actionItems: [],
     actionItemCount: 0,
     metrics: [],
+    isNewUser: false,
+    processingCount: 0,
+    firstAuditDate: null,
+    progress: { initial: null, current: null },
+    clientStartDate: null,
   }
 
   if (!clientId) {
@@ -237,14 +287,20 @@ export default async function DashboardPage() {
   })
 
   // Build completed tasks
-  data.completedTasks = (recentDeliverables ?? []).map(d => ({
-    id: d.id,
-    title: d.title ?? 'Untitled deliverable',
-    agent_name: d.agent_name ?? 'Tenkai Team',
-    content_type: d.deliverable_type ?? 'report',
-    completed_at: d.created_at,
-    deliverable_id: d.id,
-  }))
+  data.completedTasks = (recentDeliverables ?? []).map(d => {
+    const agentEntry = Object.values(TENKAI_AGENTS).find(
+      ag => ag.name.toLowerCase() === (d.agent_name ?? '').toLowerCase()
+    )
+    return {
+      id: d.id,
+      title: cleanTitle(d.title ?? '', d.deliverable_type ?? '', d.agent_name ?? ''),
+      agent_name: agentEntry?.name ?? d.agent_name ?? 'Tenkai Team',
+      agent_role: agentEntry?.role ?? '',
+      content_type: d.deliverable_type ?? 'report',
+      completed_at: d.created_at,
+      deliverable_id: d.id,
+    }
+  })
 
   // Build action items
   const approvalItems: ActionItem[] = (pendingApprovals ?? []).map(a => {
@@ -297,23 +353,81 @@ export default async function DashboardPage() {
     healthScore = auditDeliverable?.score ?? null
   }
 
+  // Fetch GA4 and GSC integration metadata
+  const [{ data: ga4Integ }, { data: gscInteg }] = await Promise.all([
+    supabaseAdmin
+      .from('client_integrations')
+      .select('metadata, status')
+      .eq('client_id', clientId)
+      .eq('integration_type', 'google_analytics')
+      .single(),
+    supabaseAdmin
+      .from('client_integrations')
+      .select('metadata, status')
+      .eq('client_id', clientId)
+      .eq('integration_type', 'google_search_console')
+      .single(),
+  ])
+
+  const ga4PropertyId = ga4Integ?.status === 'active'
+    ? (ga4Integ.metadata as Record<string, unknown> | null)?.property_id as string | undefined
+    : undefined
+  const gscSiteUrl = gscInteg?.status === 'active'
+    ? (gscInteg.metadata as Record<string, unknown> | null)?.site_url as string | undefined
+    : undefined
+
+  const [ga4Data, gscData] = await Promise.all([
+    ga4PropertyId
+      ? fetchGA4Data(ga4PropertyId, { clientId }).catch(() => null)
+      : Promise.resolve(null),
+    gscSiteUrl
+      ? fetchGSCData(gscSiteUrl, { clientId }).catch(() => null)
+      : Promise.resolve(null),
+  ])
+
+  const websiteVisitsMetric: DashboardMetric = ga4Data && !ga4Data.error && ga4Data.sessions > 0
+    ? {
+        name: 'Website Visits',
+        value: ga4Data.sessions.toLocaleString('en-US'),
+        trend: 'flat',
+        change_pct: '',
+        period: 'Last 28 days',
+        link_to: '/metrics?tab=traffic',
+      }
+    : {
+        name: 'Website Visits',
+        value: '--',
+        trend: 'flat',
+        change_pct: '',
+        period: 'Connect analytics to track',
+        link_to: '/metrics?tab=traffic',
+      }
+
+  const topKeywordsCount = gscData && !gscData.error && gscData.topQueries
+    ? gscData.topQueries.filter((q: { position: number }) => q.position <= 10).length
+    : null
+
+  const keywordsMetric: DashboardMetric = topKeywordsCount !== null
+    ? {
+        name: 'Keywords in Top 10',
+        value: topKeywordsCount,
+        trend: topKeywordsCount > 0 ? 'up' : 'flat',
+        change_pct: '',
+        period: 'Last 28 days',
+        link_to: '/rankings',
+      }
+    : {
+        name: 'Keywords in Top 10',
+        value: '--',
+        trend: 'flat',
+        change_pct: '',
+        period: 'Connect Search Console',
+        link_to: '/rankings',
+      }
+
   data.metrics = [
-    {
-      name: 'Website Visits',
-      value: '--',
-      trend: 'flat',
-      change_pct: '',
-      period: 'Connect analytics to track',
-      link_to: '/metrics?tab=traffic',
-    },
-    {
-      name: 'Rankings Position',
-      value: '--',
-      trend: 'flat',
-      change_pct: '',
-      period: 'Run an audit to see rankings',
-      link_to: '/rankings',
-    },
+    websiteVisitsMetric,
+    keywordsMetric,
     {
       name: 'Health Score',
       value: healthScore !== null ? `${healthScore}/100` : '--',
@@ -331,6 +445,62 @@ export default async function DashboardPage() {
       link_to: '/content',
     },
   ]
+
+  // Determine new user state: no completed deliverables + has processing requests
+  const processingCount = (activeRequests ?? []).length
+  const isNewUser = (recentDeliverables ?? []).length === 0 && processingCount > 0
+
+  // Get first audit date for the client
+  const { data: firstAudit } = await db
+    .from('deliverables')
+    .select('created_at')
+    .eq('client_id', clientId)
+    .eq('deliverable_type', 'audit_report')
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+
+  data.isNewUser = isNewUser
+  data.processingCount = processingCount
+  data.firstAuditDate = firstAudit?.created_at ?? null
+
+  // ── Progress-over-time: compare first audit snapshot vs current ──
+  const { data: clientRow } = await supabaseAdmin
+    .from('clients')
+    .select('created_at')
+    .eq('id', clientId)
+    .single()
+
+  data.clientStartDate = clientRow?.created_at ?? null
+
+  // First audit score (initial snapshot)
+  if (firstAudit) {
+    const { data: firstAuditScore } = await db
+      .from('deliverables')
+      .select('score')
+      .eq('client_id', clientId)
+      .eq('deliverable_type', 'audit_report')
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle()
+
+    data.progress.initial = {
+      keywordsInTop10: null,
+      healthScore: firstAuditScore?.score ?? null,
+      contentPublished: 0,
+      asOf: firstAudit.created_at,
+    }
+  }
+
+  // Current snapshot
+  if (healthScore !== null || topKeywordsCount !== null || (publishedContent ?? 0) > 0) {
+    data.progress.current = {
+      keywordsInTop10: topKeywordsCount,
+      healthScore,
+      contentPublished: publishedContent ?? 0,
+      asOf: new Date().toISOString(),
+    }
+  }
 
   return <DashboardClient data={data} />
 }

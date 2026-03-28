@@ -326,15 +326,20 @@ h1 { font-family: Georgia, serif; font-size: 2rem; margin-bottom: 1rem; }
             Browse, review, and approve content from your AI writing team
           </p>
         </div>
-        <Button
-          onClick={() => setGenerateOpen(true)}
-          disabled={quotaReached}
-          className="bg-torii text-white hover:bg-torii-dark rounded-tenkai gap-1.5 flex-shrink-0"
-          title={quotaReached ? `You've used all ${quota} pieces this month.` : 'Generate new content'}
-        >
-          <Plus className="size-4" />
-          Generate Content
-        </Button>
+        <div className="flex flex-col items-end gap-1">
+          <Button
+            onClick={() => setGenerateOpen(true)}
+            disabled={quotaReached}
+            className="bg-torii text-white hover:bg-torii-dark rounded-tenkai gap-1.5 flex-shrink-0"
+            title={quotaReached ? `You've used all ${quota} pieces this month.` : 'Generate new content'}
+          >
+            <Plus className="size-4" />
+            Generate Content
+          </Button>
+          {quotaReached && (
+            <p className="text-xs text-warm-gray mt-1">Monthly quota reached. Resets on the 1st.</p>
+          )}
+        </div>
       </div>
 
       {/* ─── Status Filter Pills ─────────────────────────── */}
@@ -361,7 +366,7 @@ h1 { font-family: Georgia, serif; font-size: 2rem; margin-bottom: 1rem; }
 
       {/* ─── Content Grid ────────────────────────────────── */}
       {filteredPosts.length === 0 ? (
-        <div className="rounded-tenkai border border-tenkai-border bg-parchment/30 py-16 text-center">
+        <div className="portal-card py-16 text-center">
           <div className="w-12 h-12 rounded-full bg-torii-subtle flex items-center justify-center mx-auto mb-3">
             <span className="text-lg font-serif text-torii">{TENKAI_AGENTS.sakura.kanji}</span>
           </div>
@@ -385,36 +390,40 @@ h1 { font-family: Georgia, serif; font-size: 2rem; margin-bottom: 1rem; }
           )}
         </div>
       ) : (
-        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="space-y-2">
+          <p className="section-label text-muted-gray mb-3">
+            {filteredPosts.length} {filter === 'all' ? 'pieces' : STATUS_FILTERS.find((f) => f.value === filter)?.label.toLowerCase()}
+          </p>
           {filteredPosts.map((post) => {
             const agent = getAgentInfo(post.agent_author)
             return (
               <button
                 key={post.id}
                 onClick={() => openViewer(post.id)}
-                className="text-left bg-ivory rounded-tenkai border border-tenkai-border p-5 shadow-tenkai-sm hover:shadow-tenkai-md transition-all duration-normal cursor-pointer group"
+                className="content-item hover-lift w-full text-left cursor-pointer"
               >
-                <div className="flex items-start justify-between gap-2 mb-3">
-                  <h3 className="font-serif text-sm font-semibold text-charcoal line-clamp-2 group-hover:text-torii transition-colors">
-                    {post.title}
-                  </h3>
-                  <StatusBadge status={mapStatus(post.status)} className="flex-shrink-0" />
-                </div>
-
-                {post.excerpt && (
-                  <p className="text-xs text-warm-gray line-clamp-2 mb-3 leading-relaxed">
-                    {post.excerpt}
-                  </p>
-                )}
-
-                <div className="flex items-center justify-between pt-3 border-t border-tenkai-border-light">
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-full bg-torii-subtle flex items-center justify-center flex-shrink-0">
-                      <span className="text-[10px] font-serif text-torii">{agent.kanji}</span>
-                    </div>
-                    <span className="text-xs text-warm-gray">{agent.name}</span>
+                <div className="content-info min-w-0 flex-1">
+                  <h4 className="text-charcoal font-semibold line-clamp-1">{post.title}</h4>
+                  <div className="content-meta mt-1">
+                    <span>{agent.name}</span>
+                    <span>{relativeDate(post.created_at)}</span>
+                    {post.excerpt && (
+                      <span className="hidden sm:inline text-warm-gray/70">
+                        ~{Math.max(1, Math.round(post.excerpt.length / 5))} words
+                      </span>
+                    )}
+                    {post.keywords.length > 0 && (
+                      <span className="hidden md:inline text-torii/70 font-medium">
+                        {post.keywords[0]}
+                      </span>
+                    )}
                   </div>
-                  <span className="text-xs text-muted-gray">{relativeDate(post.created_at)}</span>
+                  {post.status === 'pending_review' && post.excerpt && (
+                    <p className="text-[11px] text-warm-gray mt-1 line-clamp-2">{post.excerpt}</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0 ml-4">
+                  <StatusBadge status={mapStatus(post.status)} />
                 </div>
               </button>
             )
@@ -451,15 +460,26 @@ h1 { font-family: Georgia, serif; font-size: 2rem; margin-bottom: 1rem; }
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     {canDownload && detail.status === 'approved' && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleDownload}
-                        className="gap-1.5 rounded-tenkai"
-                      >
-                        <Download className="size-3.5" />
-                        Download HTML
-                      </Button>
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleDownload}
+                          className="gap-1.5 rounded-tenkai"
+                        >
+                          <Download className="size-3.5" />
+                          HTML
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => window.open(`/api/reports/pdf?id=${detail.id}`, '_blank')}
+                          className="gap-1.5 rounded-tenkai"
+                        >
+                          <Download className="size-3.5" />
+                          PDF
+                        </Button>
+                      </>
                     )}
                     {canDownload && detail.status !== 'approved' && (
                       <Button
@@ -470,7 +490,7 @@ h1 { font-family: Georgia, serif; font-size: 2rem; margin-bottom: 1rem; }
                         title="Approve this content before downloading."
                       >
                         <Download className="size-3.5" />
-                        Download HTML
+                        Download
                       </Button>
                     )}
                     <button
@@ -483,6 +503,26 @@ h1 { font-family: Georgia, serif; font-size: 2rem; margin-bottom: 1rem; }
                     </button>
                   </div>
                 </div>
+
+                {/* Content info bar — word count, keywords, impact */}
+                {detail.keywords?.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-4 px-6 py-2.5 bg-parchment/50 border-b border-tenkai-border-light text-[12px] text-warm-gray">
+                    {typeof detail.content === 'string' && (
+                      <span>~{detail.content.split(/\s+/).filter(Boolean).length.toLocaleString()} words</span>
+                    )}
+                    {detail.keywords.slice(0, 3).map(kw => (
+                      <span key={kw} className="inline-flex items-center gap-1 px-2 py-0.5 bg-torii/5 rounded-full text-torii font-medium">
+                        {kw}
+                      </span>
+                    ))}
+                    {detail.seo_score != null && detail.seo_score >= 70 && (
+                      <span className="text-[#4A7C59] font-medium">High ranking potential</span>
+                    )}
+                    {detail.seo_score != null && detail.seo_score >= 40 && detail.seo_score < 70 && (
+                      <span className="text-[#C49A3C] font-medium">Moderate ranking potential</span>
+                    )}
+                  </div>
+                )}
 
                 {/* Styled content body */}
                 <div className="flex-1 overflow-y-auto px-6 py-6">
@@ -552,7 +592,7 @@ h1 { font-family: Georgia, serif; font-size: 2rem; margin-bottom: 1rem; }
             <DialogTitle className="font-serif text-charcoal">Generate Content</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <p className="text-xs text-warm-gray">
+            <p className="section-label text-muted-gray">
               {monthlyContentCount} of {quota} pieces used this month
             </p>
             <div className="w-full bg-cream rounded-full h-1.5">

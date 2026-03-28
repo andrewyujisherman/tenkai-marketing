@@ -121,7 +121,7 @@ function ReportCard({ report, onClick }: { report: ReportData; onClick: () => vo
   return (
     <button
       onClick={onClick}
-      className="w-full text-left bg-ivory rounded-tenkai border border-tenkai-border p-6 shadow-tenkai-sm hover:shadow-tenkai-md transition-all duration-normal cursor-pointer group"
+      className="report-item hover-lift w-full text-left cursor-pointer"
     >
       <div className="flex items-start justify-between gap-3 mb-2">
         <div className="min-w-0 flex-1">
@@ -243,7 +243,16 @@ function ReportViewerModal({ report, onClose }: { report: ReportData; onClose: (
           <div className="flex items-center gap-2 flex-shrink-0">
             <Button variant="outline" size="sm" onClick={exportCSV} className="gap-1.5 rounded-tenkai">
               <Download className="size-3.5" />
-              Export
+              CSV
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => window.open(`/api/reports/pdf?id=${report.id}`, '_blank')}
+              className="gap-1.5 rounded-tenkai"
+            >
+              <Download className="size-3.5" />
+              PDF
             </Button>
             <button onClick={onClose} className="p-2 rounded-tenkai hover:bg-parchment transition-colors duration-fast text-warm-gray">
               <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -254,7 +263,7 @@ function ReportViewerModal({ report, onClose }: { report: ReportData; onClose: (
         </div>
 
         {/* Body — scrollable */}
-        <div className="flex-1 overflow-y-auto px-6 py-6 space-y-8">
+        <div className="flex-1 overflow-y-auto report-content space-y-8">
           {/* Executive Summary */}
           {insights.length > 0 && (
             <section>
@@ -357,7 +366,7 @@ function ReportViewerModal({ report, onClose }: { report: ReportData; onClose: (
                 Pro plans include weekly reports, revenue attribution, and exportable data
               </p>
             </div>
-            <a href="mailto:rookbot.mini@gmail.com?subject=Upgrade%20to%20Pro">
+            <a href="mailto:support@tenkaimarketing.com?subject=Upgrade%20to%20Pro">
               <Button className="bg-torii text-white hover:bg-torii-dark rounded-tenkai text-sm gap-1.5 flex-shrink-0">
                 Contact Us to Upgrade
                 <ArrowUpRight className="size-3.5" />
@@ -384,9 +393,7 @@ function DeliverableViewerModal({ deliverable, onClose }: { deliverable: ReportD
   }
 
   // Build OutputViewer-compatible content
-  const outputContent = deliverable.content
-    ? (typeof deliverable.content === 'string' ? deliverable.content : JSON.stringify(deliverable.content, null, 2))
-    : ''
+  const outputContent = deliverable.content ?? ''
 
   return (
     <OutputViewer
@@ -409,19 +416,39 @@ function DeliverableViewerModal({ deliverable, onClose }: { deliverable: ReportD
 }
 
 /* ─── Keywords Tab ─────────────────────────────────────── */
-function KeywordsTab({ deliverables }: { deliverables: ReportDeliverable[] }) {
+function KeywordsTab({ deliverables, gscConnected = false }: { deliverables: ReportDeliverable[]; gscConnected?: boolean }) {
   const [sortKey, setSortKey] = useState<'volume' | 'difficulty' | 'keyword'>('volume')
   const [sortAsc, setSortAsc] = useState(false)
   const [selectedDeliverable, setSelectedDeliverable] = useState<ReportDeliverable | null>(null)
 
   if (deliverables.length === 0) {
     return (
-      <div className="rounded-tenkai border border-tenkai-border bg-parchment/30 py-16 text-center">
-        <Search className="size-8 text-muted-gray mx-auto mb-3" />
-        <p className="font-serif text-base font-medium text-charcoal mb-1">No keyword research yet</p>
-        <p className="text-sm text-warm-gray max-w-sm mx-auto">
-          Request Keyword Opportunities from your Dashboard.
-        </p>
+      <div className="rounded-tenkai border border-tenkai-border bg-parchment/30 py-16 text-center flex flex-col items-center gap-4">
+        <Search className="size-8 text-muted-gray" />
+        <div>
+          <p className="font-serif text-base font-medium text-charcoal mb-1">No keyword research yet</p>
+          <p className="text-sm text-warm-gray max-w-sm mx-auto">
+            {gscConnected
+              ? 'Your team is building your keyword strategy. Check back soon for keyword analysis.'
+              : 'Connect Google Search Console so Haruki can track and analyze your keyword performance.'}
+          </p>
+        </div>
+        <div className="flex flex-col sm:flex-row items-center gap-3">
+          {!gscConnected && (
+            <a
+              href="/settings?tab=integrations"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-tenkai bg-torii text-white text-sm font-medium hover:bg-torii-dark transition-colors duration-fast"
+            >
+              Connect Search Console
+            </a>
+          )}
+          <a
+            href="/rankings"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-tenkai border border-tenkai-border text-charcoal text-sm font-medium hover:bg-parchment transition-colors duration-fast"
+          >
+            View Rankings
+          </a>
+        </div>
       </div>
     )
   }
@@ -463,7 +490,7 @@ function KeywordsTab({ deliverables }: { deliverables: ReportDeliverable[] }) {
             <button
               key={d.id}
               onClick={() => setSelectedDeliverable(d)}
-              className="w-full text-left bg-ivory rounded-tenkai border border-tenkai-border p-6 hover:shadow-tenkai-md transition-all cursor-pointer"
+              className="report-item hover-lift w-full text-left cursor-pointer"
             >
               <div className="flex items-center gap-2 mb-2">
                 <Search className="size-4 text-torii" />
@@ -536,12 +563,20 @@ function CompetitorsTab({ deliverables }: { deliverables: ReportDeliverable[] })
 
   if (deliverables.length === 0) {
     return (
-      <div className="rounded-tenkai border border-tenkai-border bg-parchment/30 py-16 text-center">
-        <Users className="size-8 text-muted-gray mx-auto mb-3" />
-        <p className="font-serif text-base font-medium text-charcoal mb-1">No competitor analysis yet</p>
-        <p className="text-sm text-warm-gray max-w-sm mx-auto">
-          Request Competitor Insights from your Dashboard.
-        </p>
+      <div className="rounded-tenkai border border-tenkai-border bg-parchment/30 py-16 text-center flex flex-col items-center gap-4">
+        <Users className="size-8 text-muted-gray" />
+        <div>
+          <p className="font-serif text-base font-medium text-charcoal mb-1">No competitor analysis yet</p>
+          <p className="text-sm text-warm-gray max-w-sm mx-auto">
+            Run a site audit to benchmark your site against competitors in your space.
+          </p>
+        </div>
+        <a
+          href="/health"
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-tenkai bg-torii text-white text-sm font-medium hover:bg-torii-dark transition-colors duration-fast"
+        >
+          Run Site Audit
+        </a>
       </div>
     )
   }
@@ -562,7 +597,7 @@ function CompetitorsTab({ deliverables }: { deliverables: ReportDeliverable[] })
             <button
               key={d.id}
               onClick={() => setSelectedDeliverable(d)}
-              className="text-left bg-ivory rounded-tenkai border border-tenkai-border p-6 hover:shadow-tenkai-md transition-all cursor-pointer"
+              className="report-item hover-lift text-left cursor-pointer"
             >
               <div className="flex items-center gap-2 mb-3">
                 <Users className="size-4 text-torii shrink-0" />
@@ -624,17 +659,37 @@ function CompetitorsTab({ deliverables }: { deliverables: ReportDeliverable[] })
 }
 
 /* ─── Analytics Tab ────────────────────────────────────── */
-function AnalyticsTab({ deliverables }: { deliverables: ReportDeliverable[] }) {
+function AnalyticsTab({ deliverables, gscConnected = false }: { deliverables: ReportDeliverable[]; gscConnected?: boolean }) {
   const [selectedDeliverable, setSelectedDeliverable] = useState<ReportDeliverable | null>(null)
 
   if (deliverables.length === 0) {
     return (
-      <div className="rounded-tenkai border border-tenkai-border bg-parchment/30 py-16 text-center">
-        <TrendingUp className="size-8 text-muted-gray mx-auto mb-3" />
-        <p className="font-serif text-base font-medium text-charcoal mb-1">No analytics review yet</p>
-        <p className="text-sm text-warm-gray max-w-sm mx-auto">
-          Request an Analytics Review from your Dashboard.
-        </p>
+      <div className="rounded-tenkai border border-tenkai-border bg-parchment/30 py-16 text-center flex flex-col items-center gap-4">
+        <TrendingUp className="size-8 text-muted-gray" />
+        <div>
+          <p className="font-serif text-base font-medium text-charcoal mb-1">No analytics review yet</p>
+          <p className="text-sm text-warm-gray max-w-sm mx-auto">
+            {gscConnected
+              ? 'Your team is analyzing your analytics data. Check back soon for your first report.'
+              : 'Connect Google Search Console to unlock traffic and analytics data for your site.'}
+          </p>
+        </div>
+        <div className="flex flex-col sm:flex-row items-center gap-3">
+          {!gscConnected && (
+            <a
+              href="/settings?tab=integrations"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-tenkai bg-torii text-white text-sm font-medium hover:bg-torii-dark transition-colors duration-fast"
+            >
+              Connect Search Console
+            </a>
+          )}
+          <a
+            href="/health"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-tenkai border border-tenkai-border text-charcoal text-sm font-medium hover:bg-parchment transition-colors duration-fast"
+          >
+            Run Site Audit
+          </a>
+        </div>
       </div>
     )
   }
@@ -716,12 +771,20 @@ function AIVisibilityTab({ deliverables }: { deliverables: ReportDeliverable[] }
 
   if (deliverables.length === 0) {
     return (
-      <div className="rounded-tenkai border border-tenkai-border bg-parchment/30 py-16 text-center">
-        <Sparkles className="size-8 text-muted-gray mx-auto mb-3" />
-        <p className="font-serif text-base font-medium text-charcoal mb-1">No AI visibility analysis yet</p>
-        <p className="text-sm text-warm-gray max-w-sm mx-auto">
-          Request an AI Search Visibility check from your Dashboard.
-        </p>
+      <div className="rounded-tenkai border border-tenkai-border bg-parchment/30 py-16 text-center flex flex-col items-center gap-4">
+        <Sparkles className="size-8 text-muted-gray" />
+        <div>
+          <p className="font-serif text-base font-medium text-charcoal mb-1">No AI visibility analysis yet</p>
+          <p className="text-sm text-warm-gray max-w-sm mx-auto">
+            Run a site audit to see how your brand appears in AI-powered search results.
+          </p>
+        </div>
+        <a
+          href="/health"
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-tenkai bg-torii text-white text-sm font-medium hover:bg-torii-dark transition-colors duration-fast"
+        >
+          Run Site Audit
+        </a>
       </div>
     )
   }
@@ -745,7 +808,7 @@ function AIVisibilityTab({ deliverables }: { deliverables: ReportDeliverable[] }
                 <button
                   key={d.id}
                   onClick={() => setSelectedDeliverable(d)}
-                  className="w-full text-left bg-ivory rounded-tenkai border border-tenkai-border p-6 hover:shadow-tenkai-md transition-all cursor-pointer"
+                  className="report-item hover-lift w-full text-left cursor-pointer"
                 >
                   <div className="flex items-center gap-2 mb-3">
                     <span className="font-medium text-charcoal">{d.title ?? 'Geographic Report'}</span>
@@ -798,7 +861,7 @@ function AIVisibilityTab({ deliverables }: { deliverables: ReportDeliverable[] }
                 <button
                   key={d.id}
                   onClick={() => setSelectedDeliverable(d)}
-                  className="w-full text-left bg-ivory rounded-tenkai border border-tenkai-border p-6 hover:shadow-tenkai-md transition-all cursor-pointer"
+                  className="report-item hover-lift w-full text-left cursor-pointer"
                 >
                   <div className="flex items-center gap-2 mb-3">
                     <Sparkles className="size-4 text-torii" />
@@ -883,6 +946,20 @@ function PerformanceTab({ reports }: { reports: ReportData[] }) {
             Yumi is analyzing your SEO data. Starter plans receive monthly reports, Growth bi-monthly, and Pro weekly.
           </p>
         </div>
+        <div className="flex flex-col sm:flex-row items-center gap-3">
+          <a
+            href="/health"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-tenkai bg-torii text-white text-sm font-medium hover:bg-torii-dark transition-colors duration-fast"
+          >
+            Run Site Audit
+          </a>
+          <a
+            href="/rankings"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-tenkai border border-tenkai-border text-charcoal text-sm font-medium hover:bg-parchment transition-colors duration-fast"
+          >
+            View Rankings
+          </a>
+        </div>
       </div>
     )
   }
@@ -908,9 +985,10 @@ interface ReportsClientProps {
   competitorDeliverables?: ReportDeliverable[]
   analyticsDeliverables?: ReportDeliverable[]
   aiDeliverables?: ReportDeliverable[]
+  gscConnected?: boolean
 }
 
-export default function ReportsClient({ reports, keywordDeliverables = [], competitorDeliverables = [], analyticsDeliverables = [], aiDeliverables = [] }: ReportsClientProps) {
+export default function ReportsClient({ reports, keywordDeliverables = [], competitorDeliverables = [], analyticsDeliverables = [], aiDeliverables = [], gscConnected = false }: ReportsClientProps) {
   return (
     <div className="space-y-6">
       {/* Page header */}
@@ -975,13 +1053,13 @@ export default function ReportsClient({ reports, keywordDeliverables = [], compe
           <PerformanceTab reports={reports} />
         </TabsContent>
         <TabsContent value="keywords">
-          <KeywordsTab deliverables={keywordDeliverables} />
+          <KeywordsTab deliverables={keywordDeliverables} gscConnected={gscConnected} />
         </TabsContent>
         <TabsContent value="competitors">
           <CompetitorsTab deliverables={competitorDeliverables} />
         </TabsContent>
         <TabsContent value="analytics">
-          <AnalyticsTab deliverables={analyticsDeliverables} />
+          <AnalyticsTab deliverables={analyticsDeliverables} gscConnected={gscConnected} />
         </TabsContent>
         <TabsContent value="ai-visibility">
           <AIVisibilityTab deliverables={aiDeliverables} />

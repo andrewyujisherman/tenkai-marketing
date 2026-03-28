@@ -78,33 +78,43 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: updateError.message }, { status: 500 })
   }
 
-  // Auto-create a site_audit service request so the client gets an
-  // immediate deliverable. Use the URL from onboarding answers or the
-  // client's stored website_url.
+  // Auto-trigger strategy chain: site_audit → keyword_research → content_calendar → competitor_analysis
+  // These run in parallel so the client sees immediate progress from their AI team.
   const websiteUrl =
     (onboarding_data?.business?.url as string | undefined) ??
     client.website_url
 
   if (websiteUrl) {
-    const agentId = getAgentForRequest('site_audit')
-    await supabaseAdmin
+    const strategyChain = [
+      { type: 'site_audit', priority: 9 },
+      { type: 'keyword_research', priority: 8 },
+      { type: 'content_calendar', priority: 7 },
+      { type: 'competitor_analysis', priority: 7 },
+    ] as const
+
+    const sharedParams = {
+      source: 'onboarding',
+      industry: onboarding_data?.industry ?? null,
+      competitors: onboarding_data?.competitors ?? null,
+      businessGoals: onboarding_data?.businessGoals ?? null,
+      targetGeography: onboarding_data?.targetGeography ?? null,
+    }
+
+    const inserts = strategyChain.map(({ type, priority }) => ({
+      client_id: client.id,
+      request_type: type,
+      target_url: websiteUrl,
+      parameters: sharedParams,
+      assigned_agent: getAgentForRequest(type),
+      priority,
+    }))
+
+    supabaseAdmin
       .from('service_requests')
-      .insert({
-        client_id: client.id,
-        request_type: 'site_audit',
-        target_url: websiteUrl,
-        parameters: {
-          source: 'onboarding',
-          industry: onboarding_data?.industry ?? null,
-          competitors: onboarding_data?.competitors ?? null,
-        },
-        assigned_agent: agentId,
-        priority: 8, // High priority — first impression matters
-      })
-      // Fire and forget — don't block onboarding on queue insert
+      .insert(inserts)
       .then(({ error }) => {
         if (error) {
-          console.error('[onboarding] Failed to create initial site_audit request:', error.message)
+          console.error('[onboarding] Failed to create strategy chain:', error.message)
         }
       })
   }

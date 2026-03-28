@@ -2,12 +2,24 @@
 
 import { Input } from '@/components/ui/input'
 
+export const BUSINESS_GOALS = [
+  'Get more customers',
+  'Rank higher on Google',
+  'Beat competitors',
+  'Local visibility',
+  'Build brand awareness',
+  'Generate more leads',
+] as const
+
 export interface BusinessInfoData {
   businessName: string
   websiteUrl: string
   businessType: string
   services: string
   serviceArea: string
+  competitors: string[]
+  businessGoals: string[]
+  targetGeography: string
 }
 
 interface StepBusinessInfoProps {
@@ -16,8 +28,22 @@ interface StepBusinessInfoProps {
 }
 
 export function StepBusinessInfo({ data, onChange }: StepBusinessInfoProps) {
-  function update(field: keyof BusinessInfoData, value: string) {
+  function update(field: keyof BusinessInfoData, value: string | string[]) {
     onChange({ ...data, [field]: value })
+  }
+
+  function updateCompetitor(index: number, value: string) {
+    const updated = [...data.competitors]
+    updated[index] = value
+    onChange({ ...data, competitors: updated })
+  }
+
+  function toggleGoal(goal: string) {
+    const current = data.businessGoals
+    const updated = current.includes(goal)
+      ? current.filter(g => g !== goal)
+      : [...current, goal]
+    onChange({ ...data, businessGoals: updated })
   }
 
   return (
@@ -88,6 +114,67 @@ export function StepBusinessInfo({ data, onChange }: StepBusinessInfoProps) {
             placeholder="e.g., Austin, TX"
             className="h-11 border-tenkai-border rounded-tenkai focus-visible:border-torii focus-visible:ring-torii/20"
           />
+        </div>
+
+        {/* ── What are your main goals? ──────────────────── */}
+        <div>
+          <label className="text-sm font-medium text-charcoal mb-2 block">
+            What are your main goals?
+          </label>
+          <p className="text-xs text-warm-gray mb-2">Pick all that apply — this shapes your strategy.</p>
+          <div className="flex flex-wrap gap-2">
+            {BUSINESS_GOALS.map(goal => (
+              <button
+                key={goal}
+                type="button"
+                onClick={() => toggleGoal(goal)}
+                className={`px-3 py-1.5 rounded-full text-sm border transition-colors duration-fast ${
+                  data.businessGoals.includes(goal)
+                    ? 'bg-torii text-white border-torii'
+                    : 'bg-transparent text-charcoal border-tenkai-border hover:border-torii/50'
+                }`}
+              >
+                {goal}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Target Geography ───────────────────────────── */}
+        <div>
+          <label className="text-sm font-medium text-charcoal mb-1.5 block">
+            Where are your customers?
+          </label>
+          <select
+            value={data.targetGeography}
+            onChange={(e) => update('targetGeography', e.target.value)}
+            className="w-full h-11 px-3 text-sm border border-tenkai-border rounded-tenkai bg-transparent outline-none focus:border-torii focus:ring-2 focus:ring-torii/20 text-charcoal"
+          >
+            <option value="">Select...</option>
+            <option value="local">Local — one city or neighborhood</option>
+            <option value="regional">Regional — a few cities or a state</option>
+            <option value="national">National — across the country</option>
+            <option value="international">International — multiple countries</option>
+          </select>
+        </div>
+
+        {/* ── Competitors ────────────────────────────────── */}
+        <div>
+          <label className="text-sm font-medium text-charcoal mb-1.5 block">
+            Top competitors
+          </label>
+          <p className="text-xs text-warm-gray mb-2">Who shows up when people search for your services? (optional)</p>
+          <div className="space-y-2">
+            {[0, 1, 2].map(i => (
+              <Input
+                key={i}
+                value={data.competitors[i] ?? ''}
+                onChange={(e) => updateCompetitor(i, (e.target as HTMLInputElement).value)}
+                placeholder={`Competitor ${i + 1} website or name`}
+                className="h-10 border-tenkai-border rounded-tenkai focus-visible:border-torii focus-visible:ring-torii/20"
+              />
+            ))}
+          </div>
         </div>
       </div>
     </div>
