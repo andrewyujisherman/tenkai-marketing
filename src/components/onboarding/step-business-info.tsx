@@ -2,6 +2,34 @@
 
 import { Input } from '@/components/ui/input'
 
+export const BUSINESS_TYPES = [
+  'Plumbing',
+  'HVAC',
+  'Electrical',
+  'Roofing',
+  'Landscaping',
+  'Dental',
+  'Medical / Healthcare',
+  'Legal',
+  'Accounting / Financial',
+  'Real Estate',
+  'Restaurant / Food Service',
+  'Auto Repair',
+  'Cleaning Services',
+  'Construction',
+  'Salon / Spa',
+  'Fitness / Gym',
+  'Pet Services',
+  'Photography',
+  'Marketing / Advertising',
+  'Consulting',
+  'E-commerce / Retail',
+  'SaaS / Technology',
+  'Education / Tutoring',
+  'Home Services (Other)',
+  'Other',
+] as const
+
 export const BUSINESS_GOALS = [
   'Get more customers',
   'Rank higher on Google',
@@ -25,6 +53,17 @@ export interface BusinessInfoData {
 interface StepBusinessInfoProps {
   data: BusinessInfoData
   onChange: (data: BusinessInfoData) => void
+}
+
+function isValidUrl(url: string): boolean {
+  if (!url.trim()) return true // empty is valid (caught by required check)
+  try {
+    const withProtocol = url.match(/^https?:\/\//) ? url : `https://${url}`
+    new URL(withProtocol)
+    return true
+  } catch {
+    return false
+  }
 }
 
 export function StepBusinessInfo({ data, onChange }: StepBusinessInfoProps) {
@@ -75,20 +114,29 @@ export function StepBusinessInfo({ data, onChange }: StepBusinessInfoProps) {
             value={data.websiteUrl}
             onChange={(e) => update('websiteUrl', (e.target as HTMLInputElement).value)}
             placeholder="https://yourbusiness.com"
-            className="h-11 border-tenkai-border rounded-tenkai focus-visible:border-torii focus-visible:ring-torii/20"
+            className={`h-11 border-tenkai-border rounded-tenkai focus-visible:border-torii focus-visible:ring-torii/20 ${
+              data.websiteUrl.trim() && !isValidUrl(data.websiteUrl) ? 'border-error focus-visible:border-error' : ''
+            }`}
           />
+          {data.websiteUrl.trim() && !isValidUrl(data.websiteUrl) && (
+            <p className="text-xs text-error mt-1">Please enter a valid website URL (e.g., yourbusiness.com)</p>
+          )}
         </div>
 
         <div>
           <label className="text-sm font-medium text-charcoal mb-1.5 block">
             Business Type
           </label>
-          <Input
+          <select
             value={data.businessType}
-            onChange={(e) => update('businessType', (e.target as HTMLInputElement).value)}
-            placeholder="e.g., Plumbing, Dental, Real Estate..."
-            className="h-11 border-tenkai-border rounded-tenkai focus-visible:border-torii focus-visible:ring-torii/20"
-          />
+            onChange={(e) => update('businessType', e.target.value)}
+            className="w-full h-11 px-3 text-sm border border-tenkai-border rounded-tenkai bg-transparent outline-none focus:border-torii focus:ring-2 focus:ring-torii/20 text-charcoal"
+          >
+            <option value="">Select your industry...</option>
+            {BUSINESS_TYPES.map(type => (
+              <option key={type} value={type}>{type}</option>
+            ))}
+          </select>
         </div>
 
         <div>

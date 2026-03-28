@@ -250,9 +250,20 @@ export default function OnboardingPage() {
     setIsSubmitting(false)
   }
 
+  function isValidUrl(url: string): boolean {
+    if (!url.trim()) return false
+    try {
+      const withProtocol = url.match(/^https?:\/\//) ? url : `https://${url}`
+      new URL(withProtocol)
+      return true
+    } catch {
+      return false
+    }
+  }
+
   function canContinue(): boolean {
     if (draft.step === 1) {
-      return draft.businessInfo.businessName.trim().length >= 2 && draft.businessInfo.websiteUrl.trim().length > 0
+      return draft.businessInfo.businessName.trim().length >= 2 && isValidUrl(draft.businessInfo.websiteUrl)
     }
     return true
   }

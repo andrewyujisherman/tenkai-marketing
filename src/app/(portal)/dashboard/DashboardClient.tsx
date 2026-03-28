@@ -126,10 +126,10 @@ function businessLanguageLabel(item: ActionItem): string {
 // ─── Strategy Steps for Welcome State ─────────────────────
 
 const STRATEGY_STEPS = [
-  { label: 'Analyzing your website', agent: 'Haruki' },
-  { label: 'Researching your best keywords', agent: 'Haruki' },
-  { label: 'Planning your content calendar', agent: 'Ryo' },
-  { label: 'Studying your competitors', agent: 'Haruki' },
+  { label: 'Analyzing your website', agent: 'Haruki', estimate: '~2 hours' },
+  { label: 'Researching your best keywords', agent: 'Haruki', estimate: '~3 hours' },
+  { label: 'Planning your content calendar', agent: 'Ryo', estimate: '~4 hours' },
+  { label: 'Studying your competitors', agent: 'Haruki', estimate: '~2 hours' },
 ]
 
 // ─── Main Component ───────────────────────────────────────
@@ -351,7 +351,7 @@ export default function DashboardClient({ data }: DashboardClientProps) {
                       <span className={cn('text-sm', isActive ? 'text-charcoal font-medium' : 'text-warm-gray')}>
                         {step.label}
                       </span>
-                      <span className="text-xs text-warm-gray/70">{step.agent}</span>
+                      <span className="text-xs text-warm-gray/70">{step.agent} · {step.estimate}</span>
                     </div>
                   )
                 })}
