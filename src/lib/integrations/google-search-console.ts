@@ -2,7 +2,6 @@ import { google } from 'googleapis'
 import * as fs from 'fs'
 import * as path from 'path'
 import { supabaseAdmin } from '@/lib/supabase-admin'
-import { upsertClientIntegration } from '@/lib/integrations/client-store'
 
 export interface GSCData {
   topQueries: Array<{ query: string; clicks: number; impressions: number; ctr: number; position: number }>
@@ -59,10 +58,11 @@ async function buildAuth(clientId?: string) {
           try {
             const { credentials } = await oauth2Client.refreshAccessToken()
             oauth2Client.setCredentials(credentials)
-            await upsertClientIntegration(clientId, 'google_search_console', {
-              ...creds,
-              ...credentials,
-            })
+            await supabaseAdmin
+              .from('client_integrations')
+              .update({ credentials: { ...creds, ...credentials }, updated_at: new Date().toISOString() })
+              .eq('client_id', clientId)
+              .eq('integration_type', 'google_search_console')
           } catch {
             return null
           }

@@ -104,6 +104,61 @@ export async function searchSerp(query: string, options: { num?: number; gl?: st
   }
 }
 
+export interface KeywordSerpEnrichment {
+  keyword: string
+  topResults: Array<{ position: number; title: string; link: string; snippet: string }>
+  peopleAlsoAsk: string[]
+  relatedSearches: string[]
+  serpFeatures: string[]
+  aiOverviewPresent: boolean
+}
+
+/**
+ * Fetch real SERP data for a list of keywords.
+ * Used to enrich keyword_research, content_brief, and content_article requests
+ * with actual Google search results instead of "mental simulation."
+ */
+export async function fetchKeywordSerpData(keywords: string[], options: { gl?: string } = {}): Promise<KeywordSerpEnrichment[]> {
+  const limitedKeywords = keywords.slice(0, 5) // Cap API calls
+  const results: KeywordSerpEnrichment[] = []
+
+  for (const keyword of limitedKeywords) {
+    try {
+      const serpData = await searchSerp(keyword, { num: 10, gl: options.gl })
+      const serpFeatures: string[] = []
+      if (serpData.knowledgeGraph) serpFeatures.push('knowledge_graph')
+      if (serpData.aiOverview) serpFeatures.push('ai_overview')
+      if (serpData.peopleAlsoAsk.length > 0) serpFeatures.push('people_also_ask')
+      if (serpData.relatedSearches.length > 0) serpFeatures.push('related_searches')
+
+      results.push({
+        keyword,
+        topResults: serpData.organic.slice(0, 5).map((r) => ({
+          position: r.position,
+          title: r.title,
+          link: r.link,
+          snippet: r.snippet,
+        })),
+        peopleAlsoAsk: serpData.peopleAlsoAsk.slice(0, 5),
+        relatedSearches: serpData.relatedSearches.slice(0, 5),
+        serpFeatures,
+        aiOverviewPresent: !!serpData.aiOverview,
+      })
+    } catch {
+      results.push({
+        keyword,
+        topResults: [],
+        peopleAlsoAsk: [],
+        relatedSearches: [],
+        serpFeatures: [],
+        aiOverviewPresent: false,
+      })
+    }
+  }
+
+  return results
+}
+
 export async function searchCompetitors(domain: string, keywords: string[]): Promise<CompetitorData> {
   const limitedKeywords = keywords.slice(0, 5)
   const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0]
