@@ -52,7 +52,7 @@ export function PricingSection() {
       router.push(url)
     } catch {
       setLoadingTier(null)
-      setCheckoutError('Something went wrong. Please try again or contact rookbot.mini@gmail.com')
+      setCheckoutError('Something went wrong. Please try again or contact support@tenkaimarketing.com')
       setTimeout(() => setCheckoutError(null), 8000)
     }
   }
@@ -66,7 +66,7 @@ export function PricingSection() {
             Simple, honest pricing
           </h2>
           <p className="text-lg text-warm-gray max-w-xl mx-auto">
-            Month-to-month. Cancel anytime. 14-day money-back guarantee.
+            No commitment · Cancel anytime
           </p>
         </div>
 
@@ -105,9 +105,9 @@ export function PricingSection() {
                   </p>
                   <div className="flex items-baseline gap-1">
                     <span className="text-4xl font-serif font-semibold text-charcoal">
-                      ${tier.price}
+                      {tier.price === 0 ? 'Free' : `$${tier.price}`}
                     </span>
-                    <span className="text-warm-gray text-sm">/month</span>
+                    {tier.price > 0 && <span className="text-warm-gray text-sm">/month</span>}
                   </div>
                 </div>
 
@@ -167,7 +167,7 @@ export function PricingSection() {
           </p>
           <div className="flex items-center justify-center gap-2 text-sm text-warm-gray mb-4">
             <Lock className="size-3.5" />
-            <span>No contracts · Cancel anytime · 14-day money-back</span>
+            <span>No contracts · Cancel anytime</span>
           </div>
           <p className="text-sm text-warm-gray">
             Not sure which plan?{' '}

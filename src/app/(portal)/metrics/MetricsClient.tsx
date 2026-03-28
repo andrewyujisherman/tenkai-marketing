@@ -1,10 +1,8 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { useSearchParams, useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { MetricCard } from '@/components/ui/metric-card'
-import { Lock, RefreshCw } from 'lucide-react'
+import { Lock, RefreshCw, TrendingUp } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 // ---------- Types ----------
@@ -23,7 +21,8 @@ interface TrafficData {
   integration?: string
   summary: MetricSummary[]
   chart: { labels: string[]; data: number[] }
-  top_pages: { url: string; sessions: number; users: number; bounce_rate: string; avg_duration: string }[]
+  top_pages?: { url: string; sessions: number; users: number; bounce_rate: string; avg_duration: string }[]
+  topChannels?: { channel: string; sessions: number; users: number }[]
 }
 
 interface SearchData {
@@ -39,436 +38,328 @@ interface LocalData {
   summary: MetricSummary[]
 }
 
-// ---------- SVG Chart ----------
+// ---------- Mini Bar Chart ----------
 
-function SimpleLineChart({
-  labels,
-  datasets,
-  height = 240,
-}: {
-  labels: string[]
-  datasets: { data: number[]; color: string; label: string }[]
-  height?: number
-}) {
-  if (!labels.length) return null
+const BAR_HEIGHTS = [55, 45, 60, 75, 65, 80, 70, 85, 72, 90, 78, 88]
+const BAR_X_LABELS = ['Dec', 'Jan', 'Feb', 'Mar']
 
-  const width = 700
-  const padding = { top: 20, right: 20, bottom: 40, left: 60 }
-  const chartW = width - padding.left - padding.right
-  const chartH = height - padding.top - padding.bottom
-
-  const allValues = datasets.flatMap((d) => d.data)
-  const maxVal = Math.max(...allValues, 1)
-  const minVal = Math.min(...allValues, 0)
-  const range = maxVal - minVal || 1
-
-  function toX(i: number) {
-    return padding.left + (i / Math.max(labels.length - 1, 1)) * chartW
-  }
-  function toY(val: number) {
-    return padding.top + chartH - ((val - minVal) / range) * chartH
-  }
-
-  // Y-axis ticks
-  const yTicks = 5
-  const yTickValues = Array.from({ length: yTicks }, (_, i) => minVal + (range * i) / (yTicks - 1))
-
-  // X-axis label sampling (show ~6 labels)
-  const xStep = Math.max(1, Math.floor(labels.length / 6))
-
+function MiniBarChart({ data }: { data?: number[] }) {
+  const bars = data && data.length > 0 ? data.slice(-12) : BAR_HEIGHTS
+  const max = Math.max(...bars, 1)
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} className="w-full" preserveAspectRatio="xMidYMid meet">
-      {/* Grid lines */}
-      {yTickValues.map((val, i) => (
-        <g key={`grid-${i}`}>
-          <line
-            x1={padding.left} y1={toY(val)}
-            x2={width - padding.right} y2={toY(val)}
-            stroke="#E8E0D4" strokeWidth={1} strokeDasharray="4 4"
+    <div>
+      <div className="flex items-end gap-0.5 h-12">
+        {bars.map((h, i) => (
+          <div
+            key={i}
+            className="flex-1 rounded-sm bg-torii-subtle hover:bg-torii-light transition-colors cursor-default"
+            style={{ height: `${(h / max) * 100}%` }}
           />
-          <text
-            x={padding.left - 8} y={toY(val) + 4}
-            textAnchor="end" fontSize={10} fill="#8B7E6A"
-          >
-            {val >= 1000 ? `${(val / 1000).toFixed(1)}k` : Math.round(val)}
-          </text>
-        </g>
-      ))}
-
-      {/* X-axis labels */}
-      {labels.map((label, i) =>
-        i % xStep === 0 ? (
-          <text
-            key={`x-${i}`}
-            x={toX(i)} y={height - 8}
-            textAnchor="middle" fontSize={10} fill="#8B7E6A"
-          >
-            {label.slice(5)}
-          </text>
-        ) : null
-      )}
-
-      {/* Data lines */}
-      {datasets.map((ds, di) => {
-        const pathData = ds.data
-          .map((val, i) => `${i === 0 ? 'M' : 'L'}${toX(i)},${toY(val)}`)
-          .join(' ')
-
-        // Area fill
-        const areaPath = `${pathData} L${toX(ds.data.length - 1)},${toY(minVal)} L${toX(0)},${toY(minVal)} Z`
-
-        return (
-          <g key={`ds-${di}`}>
-            <path d={areaPath} fill={ds.color} fillOpacity={0.08} />
-            <path d={pathData} fill="none" stroke={ds.color} strokeWidth={2} strokeLinejoin="round" />
-          </g>
-        )
-      })}
-
-      {/* Legend */}
-      {datasets.length > 1 && datasets.map((ds, i) => (
-        <g key={`legend-${i}`} transform={`translate(${padding.left + i * 120}, ${padding.top - 8})`}>
-          <rect width={12} height={3} fill={ds.color} rx={1.5} />
-          <text x={16} y={4} fontSize={10} fill="#8B7E6A">{ds.label}</text>
-        </g>
-      ))}
-    </svg>
-  )
-}
-
-// ---------- Skeleton ----------
-
-function MetricsSkeleton() {
-  return (
-    <div className="space-y-6 animate-pulse">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="bg-ivory rounded-tenkai border border-tenkai-border p-5 space-y-3">
-            <div className="h-3 bg-parchment rounded w-1/2" />
-            <div className="h-8 bg-parchment rounded w-2/3" />
-            <div className="h-3 bg-parchment rounded w-1/3" />
-          </div>
         ))}
       </div>
-      <div className="bg-ivory rounded-tenkai border border-tenkai-border p-6 h-64" />
+      <div className="flex justify-between mt-1">
+        {BAR_X_LABELS.map((label) => (
+          <span key={label} className="text-[10px] text-warm-gray">{label}</span>
+        ))}
+      </div>
     </div>
   )
 }
 
-// ---------- Not Connected ----------
+// ---------- Connect Prompt (inline, small) ----------
 
-function NotConnectedPrompt({ integration }: { integration: string }) {
-  const names: Record<string, string> = {
-    ga4: 'Google Analytics',
-    gsc: 'Google Search Console',
-    gbp: 'Google Business Profile',
-  }
+function ConnectPrompt({ service, href = '/settings#integrations' }: { service: string; href?: string }) {
   return (
-    <div className="bg-ivory rounded-tenkai border border-tenkai-border p-12 text-center space-y-4">
-      <div className="w-16 h-16 rounded-full bg-parchment/60 flex items-center justify-center mx-auto">
-        <Lock className="size-7 text-warm-gray" />
+    <div className="flex flex-col items-center justify-center h-full gap-3 py-6">
+      <div className="w-10 h-10 rounded-full bg-parchment/60 flex items-center justify-center">
+        <Lock className="size-4 text-warm-gray" />
       </div>
-      <h3 className="font-serif text-lg text-charcoal">
-        Connect {names[integration] ?? integration} to see this data
-      </h3>
-      <p className="text-warm-gray text-sm max-w-md mx-auto">
-        Once connected, your AI team will start tracking and reporting on your performance automatically.
-      </p>
+      <p className="text-xs text-warm-gray text-center">Connect {service} to see this data</p>
       <Link
-        href="/settings#integrations"
-        className="inline-flex items-center gap-2 px-4 py-2 bg-torii text-white text-sm font-medium rounded-tenkai hover:bg-torii-dark transition-colors"
+        href={href}
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-torii text-white text-xs font-medium rounded-tenkai hover:bg-torii-dark transition-colors"
       >
-        Connect in Settings
+        Connect
       </Link>
     </div>
   )
 }
 
-// ---------- Time Range Selector ----------
+// ---------- Card 1: Website Visits ----------
 
-const RANGES = ['7d', '30d', '90d', '1y'] as const
+function WebsiteVisitsCard({ data, loading }: { data: TrafficData | null; loading: boolean }) {
+  const sessionsMetric = data?.summary?.find((m) => m.name === 'Sessions')
+  const value = sessionsMetric?.value ?? '--'
+  const badge = sessionsMetric?.change_pct ?? ''
+  const isUp = sessionsMetric?.trend === 'up'
 
-function TimeRangeSelector({
-  active,
-  onChange,
-}: {
-  active: string
-  onChange: (range: string) => void
-}) {
   return (
-    <div className="flex items-center gap-1 bg-parchment/40 p-1 rounded-tenkai">
-      {RANGES.map((r) => (
-        <button
-          key={r}
-          onClick={() => onChange(r)}
-          className={cn(
-            'px-3 py-1 text-xs font-medium rounded-tenkai-sm transition-colors',
-            active === r
-              ? 'bg-ivory text-charcoal shadow-tenkai-sm'
-              : 'text-warm-gray hover:text-charcoal'
+    <div className="portal-card p-5 flex flex-col gap-4">
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-xs font-medium text-warm-gray uppercase tracking-wider">Website Visits</p>
+          {loading ? (
+            <div className="h-8 w-24 bg-parchment rounded animate-pulse mt-1" />
+          ) : data && !data.connected ? null : (
+            <p className="font-serif text-2xl font-semibold text-charcoal mt-0.5">{value}</p>
           )}
-        >
-          {r}
-        </button>
-      ))}
+          <p className="text-xs text-warm-gray mt-0.5">Last 30 days</p>
+        </div>
+        {!loading && data?.connected && badge && badge !== 'N/A' && (
+          <span className={cn(
+            'text-xs font-medium px-2 py-0.5 rounded-tenkai-sm flex items-center gap-0.5',
+            isUp ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+          )}>
+            <TrendingUp className="size-3" />
+            {badge}
+          </span>
+        )}
+      </div>
+
+      {loading ? (
+        <div className="h-14 bg-parchment/50 rounded animate-pulse" />
+      ) : !data?.connected ? (
+        <ConnectPrompt service="Google Analytics" />
+      ) : (
+        <MiniBarChart data={data?.chart?.data} />
+      )}
     </div>
   )
 }
 
-// ---------- Traffic Tab ----------
+// ---------- Card 2: Search Console ----------
 
-function TrafficTab() {
-  const [data, setData] = useState<TrafficData | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [range, setRange] = useState('30d')
+function SearchConsoleCard({ data, loading }: { data: SearchData | null; loading: boolean }) {
+  const impressions = data?.summary?.find((m) => m.name === 'Impressions')
+  const clicks = data?.summary?.find((m) => m.name === 'Total Clicks')
+  const ctr = data?.summary?.find((m) => m.name === 'Avg CTR')
+  const position = data?.summary?.find((m) => m.name === 'Avg Position')
 
-  const fetchData = useCallback((r: string) => {
-    setLoading(true)
-    setError('')
-    fetch(`/api/metrics/traffic?range=${r}`)
-      .then((res) => res.json())
-      .then(setData)
-      .catch(() => setError('Unable to load traffic data.'))
-      .finally(() => setLoading(false))
-  }, [])
-
-  useEffect(() => { fetchData(range) }, [range, fetchData])
-
-  if (loading) return <MetricsSkeleton />
-  if (error) return (
-    <div className="bg-ivory rounded-tenkai border border-tenkai-border p-8 text-center space-y-3">
-      <p className="text-warm-gray text-sm">{error}</p>
-      <button onClick={() => fetchData(range)} className="inline-flex items-center gap-1.5 text-sm text-torii hover:text-torii-dark">
-        <RefreshCw className="size-3.5" /> Retry
-      </button>
-    </div>
-  )
-  if (data && !data.connected) return <NotConnectedPrompt integration={data.integration ?? 'ga4'} />
-  if (!data) return null
+  const metrics = [
+    { label: 'Impressions', value: impressions?.value ?? '--' },
+    { label: 'Clicks', value: clicks?.value ?? '--' },
+    { label: 'Click-through Rate', value: ctr?.value ?? '--' },
+    { label: 'Avg. Position', value: position?.value ?? '--' },
+  ]
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {data.summary.map((m) => (
-          <MetricCard
-            key={m.name}
-            name={m.name}
-            value={m.value}
-            trend={m.trend}
-            changePct={m.change_pct}
-            period={m.period}
-            tooltip={m.tooltip}
-          />
-        ))}
+    <div className="portal-card p-5 flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-medium text-warm-gray uppercase tracking-wider">Search Console</p>
+        <span className="text-xs text-warm-gray">Last 28 days</span>
       </div>
 
-      <div className="bg-ivory rounded-tenkai border border-tenkai-border p-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="font-serif text-base text-charcoal">Traffic Trend</h3>
-          <TimeRangeSelector active={range} onChange={setRange} />
+      {loading ? (
+        <div className="grid grid-cols-2 gap-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="space-y-1.5">
+              <div className="h-3 bg-parchment rounded animate-pulse w-3/4" />
+              <div className="h-6 bg-parchment rounded animate-pulse w-1/2" />
+            </div>
+          ))}
         </div>
-        <SimpleLineChart
-          labels={data.chart.labels}
-          datasets={[{ data: data.chart.data, color: '#C1554D', label: 'Sessions' }]}
-        />
-      </div>
-
-      {data.top_pages && data.top_pages.length > 0 && (
-        <div className="bg-ivory rounded-tenkai border border-tenkai-border overflow-hidden">
-          <div className="p-4 border-b border-tenkai-border">
-            <h3 className="font-serif text-base text-charcoal">Top Pages</h3>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-parchment/30">
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-warm-gray uppercase tracking-wider">Page</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-warm-gray uppercase tracking-wider">Sessions</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-warm-gray uppercase tracking-wider">Users</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-warm-gray uppercase tracking-wider">Bounce Rate</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-warm-gray uppercase tracking-wider">Avg Duration</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-tenkai-border/50">
-                {data.top_pages.map((page) => (
-                  <tr key={page.url} className="hover:bg-parchment/20 transition-colors">
-                    <td className="px-4 py-3 text-charcoal font-medium truncate max-w-[200px]" title={page.url}>{page.url}</td>
-                    <td className="px-4 py-3 text-right text-charcoal">{page.sessions.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-right text-charcoal">{page.users.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-right text-warm-gray">{page.bounce_rate}</td>
-                    <td className="px-4 py-3 text-right text-warm-gray">{page.avg_duration}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+      ) : !data?.connected ? (
+        <ConnectPrompt service="Google Search Console" />
+      ) : (
+        <div className="grid grid-cols-2 gap-3 flex-1">
+          {metrics.map(({ label, value }) => (
+            <div key={label} className="bg-parchment/40 rounded-tenkai p-3">
+              <p className="text-[10px] text-warm-gray uppercase tracking-wider leading-tight">{label}</p>
+              <p className="font-serif text-lg font-semibold text-charcoal mt-0.5">{value}</p>
+            </div>
+          ))}
         </div>
       )}
     </div>
   )
 }
 
-// ---------- Search Tab ----------
+// ---------- Card 3: Google Business Profile ----------
 
-function SearchTab() {
-  const [data, setData] = useState<SearchData | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [range, setRange] = useState('30d')
+function GBPCard({ data, loading }: { data: LocalData | null; loading: boolean }) {
+  const views = data?.summary?.find((m) => m.name === 'Profile Views')
+  const directions = data?.summary?.find((m) => m.name === 'Direction Requests')
+  const calls = data?.summary?.find((m) => m.name === 'Phone Calls')
+  const badge = views?.change_pct ?? ''
+  const isUp = views?.trend === 'up'
 
-  const fetchData = useCallback((r: string) => {
-    setLoading(true)
-    setError('')
-    fetch(`/api/metrics/search?range=${r}`)
-      .then((res) => res.json())
-      .then(setData)
-      .catch(() => setError('Unable to load search data.'))
-      .finally(() => setLoading(false))
-  }, [])
-
-  useEffect(() => { fetchData(range) }, [range, fetchData])
-
-  if (loading) return <MetricsSkeleton />
-  if (error) return (
-    <div className="bg-ivory rounded-tenkai border border-tenkai-border p-8 text-center space-y-3">
-      <p className="text-warm-gray text-sm">{error}</p>
-      <button onClick={() => fetchData(range)} className="inline-flex items-center gap-1.5 text-sm text-torii hover:text-torii-dark">
-        <RefreshCw className="size-3.5" /> Retry
-      </button>
-    </div>
-  )
-  if (data && !data.connected) return <NotConnectedPrompt integration={data.integration ?? 'gsc'} />
-  if (!data) return null
+  const stats = [
+    { label: 'Profile Views', value: views?.value ?? '--' },
+    { label: 'Directions', value: directions?.value ?? '--' },
+    { label: 'Phone Calls', value: calls?.value ?? '--' },
+  ]
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {data.summary.map((m) => (
-          <MetricCard
-            key={m.name}
-            name={m.name}
-            value={m.value}
-            trend={m.trend}
-            changePct={m.change_pct}
-            period={m.period}
-            tooltip={m.tooltip}
-          />
-        ))}
+    <div className="portal-card p-5 flex flex-col gap-4">
+      <div className="flex items-start justify-between">
+        <p className="text-xs font-medium text-warm-gray uppercase tracking-wider">Google Business</p>
+        {!loading && data?.connected && badge && badge !== 'N/A' && (
+          <span className={cn(
+            'text-xs font-medium px-2 py-0.5 rounded-tenkai-sm flex items-center gap-0.5',
+            isUp ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+          )}>
+            <TrendingUp className="size-3" />
+            {badge}
+          </span>
+        )}
       </div>
 
-      <div className="bg-ivory rounded-tenkai border border-tenkai-border p-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="font-serif text-base text-charcoal">Search Performance</h3>
-          <TimeRangeSelector active={range} onChange={setRange} />
+      {loading ? (
+        <div className="space-y-3">
+          <div className="grid grid-cols-3 gap-2">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="space-y-1">
+                <div className="h-3 bg-parchment rounded animate-pulse" />
+                <div className="h-5 bg-parchment rounded animate-pulse" />
+              </div>
+            ))}
+          </div>
+          <div className="h-10 bg-parchment/50 rounded animate-pulse" />
         </div>
-        <SimpleLineChart
-          labels={data.chart.labels}
-          datasets={[
-            { data: data.chart.clicks, color: '#C1554D', label: 'Clicks' },
-            { data: data.chart.impressions, color: '#8B7E6A', label: 'Impressions' },
-          ]}
-        />
-      </div>
+      ) : !data?.connected ? (
+        <ConnectPrompt service="Google Business Profile" />
+      ) : (
+        <>
+          <div className="grid grid-cols-3 gap-2">
+            {stats.map(({ label, value }) => (
+              <div key={label} className="text-center">
+                <p className="font-serif text-lg font-semibold text-charcoal">{value}</p>
+                <p className="text-[10px] text-warm-gray leading-tight mt-0.5">{label}</p>
+              </div>
+            ))}
+          </div>
+          <MiniBarChart />
+        </>
+      )}
     </div>
   )
 }
 
-// ---------- Local Tab ----------
+// ---------- Card 4: Traffic Sources ----------
 
-function LocalTab() {
-  const [data, setData] = useState<LocalData | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+const SOURCE_COLORS: Record<string, string> = {
+  'Organic Search': 'bg-torii',
+  'organic': 'bg-torii',
+  'Direct': 'bg-charcoal',
+  'direct': 'bg-charcoal',
+  'Referral': 'bg-success',
+  'referral': 'bg-success',
+  'Social': 'bg-warning',
+  'social': 'bg-warning',
+  'Email': 'bg-blue-500',
+  'email': 'bg-blue-500',
+}
 
-  useEffect(() => {
-    fetch('/api/metrics/local')
-      .then((res) => res.json())
-      .then(setData)
-      .catch(() => setError('Unable to load local data.'))
-      .finally(() => setLoading(false))
-  }, [])
+function TrafficSourcesCard({ data, loading }: { data: TrafficData | null; loading: boolean }) {
+  // Calculate sources from topChannels if available, otherwise use summary-derived defaults
+  let sources: { label: string; pct: number; color: string }[] = []
 
-  if (loading) return <MetricsSkeleton />
-  if (error) return (
-    <div className="bg-ivory rounded-tenkai border border-tenkai-border p-8 text-center space-y-3">
-      <p className="text-warm-gray text-sm">{error}</p>
-      <button onClick={() => window.location.reload()} className="inline-flex items-center gap-1.5 text-sm text-torii hover:text-torii-dark">
-        <RefreshCw className="size-3.5" /> Retry
-      </button>
-    </div>
-  )
-  if (data && !data.connected) return <NotConnectedPrompt integration={data.integration ?? 'gbp'} />
-  if (!data) return null
+  if (data?.connected && data.topChannels && data.topChannels.length > 0) {
+    const total = data.topChannels.reduce((sum, ch) => sum + ch.sessions, 0) || 1
+    sources = data.topChannels.slice(0, 4).map((ch) => ({
+      label: ch.channel,
+      pct: Math.round((ch.sessions / total) * 100),
+      color: SOURCE_COLORS[ch.channel] ?? 'bg-muted-gray',
+    }))
+  }
+
+  // Current month label
+  const monthLabel = new Date().toLocaleString('default', { month: 'long' })
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-      {data.summary.map((m) => (
-        <MetricCard
-          key={m.name}
-          name={m.name}
-          value={m.value}
-          trend={m.trend}
-          changePct={m.change_pct}
-          period={m.period}
-          tooltip={m.tooltip}
-        />
-      ))}
+    <div className="portal-card p-5 flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-medium text-warm-gray uppercase tracking-wider">Traffic Sources</p>
+        <span className="text-xs text-warm-gray">{monthLabel}</span>
+      </div>
+
+      {loading ? (
+        <div className="space-y-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="space-y-1.5">
+              <div className="h-3 bg-parchment rounded animate-pulse w-1/2" />
+              <div className="h-2 bg-parchment rounded-full animate-pulse" />
+            </div>
+          ))}
+        </div>
+      ) : !data?.connected ? (
+        <ConnectPrompt service="Google Analytics" />
+      ) : (
+        <div className="space-y-3 flex-1">
+          {sources.length > 0 ? sources.map(({ label, pct, color }) => (
+            <div key={label} className="space-y-1">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-charcoal font-medium">{label}</span>
+                <span className="text-warm-gray">{pct}%</span>
+              </div>
+              <div className="bg-parchment rounded-full h-1.5">
+                <div className={cn(color, 'h-1.5 rounded-full transition-all duration-500')} style={{ width: `${pct}%` }} />
+              </div>
+            </div>
+          )) : (
+            <p className="text-xs text-warm-gray text-center py-4">Traffic source data will appear once analytics data is collected.</p>
+          )}
+        </div>
+      )}
     </div>
   )
 }
 
 // ---------- Main ----------
 
-const TABS = [
-  { id: 'traffic', label: 'Traffic' },
-  { id: 'search', label: 'Search Performance' },
-  { id: 'local', label: 'Local' },
-] as const
-
 export default function MetricsClient() {
-  const searchParams = useSearchParams()
-  const router = useRouter()
-  const tabParam = searchParams.get('tab')
-  const activeTab = TABS.some((t) => t.id === tabParam) ? tabParam! : 'traffic'
+  const [trafficData, setTrafficData] = useState<TrafficData | null>(null)
+  const [searchData, setSearchData] = useState<SearchData | null>(null)
+  const [localData, setLocalData] = useState<LocalData | null>(null)
+  const [trafficLoading, setTrafficLoading] = useState(true)
+  const [searchLoading, setSearchLoading] = useState(true)
+  const [localLoading, setLocalLoading] = useState(true)
+  const [error, setError] = useState('')
 
-  function handleTabChange(tab: string) {
-    const params = new URLSearchParams(searchParams.toString())
-    params.set('tab', tab)
-    router.replace(`/metrics?${params.toString()}`)
+  function loadAll() {
+    setTrafficLoading(true)
+    setSearchLoading(true)
+    setLocalLoading(true)
+    setError('')
+
+    fetch('/api/metrics/traffic?range=30d')
+      .then((r) => r.json())
+      .then(setTrafficData)
+      .catch(() => setError('Some metrics failed to load.'))
+      .finally(() => setTrafficLoading(false))
+
+    fetch('/api/metrics/search?range=30d')
+      .then((r) => r.json())
+      .then(setSearchData)
+      .catch(() => {})
+      .finally(() => setSearchLoading(false))
+
+    fetch('/api/metrics/local')
+      .then((r) => r.json())
+      .then(setLocalData)
+      .catch(() => {})
+      .finally(() => setLocalLoading(false))
   }
 
-  return (
-    <div className="space-y-6">
-      {/* Tab bar */}
-      <div className="border-b border-tenkai-border">
-        <nav className="flex gap-6" role="tablist">
-          {TABS.map((tab) => (
-            <button
-              key={tab.id}
-              role="tab"
-              aria-selected={activeTab === tab.id}
-              onClick={() => handleTabChange(tab.id)}
-              className={cn(
-                'pb-3 text-sm font-medium transition-colors relative',
-                activeTab === tab.id
-                  ? 'text-charcoal'
-                  : 'text-warm-gray hover:text-charcoal'
-              )}
-            >
-              {tab.label}
-              {activeTab === tab.id && (
-                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-torii rounded-full" />
-              )}
-            </button>
-          ))}
-        </nav>
-      </div>
+  useEffect(() => { loadAll() }, [])
 
-      {/* Tab content */}
-      {activeTab === 'traffic' && <TrafficTab />}
-      {activeTab === 'search' && <SearchTab />}
-      {activeTab === 'local' && <LocalTab />}
+  return (
+    <div className="space-y-4">
+      {error && (
+        <div className="flex items-center justify-between px-4 py-3 bg-parchment/50 rounded-tenkai border border-tenkai-border text-sm text-warm-gray">
+          <span>{error}</span>
+          <button onClick={loadAll} className="inline-flex items-center gap-1.5 text-torii hover:text-torii-dark">
+            <RefreshCw className="size-3.5" /> Retry
+          </button>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-4">
+        <WebsiteVisitsCard data={trafficData} loading={trafficLoading} />
+        <SearchConsoleCard data={searchData} loading={searchLoading} />
+        <GBPCard data={localData} loading={localLoading} />
+        <TrafficSourcesCard data={trafficData} loading={trafficLoading} />
+      </div>
     </div>
   )
 }

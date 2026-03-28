@@ -63,6 +63,7 @@ export default async function ReportsPage() {
     { data: competitorRows },
     { data: analyticsRows },
     { data: aiRows },
+    { data: gscIntegration },
   ] = await Promise.all([
     db.from('reports')
       .select('id, type, period_start, period_end, metrics, insights, agent_commentary, created_at')
@@ -92,6 +93,12 @@ export default async function ReportsPage() {
       .in('deliverable_type', ['geo_report', 'entity_report'])
       .order('created_at', { ascending: false })
       .limit(20),
+    supabaseAdmin
+      .from('client_integrations')
+      .select('status')
+      .eq('client_id', clientId)
+      .eq('integration_type', 'google_search_console')
+      .maybeSingle(),
   ])
 
   const reports: ReportData[] = (rows ?? []).map((r) => ({
@@ -116,6 +123,8 @@ export default async function ReportsPage() {
     created_at: d.created_at as string,
   })
 
+  const gscConnected = gscIntegration?.status === 'active'
+
   return (
     <ReportsClient
       reports={reports}
@@ -123,6 +132,7 @@ export default async function ReportsPage() {
       competitorDeliverables={(competitorRows ?? []).map(mapDeliverable)}
       analyticsDeliverables={(analyticsRows ?? []).map(mapDeliverable)}
       aiDeliverables={(aiRows ?? []).map(mapDeliverable)}
+      gscConnected={gscConnected}
     />
   )
 }

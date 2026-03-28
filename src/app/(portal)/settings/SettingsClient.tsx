@@ -274,14 +274,16 @@ function BillingTab() {
 
   return (
     <div className="max-w-xl space-y-4">
-      <div className="bg-ivory rounded-tenkai border border-tenkai-border p-8 space-y-5">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-parchment/60 flex items-center justify-center">
-            <CreditCard className="size-5 text-warm-gray" />
-          </div>
-          <div>
-            <h3 className="font-serif text-lg text-charcoal">Billing & Subscription</h3>
-            <p className="text-warm-gray text-xs">Manage your plan, payment method, and invoices</p>
+      <div className="portal-card space-y-5">
+        <div className="portal-card-header">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-parchment/60 flex items-center justify-center">
+              <CreditCard className="size-5 text-warm-gray" />
+            </div>
+            <div>
+              <h3>Billing & Subscription</h3>
+              <p className="text-warm-gray text-xs">Manage your plan, payment method, and invoices</p>
+            </div>
           </div>
         </div>
 
@@ -323,10 +325,10 @@ function BillingTab() {
             Questions about your plan or invoices? We&apos;re happy to help:
           </p>
           <a
-            href="mailto:rookbot.mini@gmail.com?subject=Billing%20Question"
+            href="mailto:support@tenkaimarketing.com?subject=Billing%20Question"
             className="inline-flex items-center gap-2 text-sm font-medium text-torii hover:text-torii-dark transition-colors"
           >
-            rookbot.mini@gmail.com
+            support@tenkaimarketing.com
             <span className="text-xs text-warm-gray">(usually replies within a few hours)</span>
           </a>
         </div>
@@ -430,6 +432,12 @@ interface Integration {
   oauth_type: string
   status: string
   connected_at: string | null
+  metadata?: Record<string, unknown> | null
+}
+
+interface PropertyOption {
+  value: string
+  label: string
 }
 
 interface WizardConfig {
@@ -501,9 +509,44 @@ function IntegrationCard({
   const [wizardOpen, setWizardOpen] = useState(false)
   const [step, setStep] = useState(0) // 0-indexed: 0, 1, 2
   const [confirmDisconnect, setConfirmDisconnect] = useState(false)
+  const [propertyOptions, setPropertyOptions] = useState<PropertyOption[]>([])
+  const [selectedProperty, setSelectedProperty] = useState<string | null>(null)
+  const [propertyLoading, setPropertyLoading] = useState(false)
+  const [propertySaving, setPropertySaving] = useState(false)
   const isConnected = integration.status === 'connected'
   const isExpired = integration.status === 'expired'
   const config = WIZARD_CONFIG[integration.type]
+
+  const hasMultipleProperties = (integration.type === 'google_search_console' || integration.type === 'google_analytics') && isConnected
+
+  useEffect(() => {
+    if (!hasMultipleProperties) return
+    setPropertyLoading(true)
+    fetch(`/api/integrations/properties?type=${integration.type}`)
+      .then((r) => r.json())
+      .then((data) => {
+        setPropertyOptions(data.options ?? [])
+        setSelectedProperty(data.selected ?? null)
+      })
+      .catch(() => {})
+      .finally(() => setPropertyLoading(false))
+  }, [hasMultipleProperties, integration.type])
+
+  async function handlePropertyChange(value: string) {
+    setPropertySaving(true)
+    const body: Record<string, string> = { type: integration.type }
+    if (integration.type === 'google_search_console') body.site_url = value
+    else body.property_id = value
+    try {
+      const res = await fetch('/api/integrations/select-property', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (res.ok) setSelectedProperty(value)
+    } catch {}
+    setPropertySaving(false)
+  }
 
   function openWizard() {
     setStep(0)
@@ -518,7 +561,7 @@ function IntegrationCard({
   const stepLabels = ['Open Service', 'Find Property', 'Authorize Tenkai']
 
   return (
-    <div className="bg-ivory rounded-tenkai border border-tenkai-border overflow-hidden">
+    <div className="portal-card" style={{ padding: 0, overflow: 'hidden' }}>
       {/* Card header row */}
       <div className="p-5">
         <div className="flex items-center justify-between">
@@ -593,9 +636,36 @@ function IntegrationCard({
           </p>
         )}
 
+        {hasMultipleProperties && propertyOptions.length > 1 && (
+          <div className="mt-3">
+            <label className="text-xs font-medium text-charcoal block mb-1">
+              {integration.type === 'google_search_console' ? 'Active Site' : 'Active Property'}
+            </label>
+            <div className="relative">
+              <select
+                value={selectedProperty ?? ''}
+                onChange={(e) => handlePropertyChange(e.target.value)}
+                disabled={propertySaving || propertyLoading}
+                className="w-full text-xs px-3 py-2 bg-ivory border border-tenkai-border rounded-tenkai text-charcoal appearance-none cursor-pointer hover:border-torii transition-colors disabled:opacity-50 pr-8"
+              >
+                {propertyOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+              <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none">
+                {propertySaving ? (
+                  <span className="text-[10px] text-warm-gray">Saving...</span>
+                ) : (
+                  <svg className="size-3 text-warm-gray" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {tier === 'done_for_you' && !isConnected && !wizardOpen && (
           <a
-            href="mailto:rookbot.mini@gmail.com?subject=Integration%20Setup%20Help"
+            href="mailto:support@tenkaimarketing.com?subject=Integration%20Setup%20Help"
             className="inline-flex items-center gap-1.5 text-xs font-medium text-torii hover:text-[#a84540] transition-colors mt-3"
           >
             Schedule Setup Call
@@ -605,22 +675,21 @@ function IntegrationCard({
 
       {/* Wizard panel */}
       {wizardOpen && config && (
-        <div className="border-t border-tenkai-border bg-[#F5F1EB]/50">
-          {/* Step progress bar */}
-          <div className="px-5 pt-4 pb-3 flex items-center justify-between">
+        <div className="connection-wizard px-5">
+          {/* Step progress */}
+          <div className="flex items-center justify-between mb-3">
             <WizardSteps current={step} total={3} />
-            <span className="text-xs text-[#8A8580]">Step {step + 1} of 3</span>
+            <span className="text-xs text-warm-gray">Step {step + 1} of 3</span>
           </div>
 
-          {/* Step content */}
-          <div className="px-5 pb-5 space-y-4">
-
-            {/* Step 1: Open the service */}
-            {step === 0 && (
-              <div className="space-y-3">
+          {/* Step 1: Open the service */}
+          {step === 0 && (
+            <div className="wizard-step">
+              <div className="wizard-step-num">1</div>
+              <div className="wizard-step-content space-y-3">
                 <div>
                   <p className="text-sm font-medium text-charcoal">{stepLabels[0]}</p>
-                  <p className="text-xs text-[#8A8580] mt-1">
+                  <p className="text-xs text-warm-gray mt-1">
                     First, open {integration.name} in a new tab and make sure you&apos;re signed in with the Google account that has access to your property.
                   </p>
                 </div>
@@ -634,27 +703,27 @@ function IntegrationCard({
                   Open {integration.name}
                 </a>
                 <div className="flex justify-end pt-1">
-                  <button
-                    onClick={() => setStep(1)}
-                    className="px-4 py-1.5 bg-torii text-white text-xs font-medium rounded-tenkai hover:bg-[#a84540] transition-colors"
-                  >
+                  <button onClick={() => setStep(1)} className="tk-btn tk-btn-primary tk-btn-sm">
                     I&apos;m signed in — next step
                   </button>
                 </div>
               </div>
-            )}
+            </div>
+          )}
 
-            {/* Step 2: Find your property */}
-            {step === 1 && (
-              <div className="space-y-3">
+          {/* Step 2: Find your property */}
+          {step === 1 && (
+            <div className="wizard-step">
+              <div className="wizard-step-num">2</div>
+              <div className="wizard-step-content space-y-3">
                 <div>
                   <p className="text-sm font-medium text-charcoal">{stepLabels[1]}</p>
-                  <p className="text-xs text-[#8A8580] mt-1">Locate the property you want to connect to Tenkai.</p>
+                  <p className="text-xs text-warm-gray mt-1">Locate the property you want to connect to Tenkai.</p>
                 </div>
                 <ol className="space-y-1.5">
                   {config.step2Instructions.map((instruction, i) => (
-                    <li key={i} className="flex gap-2 text-xs text-[#8A8580]">
-                      <span className="flex-shrink-0 w-4 h-4 rounded-full bg-parchment/80 border border-tenkai-border flex items-center justify-center text-[10px] font-semibold text-[#8A8580]">
+                    <li key={i} className="flex gap-2 text-xs text-warm-gray">
+                      <span className="flex-shrink-0 w-4 h-4 rounded-full bg-parchment/80 border border-tenkai-border flex items-center justify-center text-[10px] font-semibold text-warm-gray">
                         {i + 1}
                       </span>
                       <span>{instruction}</span>
@@ -663,35 +732,28 @@ function IntegrationCard({
                 </ol>
                 {config.step2HelpText && (
                   <div className="bg-ivory border border-tenkai-border rounded-tenkai p-3">
-                    <p className="text-xs text-[#8A8580] leading-relaxed">
+                    <p className="text-xs text-warm-gray leading-relaxed">
                       <span className="font-medium text-charcoal">Having trouble? </span>
                       {config.step2HelpText}
                     </p>
                   </div>
                 )}
                 <div className="flex justify-between pt-1">
-                  <button
-                    onClick={() => setStep(0)}
-                    className="px-4 py-1.5 bg-ivory border border-tenkai-border rounded-tenkai text-xs font-medium text-[#8A8580] hover:border-charcoal hover:text-charcoal transition-colors"
-                  >
-                    Back
-                  </button>
-                  <button
-                    onClick={() => setStep(2)}
-                    className="px-4 py-1.5 bg-torii text-white text-xs font-medium rounded-tenkai hover:bg-[#a84540] transition-colors"
-                  >
-                    I found it — next step
-                  </button>
+                  <button onClick={() => setStep(0)} className="tk-btn tk-btn-secondary tk-btn-sm">Back</button>
+                  <button onClick={() => setStep(2)} className="tk-btn tk-btn-primary tk-btn-sm">I found it — next step</button>
                 </div>
               </div>
-            )}
+            </div>
+          )}
 
-            {/* Step 3: Authorize Tenkai */}
-            {step === 2 && (
-              <div className="space-y-3">
+          {/* Step 3: Authorize Tenkai */}
+          {step === 2 && (
+            <div className="wizard-step">
+              <div className="wizard-step-num">3</div>
+              <div className="wizard-step-content space-y-3">
                 <div>
                   <p className="text-sm font-medium text-charcoal">{stepLabels[2]}</p>
-                  <p className="text-xs text-[#8A8580] mt-1">
+                  <p className="text-xs text-warm-gray mt-1">
                     Tenkai requests <span className="font-medium text-charcoal">read-only</span> access — we never modify your data. You&apos;ll see a Google permission screen where you can review exactly what&apos;s being requested before approving.
                   </p>
                 </div>
@@ -699,7 +761,7 @@ function IntegrationCard({
                   <p className="text-xs font-medium text-charcoal">What Tenkai can do:</p>
                   <ul className="space-y-0.5">
                     {['View your search performance data', 'Read traffic and user metrics', 'See your property information'].map((item, i) => (
-                      <li key={i} className="flex items-center gap-1.5 text-xs text-[#8A8580]">
+                      <li key={i} className="flex items-center gap-1.5 text-xs text-warm-gray">
                         <Check className="size-3 text-success flex-shrink-0" />
                         {item}
                       </li>
@@ -707,23 +769,18 @@ function IntegrationCard({
                   </ul>
                 </div>
                 <div className="flex justify-between pt-1">
-                  <button
-                    onClick={() => setStep(1)}
-                    className="px-4 py-1.5 bg-ivory border border-tenkai-border rounded-tenkai text-xs font-medium text-[#8A8580] hover:border-charcoal hover:text-charcoal transition-colors"
-                  >
-                    Back
-                  </button>
+                  <button onClick={() => setStep(1)} className="tk-btn tk-btn-secondary tk-btn-sm">Back</button>
                   <a
                     href={`/api/auth/oauth/google?type=${integration.oauth_type}`}
-                    className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-torii text-white text-xs font-medium rounded-tenkai hover:bg-[#a84540] transition-colors"
+                    className="tk-btn tk-btn-primary tk-btn-sm"
                   >
                     <ExternalLink className="size-3" />
                     Authorize Tenkai to read my data
                   </a>
                 </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -934,7 +991,7 @@ export default function SettingsClient() {
               className={cn(
                 'pb-3 text-sm font-medium transition-colors relative',
                 activeTab === tab
-                  ? 'text-charcoal'
+                  ? 'text-torii'
                   : 'text-warm-gray hover:text-charcoal'
               )}
             >

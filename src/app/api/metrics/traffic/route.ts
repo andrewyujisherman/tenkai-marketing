@@ -83,20 +83,96 @@ export async function GET(req: NextRequest) {
       .from('client_integrations')
       .select('status')
       .eq('client_id', clientId)
-      .eq('type', 'google_analytics')
+      .eq('integration_type', 'google_analytics')
       .single()
 
-    if (!integration || integration.status !== 'connected') {
-      // Demo mode always returns data
-      if (demo) {
-        return NextResponse.json(generateDemoTrafficData(range))
-      }
+    if (!integration || integration.status !== 'active') {
+      if (demo) return NextResponse.json(generateDemoTrafficData(range))
       return NextResponse.json({ connected: false, integration: 'ga4' })
     }
 
-    // In production, fetch real GA4 data here
-    // For now, return demo-shaped data
-    return NextResponse.json(generateDemoTrafficData(range))
+    // Fetch real GA4 data using stored OAuth tokens
+    const { fetchGA4Data } = await import('@/lib/integrations/google-analytics')
+
+    const { data: integFull } = await supabaseAdmin
+      .from('client_integrations')
+      .select('metadata')
+      .eq('client_id', clientId)
+      .eq('integration_type', 'google_analytics')
+      .single()
+
+    const meta = (integFull?.metadata ?? {}) as Record<string, string>
+    let propertyId = meta.property_id ?? meta.ga4_property_id ?? undefined
+
+    // Auto-discover GA4 property if metadata is empty
+    if (!propertyId) {
+      try {
+        const { getValidAccessToken } = await import('@/lib/integrations/client-store')
+        const token = await getValidAccessToken(clientId, 'google_analytics')
+        if (token) {
+          const acctRes = await fetch('https://analyticsadmin.googleapis.com/v1beta/accountSummaries', {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+          if (acctRes.ok) {
+            const acctData = await acctRes.json()
+            const summaries = (acctData.accountSummaries ?? []) as Array<{
+              displayName: string
+              propertySummaries?: Array<{ property: string; displayName: string }>
+            }>
+            const properties = summaries.flatMap((a) =>
+              (a.propertySummaries ?? []).map((p) => ({
+                property: p.property,
+                name: p.displayName,
+                account: a.displayName,
+              }))
+            )
+            if (properties.length > 0) {
+              // Prefer property matching client's website_url
+              const { data: clientRec } = await supabaseAdmin.from('clients').select('website_url').eq('id', clientId).single()
+              const clientUrl = (clientRec?.website_url as string ?? '').replace(/^https?:\/\//, '').replace(/\/$/, '').toLowerCase()
+              const matched = clientUrl ? properties.find((p) => p.name.toLowerCase().includes(clientUrl.split('.')[0])) : null
+              const best = matched ?? properties[0]
+              const propId = best.property.replace('properties/', '')
+              propertyId = propId
+              await supabaseAdmin
+                .from('client_integrations')
+                .update({ metadata: { ...meta, property_id: propId, property_name: best.name, properties }, updated_at: new Date().toISOString() })
+                .eq('client_id', clientId)
+                .eq('integration_type', 'google_analytics')
+            }
+          }
+        }
+      } catch (e) {
+        console.error('[metrics/traffic] GA4 auto-discovery failed:', e)
+      }
+    }
+
+    if (!propertyId) {
+      return NextResponse.json({ connected: true, summary: [], chart: { labels: [], sessions: [], users: [] }, error: 'No GA4 property found. Please reconnect Google Analytics.' })
+    }
+
+    const days = range === '7d' ? 7 : range === '30d' ? 30 : range === '90d' ? 90 : 365
+    const ga4Data = await fetchGA4Data(propertyId, { days, clientId })
+
+    if (!ga4Data || ga4Data.error) {
+      console.error('[metrics/traffic] GA4 fetch error:', ga4Data?.error)
+      if (demo) return NextResponse.json(generateDemoTrafficData(range))
+      return NextResponse.json({ connected: true, summary: [], chart: { labels: [], data: [] }, top_pages: [], error: 'Unable to fetch analytics data. Your team will retry automatically.' })
+    }
+
+    return NextResponse.json({
+      connected: true,
+      summary: [
+        { name: 'Sessions', value: ga4Data.sessions.toLocaleString(), trend: 'up', change_pct: 'N/A', period: `last ${days} days`, tooltip: 'Total visits to your website' },
+        { name: 'Users', value: ga4Data.users.toLocaleString(), trend: 'up', change_pct: 'N/A', period: `last ${days} days`, tooltip: 'Unique visitors to your site' },
+        { name: 'Bounce Rate', value: `${ga4Data.bounceRate}%`, trend: 'neutral', change_pct: 'N/A', period: `last ${days} days`, tooltip: 'Percentage of visitors who left without interacting' },
+        { name: 'Avg Duration', value: `${ga4Data.avgSessionDuration}s`, trend: 'neutral', change_pct: 'N/A', period: `last ${days} days`, tooltip: 'Average time visitors spend on your site' },
+      ],
+      topChannels: ga4Data.topChannels,
+      topPages: ga4Data.topPages,
+      organicTraffic: ga4Data.organicTraffic,
+      chart: { labels: [], sessions: [], users: [] },
+    })
   } catch (err: unknown) {
     console.error('[metrics/traffic] error:', err)
     return NextResponse.json({ error: 'Failed to load traffic data' }, { status: 500 })

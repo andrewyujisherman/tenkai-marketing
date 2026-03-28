@@ -6,9 +6,9 @@ export const dynamic = 'force-dynamic'
 import { isDemoMode, DEMO_CLIENT_ID } from '@/lib/demo'
 
 const TIER_MAP: Record<string, { display: string; price: number }> = {
-  visibility: { display: 'Visibility', price: 149 },
-  growth: { display: 'Growth', price: 299 },
-  done_for_you: { display: 'Done-For-You', price: 499 },
+  visibility: { display: 'Visibility', price: 0 },
+  growth: { display: 'Growth', price: 0 },
+  done_for_you: { display: 'Done-For-You', price: 0 },
 }
 
 export async function GET() {
@@ -61,7 +61,7 @@ export async function GET() {
       tier_display: tierInfo.display,
       price: tierInfo.price,
       next_billing: nextBilling.toISOString(),
-      payment_last4: demo ? '4242' : '••••',
+      payment_last4: demo ? null : null,
       is_highest_tier: tier === 'done_for_you',
     })
   } catch (err: unknown) {

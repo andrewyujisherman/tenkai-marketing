@@ -11,7 +11,7 @@ interface ScoreCircleProps {
 
 const sizeConfig = {
   sm: { width: 80, stroke: 6, fontSize: 'text-lg', labelSize: 'text-[10px]' },
-  md: { width: 120, stroke: 8, fontSize: 'text-3xl', labelSize: 'text-xs' },
+  md: { width: 140, stroke: 8, fontSize: 'text-4xl', labelSize: 'text-[11px]' },
   lg: { width: 160, stroke: 10, fontSize: 'text-4xl', labelSize: 'text-sm' },
 }
 

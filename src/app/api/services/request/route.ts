@@ -122,11 +122,31 @@ async function createRequest(
     console.error(`[services/request] Background processing failed for ${serviceRequest.id}:`, err)
   })
 
-  // On Vercel, we need to wait for the promise to complete since
-  // the runtime kills the function after the response is sent.
-  // Use waitUntil if available (Vercel Edge), otherwise await.
-  // For Node.js runtime, we must await to ensure completion.
-  await processPromise
+  // Await with a 90s timeout so Vercel doesn't hang indefinitely.
+  const timeoutMs = 90_000
+  const abortController = new AbortController()
+  const timeoutId = setTimeout(() => abortController.abort(), timeoutMs)
+
+  try {
+    await Promise.race([
+      processPromise,
+      new Promise<never>((_, reject) =>
+        abortController.signal.addEventListener('abort', () =>
+          reject(new Error('processing_timeout'))
+        )
+      ),
+    ])
+  } catch (err) {
+    if (err instanceof Error && err.message === 'processing_timeout') {
+      console.warn(`[services/request] Processing timed out for ${serviceRequest.id}`)
+      await supabaseAdmin
+        .from('service_requests')
+        .update({ status: 'timeout' })
+        .eq('id', serviceRequest.id)
+    }
+  } finally {
+    clearTimeout(timeoutId)
+  }
 
   // Re-fetch the updated status
   const { data: updated } = await supabaseAdmin

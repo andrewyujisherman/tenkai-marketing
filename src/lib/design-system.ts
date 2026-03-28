@@ -63,7 +63,7 @@ export const tiers = [
     name: 'Starter',
     displayName: 'Visibility',
     nameJp: '見',
-    price: 149,
+    price: 0,
     description: 'See how your website performs and start climbing the rankings',
     features: {
       audit: 'Website health score',
@@ -80,7 +80,7 @@ export const tiers = [
     name: 'Growth',
     displayName: 'Growth',
     nameJp: '成長',
-    price: 299,
+    price: 0,
     popular: true,
     description: 'Active SEO strategy with content, competitors, and local optimization',
     features: {
@@ -98,7 +98,7 @@ export const tiers = [
     name: 'Pro',
     displayName: 'Done-For-You',
     nameJp: '天',
-    price: 499,
+    price: 0,
     description: 'We handle everything — content creation, publishing, and link building',
     features: {
       audit: 'Full audit + technical fixes',

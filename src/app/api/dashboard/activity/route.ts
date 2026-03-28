@@ -4,6 +4,33 @@ import { supabaseAdmin } from '@/lib/supabase-admin'
 import { isDemoMode, DEMO_CLIENT_ID } from '@/lib/demo'
 import { TENKAI_AGENTS, type AgentId } from '@/lib/agents'
 
+function cleanTitle(title: string, contentType?: string, agentName?: string): string {
+  const prefixMap: Record<string, string> = {
+    'Outreach Emails:': 'Completed outreach email campaign',
+    'Review Responses:': 'Reviewed and responded to business reviews',
+    'Schema Markup:': 'Updated schema markup for SEO',
+  }
+
+  for (const [prefix, replacement] of Object.entries(prefixMap)) {
+    if (title.startsWith(prefix)) return replacement
+  }
+
+  // Strip URLs
+  const stripped = title.replace(/https?:\/\/[^\s]+/g, '').trim()
+  if (stripped.length >= 10) return stripped
+
+  // Fallback: generate from content type / agent name
+  const ct = (contentType ?? '').toLowerCase()
+  const ag = (agentName ?? '').toLowerCase()
+  if (ct.includes('outreach') || ag.includes('outreach')) return 'Completed outreach campaign'
+  if (ct.includes('blog') || ct.includes('article')) return 'Published blog post'
+  if (ct.includes('schema')) return 'Updated schema markup for SEO'
+  if (ct.includes('review')) return 'Reviewed and responded to business reviews'
+  if (ct.includes('audit')) return 'Completed SEO audit report'
+  if (ct.includes('report')) return 'Generated SEO performance report'
+  return stripped.length > 0 ? stripped : 'Completed SEO task'
+}
+
 export async function GET() {
   try {
     const demo = await isDemoMode()
@@ -87,14 +114,20 @@ export async function GET() {
       }
     })
 
-    const completed = (completedTasks ?? []).map(d => ({
-      id: d.id,
-      title: d.title ?? 'Untitled deliverable',
-      agent_name: d.agent_name ?? 'Tenkai Team',
-      content_type: d.deliverable_type ?? 'report',
-      completed_at: d.created_at,
-      deliverable_id: d.id,
-    }))
+    const completed = (completedTasks ?? []).map(d => {
+      const agentEntry = Object.values(TENKAI_AGENTS).find(
+        ag => ag.name.toLowerCase() === (d.agent_name ?? '').toLowerCase()
+      )
+      return {
+        id: d.id,
+        title: cleanTitle(d.title ?? '', d.deliverable_type ?? '', d.agent_name ?? ''),
+        agent_name: agentEntry?.name ?? d.agent_name ?? 'Tenkai Team',
+        agent_role: agentEntry?.role ?? '',
+        content_type: d.deliverable_type ?? 'report',
+        completed_at: d.created_at,
+        deliverable_id: d.id,
+      }
+    })
 
     return NextResponse.json({ agents, completed_tasks: completed })
   } catch {

@@ -31,6 +31,8 @@ interface KeywordData {
   trend: number[]
   page_url: string
   recommendation: string
+  monthly_searches: number
+  difficulty: 'easy' | 'medium' | 'hard'
 }
 
 interface StrategyDeliverable {
@@ -50,47 +52,17 @@ interface RankingsClientProps {
   strategy: StrategyDeliverable | null
   clientTier: string
   hasData: boolean
+  gscConnected?: boolean
 }
 
 type SortField = 'keyword' | 'position' | 'change'
 type SortDir = 'asc' | 'desc'
 
-/* ─── Sparkline ───────────────────────────────────────────── */
-function Sparkline({ data, className }: { data: number[]; className?: string }) {
-  if (!data || data.length < 2) return null
-
-  const min = Math.min(...data)
-  const max = Math.max(...data)
-  const range = max - min || 1
-  const w = 64
-  const h = 20
-  const step = w / (data.length - 1)
-
-  const points = data
-    .map((v, i) => `${i * step},${h - ((v - min) / range) * h}`)
-    .join(' ')
-
-  const isImproving = data[data.length - 1] < data[0] // lower position = better
-
-  return (
-    <svg width={w} height={h} className={cn('inline-block', className)} viewBox={`0 0 ${w} ${h}`}>
-      <polyline
-        points={points}
-        fill="none"
-        stroke={isImproving ? '#4CAF50' : '#D32F2F'}
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
-
 /* ─── Change Arrow ────────────────────────────────────────── */
 function ChangeIndicator({ change }: { change: number }) {
   if (change > 0) {
     return (
-      <span className="inline-flex items-center gap-0.5 text-success text-sm font-medium">
+      <span className="pos-change up inline-flex items-center gap-0.5">
         <ArrowUp className="size-3.5" />
         {Math.abs(change)}
       </span>
@@ -98,22 +70,36 @@ function ChangeIndicator({ change }: { change: number }) {
   }
   if (change < 0) {
     return (
-      <span className="inline-flex items-center gap-0.5 text-error text-sm font-medium">
+      <span className="pos-change down inline-flex items-center gap-0.5">
         <ArrowDown className="size-3.5" />
         {Math.abs(change)}
       </span>
     )
   }
   return (
-    <span className="inline-flex items-center gap-0.5 text-warm-gray text-sm">
+    <span className="pos-change neutral inline-flex items-center gap-0.5">
       <Minus className="size-3.5" />
       0
     </span>
   )
 }
 
+/* ─── Difficulty Badge ────────────────────────────────────── */
+function DifficultyBadge({ difficulty }: { difficulty: 'easy' | 'medium' | 'hard' }) {
+  const styles = {
+    easy: 'bg-green-50 text-green-700 border-green-200',
+    medium: 'bg-amber-50 text-amber-700 border-amber-200',
+    hard: 'bg-red-50 text-red-700 border-red-200',
+  }
+  return (
+    <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full border capitalize', styles[difficulty])}>
+      {difficulty}
+    </span>
+  )
+}
+
 /* ─── Empty State ─────────────────────────────────────────── */
-export function RankingsEmptyState() {
+export function RankingsEmptyState({ gscConnected = false }: { gscConnected?: boolean }) {
   return (
     <div className="space-y-8">
       <div>
@@ -127,17 +113,34 @@ export function RankingsEmptyState() {
           <span className="text-2xl font-serif text-torii">春樹</span>
         </div>
         <div>
-          <p className="font-medium text-charcoal">Your team is researching your market</p>
+          <p className="font-medium text-charcoal">
+            {gscConnected ? 'Your team is analyzing your search data' : 'Your team is researching your market'}
+          </p>
           <p className="text-sm text-warm-gray mt-1 max-w-sm">
-            Haruki is building your keyword strategy. Check back soon!
+            {gscConnected
+              ? 'Haruki is building your keyword strategy based on your Search Console data. Your first ranking report will appear here shortly.'
+              : 'Connect your search console to see live ranking data, or run a site audit to get started.'}
           </p>
         </div>
-        <a
-          href="/settings#integrations"
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-torii hover:text-torii-dark transition-colors"
-        >
-          Connect Google Search Console to track your rankings →
-        </a>
+        <div className="flex flex-col sm:flex-row items-center gap-3">
+          {!gscConnected && (
+            <a
+              href="/settings?tab=integrations"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-tenkai bg-torii text-white text-sm font-medium hover:bg-torii-dark transition-colors duration-fast"
+            >
+              Connect Google Search Console
+            </a>
+          )}
+          <a
+            href="/health"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-tenkai border border-tenkai-border text-charcoal text-sm font-medium hover:bg-parchment transition-colors duration-fast"
+          >
+            Run Site Audit
+          </a>
+        </div>
+        {!gscConnected && (
+          <p className="text-xs text-warm-gray mt-2">Once connected, your first ranking data typically appears within 24 hours.</p>
+        )}
       </div>
     </div>
   )
@@ -151,6 +154,7 @@ export default function RankingsClient({
   strategy,
   clientTier,
   hasData,
+  gscConnected,
 }: RankingsClientProps) {
   const searchParams = useSearchParams()
   const filterKeyword = searchParams.get('keyword') ?? ''
@@ -224,7 +228,7 @@ export default function RankingsClient({
     setApprovalLoading(false)
   }
 
-  if (!hasData) return <RankingsEmptyState />
+  if (!hasData) return <RankingsEmptyState gscConnected={gscConnected} />
 
   const showApproval = strategy && (clientTier === 'growth' || clientTier === 'pro')
 
@@ -234,7 +238,7 @@ export default function RankingsClient({
       <div>
         <h1 className="font-serif text-2xl font-semibold text-charcoal">My Rankings</h1>
         <p className="text-sm text-warm-gray mt-1">
-          Keyword performance, ranking trends, and strategy recommendations
+          Keyword performance for your website
         </p>
       </div>
 
@@ -269,10 +273,11 @@ export default function RankingsClient({
       </div>
 
       {/* Keyword Table */}
-      <div className="rounded-tenkai border border-tenkai-border bg-ivory overflow-hidden">
+      <div className="portal-card" style={{ padding: 0, marginBottom: 0 }}>
         {/* Table header with search */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-tenkai-border bg-cream/50">
-          <h2 className="font-serif text-lg font-semibold text-charcoal">Keyword Performance</h2>
+        <div className="portal-card-header" style={{ padding: '12px 16px', borderBottom: '1px solid var(--tk-border)', margin: 0 }}>
+          <h3>Tracked Keywords</h3>
+          <span className="text-xs text-warm-gray bg-cream border border-tenkai-border rounded-full px-2 py-0.5 ml-2">Updated daily</span>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-warm-gray" />
             <input
@@ -287,29 +292,31 @@ export default function RankingsClient({
 
         {/* Table */}
         <div className="overflow-x-auto" style={{ minWidth: '600px' }}>
-          <table className="w-full text-sm">
+          <table className="data-table">
             <thead>
               <tr>
                 <th
                   onClick={() => handleSort('keyword')}
-                  className="px-3 py-2.5 text-left text-[11px] uppercase tracking-[0.5px] font-semibold text-warm-gray border-b-2 border-tenkai-border cursor-pointer hover:text-torii transition-colors select-none"
+                  className="cursor-pointer hover:text-torii transition-colors select-none"
                 >
                   Keyword <SortIcon field="keyword" />
                 </th>
                 <th
                   onClick={() => handleSort('position')}
-                  className="px-3 py-2.5 text-left text-[11px] uppercase tracking-[0.5px] font-semibold text-warm-gray border-b-2 border-tenkai-border cursor-pointer hover:text-torii transition-colors select-none w-28"
+                  className="cursor-pointer hover:text-torii transition-colors select-none"
+                  style={{ width: '7rem' }}
                 >
                   Position <SortIcon field="position" />
                 </th>
                 <th
                   onClick={() => handleSort('change')}
-                  className="px-3 py-2.5 text-left text-[11px] uppercase tracking-[0.5px] font-semibold text-warm-gray border-b-2 border-tenkai-border cursor-pointer hover:text-torii transition-colors select-none w-24"
+                  className="cursor-pointer hover:text-torii transition-colors select-none"
+                  style={{ width: '6rem' }}
                 >
                   Change <SortIcon field="change" />
                 </th>
-                <th className="px-3 py-2.5 text-left text-[11px] uppercase tracking-[0.5px] font-semibold text-warm-gray border-b-2 border-tenkai-border w-20">Trend</th>
-                <th className="px-3 py-2.5 text-left text-[11px] uppercase tracking-[0.5px] font-semibold text-warm-gray border-b-2 border-tenkai-border">Page</th>
+                <th style={{ width: '8rem' }}>Monthly Searches</th>
+                <th style={{ width: '7rem' }}>Difficulty</th>
               </tr>
             </thead>
             <tbody>
@@ -344,16 +351,16 @@ export default function RankingsClient({
 
       {/* Keyword Strategy Card */}
       {strategy && (
-        <div className="rounded-tenkai border border-tenkai-border bg-ivory overflow-hidden hover:border-torii/20 hover:shadow-tenkai-md transition-all duration-normal">
-          <div className="px-6 py-4 border-b border-tenkai-border bg-cream/50">
+        <div className="portal-card hover-lift" style={{ padding: 0 }}>
+          <div className="portal-card-header" style={{ padding: '16px 24px', borderBottom: '1px solid var(--tk-border)', margin: 0 }}>
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-full bg-torii-subtle flex items-center justify-center flex-shrink-0">
                 <span className="text-sm font-serif text-torii">春樹</span>
               </div>
               <div>
-                <h2 className="font-serif text-lg font-semibold text-charcoal">
+                <h3>
                   {strategy.title ?? 'Your Keyword Strategy'}
-                </h2>
+                </h3>
                 <p className="text-xs text-warm-gray">
                   Prepared by Haruki, SEO Strategist
                   {strategy.created_at && ` · ${new Date(strategy.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`}
@@ -438,12 +445,12 @@ function KeywordRow({
           <ChangeIndicator change={kw.change} />
         </td>
         <td className="px-4 py-3">
-          <Sparkline data={kw.trend} />
+          <span className="text-charcoal text-sm">
+            {kw.monthly_searches > 0 ? kw.monthly_searches.toLocaleString() : '--'}
+          </span>
         </td>
         <td className="px-4 py-3">
-          <span className="text-warm-gray text-xs truncate block max-w-[200px]" title={kw.page_url}>
-            {kw.page_url || '--'}
-          </span>
+          <DifficultyBadge difficulty={kw.difficulty} />
         </td>
       </tr>
       {isExpanded && (

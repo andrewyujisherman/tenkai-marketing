@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { supabaseAdmin } from '@/lib/supabase-admin'
+import { fetchGBPData } from '@/lib/integrations/google-business-profile'
 
 export const dynamic = 'force-dynamic'
 import { isDemoMode, DEMO_CLIENT_ID } from '@/lib/demo'
@@ -56,15 +57,34 @@ export async function GET() {
       .from('client_integrations')
       .select('status')
       .eq('client_id', clientId)
-      .eq('type', 'google_business_profile')
+      .eq('integration_type', 'google_business_profile')
       .single()
 
-    if (!integration || integration.status !== 'connected') {
+    if (!integration || integration.status !== 'active') {
       if (demo) return NextResponse.json(generateDemoLocalData())
       return NextResponse.json({ connected: false, integration: 'gbp' })
     }
 
-    return NextResponse.json(generateDemoLocalData())
+    if (demo) return NextResponse.json(generateDemoLocalData())
+
+    const gbp = await fetchGBPData(clientId)
+    if (!gbp) {
+      return NextResponse.json({ connected: true, summary: [], error: 'Could not fetch GBP data. Token may need refresh.' })
+    }
+    if (gbp.error) {
+      return NextResponse.json({ connected: true, summary: [], error: gbp.error })
+    }
+
+    return NextResponse.json({
+      connected: true,
+      summary: [
+        { name: 'Profile Views', value: gbp.profileViews.toLocaleString(), trend: 'neutral', change_pct: null, period: `${gbp.period.start} – ${gbp.period.end}`, tooltip: 'Total views of your Google Business Profile (Maps + Search)' },
+        { name: 'Search Appearances', value: gbp.searchAppearances.toLocaleString(), trend: 'neutral', change_pct: null, period: `${gbp.period.start} – ${gbp.period.end}`, tooltip: 'How many times your business appeared in Google Search results' },
+        { name: 'Direction Requests', value: gbp.directionRequests.toLocaleString(), trend: 'neutral', change_pct: null, period: `${gbp.period.start} – ${gbp.period.end}`, tooltip: 'How many people asked for directions to your business' },
+        { name: 'Phone Calls', value: gbp.callClicks.toLocaleString(), trend: 'neutral', change_pct: null, period: `${gbp.period.start} – ${gbp.period.end}`, tooltip: 'How many people called you from your Google listing' },
+        { name: 'Website Clicks', value: gbp.websiteClicks.toLocaleString(), trend: 'neutral', change_pct: null, period: `${gbp.period.start} – ${gbp.period.end}`, tooltip: 'How many people clicked through to your website from Google' },
+      ],
+    })
   } catch (err: unknown) {
     console.error('[metrics/local] error:', err)
     return NextResponse.json({ error: 'Failed to load local data' }, { status: 500 })

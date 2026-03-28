@@ -56,23 +56,29 @@ export async function GET() {
     // Load integration statuses
     const { data: integrations } = await supabaseAdmin
       .from('client_integrations')
-      .select('type, status, connected_at')
+      .select('integration_type, status, last_verified_at, created_at, metadata')
       .eq('client_id', clientId)
 
-    const statusMap: Record<string, { status: string; connected_at: string | null }> = {}
+    const statusMap: Record<string, { status: string; connected_at: string | null; metadata: Record<string, unknown> | null }> = {}
     if (integrations) {
       for (const i of integrations) {
-        statusMap[i.type] = { status: i.status, connected_at: i.connected_at }
+        statusMap[i.integration_type] = { status: i.status, connected_at: i.last_verified_at ?? i.created_at, metadata: i.metadata ?? null }
       }
     }
 
-    const result = INTEGRATION_DEFS.map((def) => ({
-      type: def.type,
-      name: def.name,
-      oauth_type: def.oauth_type,
-      status: statusMap[def.type]?.status ?? 'not_connected',
-      connected_at: statusMap[def.type]?.connected_at ?? null,
-    }))
+    const result = INTEGRATION_DEFS.map((def) => {
+      const raw = statusMap[def.type]
+      // Map DB status → frontend status: 'active' → 'connected'
+      const status = raw?.status === 'active' ? 'connected' : raw?.status ?? 'not_connected'
+      return {
+        type: def.type,
+        name: def.name,
+        oauth_type: def.oauth_type,
+        status,
+        connected_at: raw?.connected_at ?? null,
+        metadata: raw?.metadata ?? null,
+      }
+    })
 
     // If demo and no real data, use demo integrations
     if (demo && !integrations?.length) {

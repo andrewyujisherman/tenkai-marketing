@@ -15,7 +15,7 @@ interface ComparisonRow {
 const rows: ComparisonRow[] = [
   {
     label: 'Price',
-    tenkai: '$150–500/mo',
+    tenkai: 'Free (Early Access)',
     agency: '$2,000–10,000/mo',
     diy: '$50–200/mo',
     mega: '$99–299/mo',

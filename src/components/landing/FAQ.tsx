@@ -10,7 +10,7 @@ import {
 const faqs = [
   {
     q: 'How does Tenkai pricing work?',
-    a: 'Pick a plan — Starter ($150/mo), Growth ($275/mo), or Pro ($500/mo). Pay monthly, cancel anytime. No setup fees, no hidden costs. Every plan includes your full AI team and dashboard access.',
+    a: 'All plans are currently free during our early access period. Pick a plan, sign up, and your Tenkai team starts working immediately. No credit card required.',
   },
   {
     q: 'Is the content actually good quality?',
@@ -30,7 +30,7 @@ const faqs = [
   },
   {
     q: 'Can I cancel anytime?',
-    a: 'Yes — all plans are month-to-month with no contracts. Cancel from your dashboard at any time. We also offer a 14-day money-back guarantee if you\'re not satisfied.',
+    a: 'Yes — all plans are month-to-month with no contracts. Cancel from your dashboard at any time.',
   },
   {
     q: 'How fast is onboarding?',

@@ -37,33 +37,31 @@ export function MetricCard({
   className,
 }: MetricCardProps) {
   const TrendIcon = trend ? trendConfig[trend].icon : null
-  const trendColor = trend ? trendConfig[trend].color : ''
 
   const content = (
     <div
       className={cn(
-        'bg-ivory rounded-tenkai border border-tenkai-border shadow-tenkai-sm',
-        'transition-all duration-normal',
-        linkTo && 'hover:shadow-tenkai-md hover:border-torii/20 cursor-pointer',
-        variant === 'compact' ? 'p-3' : 'p-5',
+        'portal-card text-center',
+        linkTo && 'hover-lift cursor-pointer',
+        variant === 'compact' ? 'p-3' : 'p-4',
         className
       )}
       title={tooltip}
     >
-      <span className="text-warm-gray text-xs font-medium uppercase tracking-wider">{name}</span>
-      <div className={cn('flex items-end gap-2', variant === 'compact' ? 'mt-1' : 'mt-2')}>
-        <span className={cn('font-serif text-charcoal font-semibold tracking-tight', variant === 'compact' ? 'text-2xl' : 'text-3xl')}>
+      <div className={cn('flex items-center justify-center gap-1', variant === 'compact' ? 'mt-0' : 'mt-1')}>
+        <span className={cn('metric-lg text-charcoal', variant === 'compact' && 'text-xl')}>
           {value}
         </span>
         {trend && changePct && TrendIcon && (
-          <span className={cn('flex items-center gap-0.5 text-sm font-medium pb-0.5', trendColor)}>
-            <TrendIcon className="size-3.5" />
+          <span className={cn('metric-change flex items-center gap-0.5', trend === 'up' ? 'up' : trend === 'down' ? 'down' : 'text-warm-gray')}>
+            <TrendIcon className="size-3" />
             {changePct}
           </span>
         )}
       </div>
+      <span className="metric-sub mt-1 block">{name}</span>
       {variant === 'full' && period && (
-        <span className="text-warm-gray text-xs mt-1 block">{period}</span>
+        <span className="text-muted-gray text-[11px] mt-0.5 block">{period}</span>
       )}
     </div>
   )

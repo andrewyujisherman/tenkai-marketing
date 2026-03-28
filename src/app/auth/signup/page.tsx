@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,6 +15,15 @@ function getSupabase() {
 }
 
 export default function SignupPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-cream" />}>
+      <SignupForm />
+    </Suspense>
+  )
+}
+
+function SignupForm() {
+  const searchParams = useSearchParams()
   const [fields, setFields] = useState({
     fullName: '',
     companyName: '',
@@ -21,6 +31,13 @@ export default function SignupPage() {
     email: '',
     password: '',
   })
+
+  useEffect(() => {
+    const url = searchParams.get('url')
+    if (url) {
+      setFields((f) => ({ ...f, websiteUrl: url }))
+    }
+  }, [searchParams])
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
@@ -40,6 +57,7 @@ export default function SignupPage() {
       email: fields.email,
       password: fields.password,
       options: {
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
         data: {
           full_name: fields.fullName,
           company_name: fields.companyName,

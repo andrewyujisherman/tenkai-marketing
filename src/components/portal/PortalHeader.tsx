@@ -16,7 +16,7 @@ const pageTitles: Record<string, string> = {
   '/dashboard': 'Dashboard',
   '/rankings': 'My Rankings',
   '/content': 'My Content',
-  '/health': 'Website Health',
+  '/health': 'My Website Health',
   '/links': 'Link Building',
   '/local': 'Local & Reviews',
   '/reports': 'My Reports',
@@ -28,7 +28,7 @@ const pageTitles: Record<string, string> = {
   '/audit': 'Audit',
 }
 
-export function PortalHeader() {
+export function PortalHeader({ companyName }: { companyName?: string | null }) {
   const pathname = usePathname()
   const router = useRouter()
   const title = pageTitles[pathname] || 'Dashboard'
@@ -51,8 +51,11 @@ export function PortalHeader() {
 
   return (
     <header className="h-16 bg-ivory border-b border-tenkai-border flex items-center justify-between px-6 lg:px-8 sticky top-0 z-20">
-      {/* Page title */}
-      <h1 className="font-serif text-[22px] text-charcoal">{title}</h1>
+      {/* Page title + company name */}
+      <div>
+        <h1 className="font-serif text-[22px] text-charcoal">{title}</h1>
+        {companyName && <span className="text-[13px] text-warm-gray font-normal">{companyName}</span>}
+      </div>
 
       {/* Right actions */}
       <div className="flex items-center gap-3">

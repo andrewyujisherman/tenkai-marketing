@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { ScoreCircle } from '@/components/portal/ScoreCircle'
+import { useToast } from '@/components/ui/toast-notification'
 import { cn } from '@/lib/utils'
 import {
   ChevronDown,
@@ -13,6 +13,15 @@ import {
   Loader2,
   SearchX,
 } from 'lucide-react'
+
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/#{1,6}\s/g, '')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/\*([^*]+)\*/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+}
 
 /* ─── Types ───────────────────────────────────────────────── */
 interface VitalData {
@@ -40,12 +49,7 @@ interface HealthClientProps {
   recommendations: Recommendation[]
   hasData: boolean
   clientTier: string
-}
-
-const priorityConfig: Record<string, { bg: string; text: string; label: string }> = {
-  high: { bg: 'bg-error/10', text: 'text-error', label: 'High Impact' },
-  medium: { bg: 'bg-warning/10', text: 'text-warning', label: 'Medium Impact' },
-  low: { bg: 'bg-[#5B7B9A]/10', text: 'text-[#5B7B9A]', label: 'Low Impact' },
+  gscConnected?: boolean
 }
 
 const tierAuditScope: Record<string, { label: string; description: string; request_types: string[] }> = {
@@ -66,6 +70,36 @@ const tierAuditScope: Record<string, { label: string; description: string; reque
   },
 }
 
+/* ─── Health Score Circle (mockup-matched: r=60, dasharray=377, torii arc) ─ */
+function HealthScoreCircle({ score }: { score: number }) {
+  const dasharray = 377
+  const dashoffset = dasharray - (dasharray * score / 100)
+
+  return (
+    <div className="score-circle">
+      <svg width={140} height={140} viewBox="0 0 140 140">
+        <circle cx={70} cy={70} r={60} fill="none" stroke="var(--border-light)" strokeWidth={10} />
+        <circle
+          cx={70}
+          cy={70}
+          r={60}
+          fill="none"
+          stroke="var(--torii)"
+          strokeWidth={10}
+          strokeDasharray={dasharray}
+          strokeDashoffset={dashoffset}
+          strokeLinecap="round"
+          style={{ transition: 'stroke-dashoffset 1s ease-out' }}
+        />
+      </svg>
+      <div className="score-text">
+        <span className="score-number">{score}</span>
+        <span className="score-label">out of 100</span>
+      </div>
+    </div>
+  )
+}
+
 /* ─── Empty State ─────────────────────────────────────────── */
 export function HealthEmptyState() {
   return (
@@ -81,8 +115,22 @@ export function HealthEmptyState() {
         <div>
           <p className="font-medium text-charcoal">No health data yet</p>
           <p className="text-sm text-warm-gray mt-1 max-w-sm">
-            Run your first website audit to see your site health.
+            Run your first website audit to see your site health score, Core Web Vitals, and recommendations.
           </p>
+        </div>
+        <div className="flex flex-col sm:flex-row items-center gap-3">
+          <a
+            href="/health"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-tenkai bg-torii text-white text-sm font-medium hover:bg-torii-dark transition-colors duration-fast"
+          >
+            Run New Audit
+          </a>
+          <a
+            href="/settings?tab=integrations"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-tenkai border border-tenkai-border text-charcoal text-sm font-medium hover:bg-parchment transition-colors duration-fast"
+          >
+            Connect Search Console
+          </a>
         </div>
       </div>
     </div>
@@ -92,14 +140,18 @@ export function HealthEmptyState() {
 /* ─── Main Component ──────────────────────────────────────── */
 export default function HealthClient({
   score,
-  scoreLabel,
-  scoreColor,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  scoreLabel: _scoreLabel,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  scoreColor: _scoreColor,
   lastAuditAt,
   vitals,
   recommendations,
   hasData,
   clientTier,
+  gscConnected = false,
 }: HealthClientProps) {
+  const { addToast } = useToast()
   const [auditRunning, setAuditRunning] = useState(false)
   const [showAuditDialog, setShowAuditDialog] = useState(false)
   const [expandedRec, setExpandedRec] = useState<number | null>(null)
@@ -119,11 +171,11 @@ export default function HealthClient({
           body: JSON.stringify({ request_type: requestType }),
         })
       }
-      // On success, the page will refresh with new data
-      // For now, reset state after a delay
       setTimeout(() => setAuditRunning(false), 5000)
+      addToast('success', 'Your audit is running — results will appear here shortly.')
     } catch {
       setAuditRunning(false)
+      addToast('error', 'Audit request failed. Please try again.')
     }
   }
 
@@ -199,13 +251,13 @@ export default function HealthClient({
 
       {!hasData ? (
         /* Empty state with score gauge showing -- */
-        <div className="flex flex-col items-center justify-center rounded-tenkai border border-tenkai-border bg-ivory p-16 text-center gap-6">
-          <div className="relative" style={{ width: 160, height: 160 }}>
-            <svg width={160} height={160} className="-rotate-90">
-              <circle cx={80} cy={80} r={70} fill="none" stroke="#F5F1EB" strokeWidth={10} />
+        <div className="portal-card flex flex-col items-center justify-center p-16 text-center gap-6">
+          <div className="score-circle">
+            <svg width={140} height={140}>
+              <circle cx={70} cy={70} r={62} fill="none" stroke="#F5F1EB" strokeWidth={10} />
             </svg>
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="font-serif text-4xl font-semibold text-warm-gray">--</span>
+            <div className="score-text">
+              <span className="score-number" style={{ color: 'var(--warm-gray)' }}>--</span>
             </div>
           </div>
           <div>
@@ -214,37 +266,41 @@ export default function HealthClient({
               Click the &ldquo;Run Audit&rdquo; button above to see your site health score.
             </p>
           </div>
-          <a
-            href="/settings#integrations"
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-torii hover:text-torii-dark transition-colors"
-          >
-            Connect Google Search Console for more detailed insights →
-          </a>
+          {!gscConnected && (
+            <a
+              href="/settings?tab=integrations"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-torii hover:text-torii-dark transition-colors"
+            >
+              Connect Google Search Console for more detailed insights →
+            </a>
+          )}
         </div>
       ) : (
         <>
-          {/* Health Score Gauge */}
-          <div className="flex justify-center">
-            <div className="rounded-tenkai border border-tenkai-border bg-ivory p-8 text-center max-w-md w-full">
-              <div
-                className="mx-auto"
-                title="Your score is based on technical health, page speed, mobile friendliness, and SEO best practices."
-              >
-                <ScoreCircle score={score} label="Website Health Score" size="lg" />
-              </div>
-              <p className={cn(
-                'mt-4 text-sm font-medium',
-                scoreColor === 'green' && 'text-success',
-                scoreColor === 'amber' && 'text-warning',
-                scoreColor === 'red' && 'text-error',
-              )}>
-                {scoreLabel}
-              </p>
-              {lastAuditAt && (
-                <p className="text-xs text-warm-gray mt-1">
-                  Last audit: {new Date(lastAuditAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+          {/* Health Score + Summary */}
+          <div className="portal-card">
+            <div
+              className="health-score-wrap"
+              title="Your score is based on technical health, page speed, mobile friendliness, and SEO best practices."
+            >
+              <HealthScoreCircle score={score} />
+              <div className="health-summary">
+                <h3 className="font-serif text-base font-semibold text-charcoal">
+                  {score >= 70 ? 'Good Health' : score >= 40 ? 'Needs Work' : 'Critical'}
+                </h3>
+                {lastAuditAt && (
+                  <p className="text-xs text-warm-gray mt-1">
+                    Last audit: {new Date(lastAuditAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </p>
+                )}
+                <p className="mt-3" style={{ fontSize: 13, color: 'var(--warm-gray)', lineHeight: 1.7 }}>
+                  {score >= 70
+                    ? 'Your site is in good shape. Keep an eye on the recommendations below to stay ahead of any issues.'
+                    : score >= 40
+                    ? 'Your site has some issues that need attention. Review the recommendations below to improve your score.'
+                    : 'Your site has critical issues that may be hurting your visibility and performance. Act on the recommendations below.'}
                 </p>
-              )}
+              </div>
             </div>
           </div>
 
@@ -255,11 +311,12 @@ export default function HealthClient({
               {vitals.map((vital) => (
                 <div
                   key={vital.name}
-                  className="rounded-tenkai border border-tenkai-border bg-ivory p-5 hover:shadow-tenkai-md transition-shadow duration-normal group"
+                  className="portal-card hover-lift group"
                   title={vital.explanation}
+                  style={{ marginBottom: 0 }}
                 >
                   <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-medium text-warm-gray uppercase tracking-wider">
+                    <span className="section-label">
                       {vital.display_name}
                     </span>
                     <span
@@ -279,7 +336,7 @@ export default function HealthClient({
                     </span>
                   </div>
                   <div className="flex items-end gap-1">
-                    <span className="font-serif text-3xl font-semibold text-charcoal">
+                    <span className="metric-lg">
                       {vital.value}
                     </span>
                     {vital.unit && (
@@ -296,71 +353,55 @@ export default function HealthClient({
 
           {/* Recommendations */}
           {recommendations.length > 0 && (
-            <div>
-              <div className="flex items-center gap-2 mb-4">
-                <Lightbulb className="size-5 text-torii" />
-                <h2 className="font-serif text-lg font-semibold text-charcoal">
-                  Recommendations
-                </h2>
+            <div className="portal-card">
+              <div className="portal-card-header" style={{ marginBottom: 4 }}>
+                <div className="flex items-center gap-2">
+                  <Lightbulb className="size-5 text-torii" />
+                  <h3>Recommendations</h3>
+                </div>
               </div>
               <p className="text-sm text-warm-gray mb-4">
                 Prioritized actions to improve your website health, in plain English
               </p>
 
-              <div className="space-y-3">
+              <div>
                 {visibleRecs.map((rec, i) => {
-                  const config = priorityConfig[rec.priority.toLowerCase()] ?? priorityConfig.medium
+                  const priority = rec.priority.toLowerCase() as 'high' | 'medium' | 'low'
                   const isExpanded = expandedRec === i
 
                   return (
                     <div
                       key={i}
-                      className="rounded-tenkai border border-tenkai-border bg-ivory overflow-hidden hover:shadow-tenkai-sm transition-shadow duration-normal cursor-pointer"
+                      className="recommendation-item cursor-pointer"
                       onClick={() => setExpandedRec(isExpanded ? null : i)}
                     >
-                      <div className="flex items-start gap-4 p-4">
-                        <div className="flex items-center justify-center size-7 rounded-full bg-parchment text-sm font-semibold text-charcoal shrink-0">
-                          {i + 1}
+                      <div className={cn('severity-dot', priority === 'high' ? 'high' : priority === 'low' ? 'low' : 'medium')} />
+                      <div className="rec-text">
+                        <div className="rec-title flex items-center gap-2">
+                          {rec.title}
+                          <span className="shrink-0 mt-0.5">
+                            {isExpanded ? (
+                              <ChevronUp className="size-4 text-warm-gray" />
+                            ) : (
+                              <ChevronDown className="size-4 text-warm-gray" />
+                            )}
+                          </span>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1 flex-wrap">
-                            <span className="font-medium text-charcoal">{rec.title}</span>
-                            <span
-                              className={cn(
-                                'rounded-full px-2 py-0.5 text-[10px] font-semibold',
-                                config.bg,
-                                config.text
-                              )}
-                            >
-                              {config.label}
-                            </span>
-                          </div>
-                          {!isExpanded && (
-                            <p className="text-sm text-warm-gray leading-relaxed line-clamp-1">
-                              {rec.description}
+                        {!isExpanded ? (
+                          <p className="rec-desc line-clamp-1">{stripMarkdown(rec.description)}</p>
+                        ) : (
+                          <div className="mt-1">
+                            <p className="rec-desc" style={{ fontSize: 13, color: 'var(--charcoal)', opacity: 0.8 }}>
+                              {stripMarkdown(rec.description)}
                             </p>
-                          )}
-                        </div>
-                        <div className="shrink-0 mt-1">
-                          {isExpanded ? (
-                            <ChevronUp className="size-4 text-warm-gray" />
-                          ) : (
-                            <ChevronDown className="size-4 text-warm-gray" />
-                          )}
-                        </div>
+                            {rec.agent && (
+                              <span className="text-xs text-warm-gray/70 mt-2 inline-block">
+                                Being handled by {rec.agent}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
-                      {isExpanded && (
-                        <div className="px-4 pb-4 pt-0 ml-11">
-                          <p className="text-sm text-charcoal/80 leading-relaxed">
-                            {rec.description}
-                          </p>
-                          {rec.agent && (
-                            <span className="text-xs text-warm-gray/70 mt-2 inline-block">
-                              Being handled by {rec.agent}
-                            </span>
-                          )}
-                        </div>
-                      )}
                     </div>
                   )
                 })}

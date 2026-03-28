@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { cn } from '@/lib/utils'
-import { Pencil, X, Plus, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react'
+import { ChevronDown, ChevronUp, RefreshCw } from 'lucide-react'
 import { useToast } from '@/components/ui/toast-notification'
 
 // ---------- Types ----------
@@ -64,31 +64,29 @@ function InlineField({
   }
 
   return (
-    <div className="group flex items-start gap-3 py-2">
-      <span className="text-xs font-semibold text-warm-gray uppercase tracking-wider min-w-[80px] pt-1">{label}</span>
+    <div className="profile-field">
+      <div className="profile-label">{label}</div>
       {editing ? (
-        <div className="flex-1">
-          <input
-            ref={inputRef}
-            value={editVal}
-            onChange={(e) => setEditVal(e.target.value)}
-            onBlur={handleSave}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') handleSave()
-              if (e.key === 'Escape') { setEditVal(value); setEditing(false) }
-            }}
-            className="w-full text-sm text-charcoal bg-transparent border-b-2 border-torii outline-none pb-0.5"
-          />
-        </div>
+        <input
+          ref={inputRef}
+          value={editVal}
+          onChange={(e) => setEditVal(e.target.value)}
+          onBlur={handleSave}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') handleSave()
+            if (e.key === 'Escape') { setEditVal(value); setEditing(false) }
+          }}
+          className="w-full text-sm text-charcoal bg-transparent border-b-2 border-torii outline-none pb-0.5 mt-1"
+        />
       ) : (
         <div
-          className="flex-1 flex items-center gap-2 cursor-pointer group/field"
           onClick={() => { setEditVal(value); setEditing(true) }}
         >
-          <span className={cn('text-sm', value ? 'text-charcoal' : 'text-warm-gray italic')}>
-            {value || `Add ${label.toLowerCase()}...`}
-          </span>
-          <Pencil className="size-3 text-warm-gray opacity-0 group-hover/field:opacity-100 transition-opacity" />
+          {value ? (
+            <span className="profile-value">{value}</span>
+          ) : (
+            <span className="profile-empty">{`Add ${label.toLowerCase()}...`}</span>
+          )}
         </div>
       )}
     </div>
@@ -117,12 +115,6 @@ function TagCloud({
   const [inputVal, setInputVal] = useState('')
   const [showInput, setShowInput] = useState(false)
 
-  const chipStyles = {
-    default: 'bg-parchment/60 text-charcoal border-tenkai-border/50',
-    negative: 'bg-red-50 text-red-700 border-red-200/50',
-    gold: 'bg-amber-50 text-amber-800 border-amber-200/50',
-  }
-
   function handleAdd() {
     const trimmed = inputVal.trim()
     if (trimmed.length >= 2) {
@@ -134,48 +126,40 @@ function TagCloud({
   return (
     <div className="space-y-3">
       <div>
-        <h4 className="text-xs font-semibold text-warm-gray uppercase tracking-wider">{title}</h4>
+        <h4 className="section-label">{title}</h4>
         {subtitle && <p className="text-xs text-muted-gray mt-0.5">{subtitle}</p>}
       </div>
-      <div className="flex flex-wrap gap-2">
+      <div className="tag-list">
         {tags.map((tag) => (
           <span
             key={tag}
-            className={cn(
-              'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-tenkai text-sm border group/tag',
-              chipStyles[variant]
-            )}
+            className={cn('tk-tag', variant === 'negative' ? 'tk-tag-red' : '')}
           >
             {tag}
             <button
               onClick={() => onRemove(category, tag)}
-              className="opacity-0 group-hover/tag:opacity-100 transition-opacity p-0.5 -mr-1 rounded-full hover:bg-charcoal/10"
+              className="tag-remove"
             >
-              <X className="size-3" />
+              ×
             </button>
           </span>
         ))}
         {showInput ? (
-          <div className="inline-flex items-center">
-            <input
-              autoFocus
-              value={inputVal}
-              onChange={(e) => setInputVal(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleAdd()
-                if (e.key === 'Escape') { setShowInput(false); setInputVal('') }
-              }}
-              onBlur={() => { if (!inputVal.trim()) setShowInput(false); else handleAdd() }}
-              placeholder={`Add ${title.toLowerCase().replace(/s$/, '')}...`}
-              className="text-sm border-b-2 border-torii bg-transparent outline-none px-1 py-1 w-40"
-            />
-          </div>
+          <input
+            autoFocus
+            value={inputVal}
+            onChange={(e) => setInputVal(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleAdd()
+              if (e.key === 'Escape') { setShowInput(false); setInputVal('') }
+            }}
+            onBlur={() => { if (!inputVal.trim()) setShowInput(false); else handleAdd() }}
+            placeholder={`Add ${title.toLowerCase().replace(/s$/, '')}...`}
+            className="text-sm border-b-2 border-torii bg-transparent outline-none px-1 py-1 w-40"
+          />
         ) : (
-          <button
-            onClick={() => setShowInput(true)}
-            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-tenkai text-sm text-warm-gray border border-dashed border-tenkai-border hover:border-torii hover:text-torii transition-colors"
-          >
-            <Plus className="size-3" /> Add
+          <button onClick={() => setShowInput(true)} className="tag-add">
+            + Add
           </button>
         )}
       </div>
@@ -389,7 +373,10 @@ export default function BusinessClient() {
   return (
     <div className="space-y-8 max-w-3xl">
       {/* Overview */}
-      <div className="bg-ivory rounded-tenkai border border-tenkai-border p-6">
+      <div className="portal-card">
+        <div className="portal-card-header">
+          <h3>Business Details</h3>
+        </div>
         <InlineField label="Name" value={profile.overview.name} fieldKey="name" onSave={handleFieldSave} />
         <InlineField label="Website" value={profile.overview.url} fieldKey="url" onSave={handleFieldSave} />
         <InlineField label="Category" value={profile.overview.category} fieldKey="category" onSave={handleFieldSave} />
@@ -397,7 +384,7 @@ export default function BusinessClient() {
       </div>
 
       {/* Tag clouds */}
-      <div className="bg-ivory rounded-tenkai border border-tenkai-border p-6 space-y-8">
+      <div className="portal-card space-y-8">
         <TagCloud
           title="Services"
           tags={profile.services}
@@ -436,7 +423,7 @@ export default function BusinessClient() {
 
       {/* Q&A History */}
       <div className="space-y-3">
-        <h3 className="font-serif text-lg text-charcoal">What Your Team Has Learned</h3>
+        <h3 className="font-serif text-lg text-charcoal">Questions From Your Team</h3>
         <QAHistory questions={questions} />
       </div>
     </div>

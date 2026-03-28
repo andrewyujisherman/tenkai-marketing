@@ -1,8 +1,16 @@
 import { createServerClient } from '@supabase/ssr'
+import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS ?? 'andrewyujisherman@gmail.com').split(',').map(e => e.trim().toLowerCase())
+
+function getSupabaseAdmin() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+}
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
@@ -65,6 +73,32 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
+  // For authenticated non-admin users on portal pages: check onboarding status
+  const portalPaths = ['/dashboard', '/content', '/health', '/reports', '/settings', '/integrations', '/links', '/local', '/rankings', '/metrics', '/business']
+  const isPortal = portalPaths.some(path => request.nextUrl.pathname.startsWith(path))
+
+  if (user && !isDemo && isPortal && !ADMIN_EMAILS.includes(user.email?.toLowerCase() ?? '')) {
+    try {
+      const admin = getSupabaseAdmin()
+      const { data: client } = await admin
+        .from('clients')
+        .select('onboarding_data')
+        .or(`auth_user_id.eq.${user.id},email.eq.${(user.email ?? '').toLowerCase()}`)
+        .single()
+
+      const needsOnboarding = !client?.onboarding_data ||
+        (typeof client.onboarding_data === 'object' && Object.keys(client.onboarding_data).length === 0)
+
+      if (needsOnboarding) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/onboarding'
+        return NextResponse.redirect(url)
+      }
+    } catch {
+      // If DB check fails, allow through — don't block the user
+    }
+  }
+
   // Redirect authenticated users away from auth pages (except set-password for invited users)
   if (user && request.nextUrl.pathname.startsWith('/auth/') && request.nextUrl.pathname !== '/auth/set-password') {
     const url = request.nextUrl.clone()
@@ -76,5 +110,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/content/:path*', '/audit/:path*', '/health/:path*', '/reports/:path*', '/settings/:path*', '/onboarding/:path*', '/integrations/:path*', '/links/:path*', '/local/:path*', '/rankings/:path*', '/metrics/:path*', '/business/:path*', '/auth/:path*', '/admin/:path*'],
+  matcher: ['/dashboard/:path*', '/content/:path*', '/audit/:path*', '/health/:path*', '/reports/:path*', '/settings/:path*', '/onboarding/:path*', '/integrations/:path*', '/links/:path*', '/local/:path*', '/rankings/:path*', '/metrics/:path*', '/business/:path*', '/auth/:path*', '/admin/:path*', '/api/auth/:path*', '/api/portal/:path*'],
 }

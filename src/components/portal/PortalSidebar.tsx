@@ -24,10 +24,10 @@ import {
 const navItems = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { label: 'My Rankings', href: '/rankings', icon: BarChart3 },
-  { label: 'Website Health', href: '/health', icon: ShieldCheck },
+  { label: 'My Website Health', href: '/health', icon: ShieldCheck },
   { label: 'My Content', href: '/content', icon: FileText },
   { label: 'My Reports', href: '/reports', icon: FileText },
-  { label: 'Metrics', href: '/metrics', icon: BarChart3 },
+  { label: 'My Metrics', href: '/metrics', icon: BarChart3 },
   { label: 'My Business', href: '/business', icon: MapPin },
   { label: 'Settings', href: '/settings', icon: Settings },
 ]

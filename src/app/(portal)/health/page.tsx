@@ -248,6 +248,14 @@ export default async function HealthPage() {
 
   const hasData = overallScore > 0 || vitals.some((v) => v.value !== '--') || recommendations.length > 0
 
+  const { data: gscIntegration } = await supabaseAdmin
+    .from('client_integrations')
+    .select('status')
+    .eq('client_id', clientId)
+    .eq('integration_type', 'google_search_console')
+    .maybeSingle()
+  const gscConnected = gscIntegration?.status === 'active'
+
   return (
     <HealthClient
       score={overallScore}
@@ -258,6 +266,7 @@ export default async function HealthPage() {
       recommendations={recommendations}
       hasData={hasData}
       clientTier={clientTier}
+      gscConnected={gscConnected}
     />
   )
 }

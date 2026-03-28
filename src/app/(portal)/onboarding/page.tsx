@@ -278,12 +278,12 @@ export default function OnboardingPage() {
         <div className="max-w-xl mx-auto w-full pt-8 space-y-2">
           <div className="flex items-center justify-between text-xs text-warm-gray">
             <span className="section-label">Setting Up</span>
-            <span>Step {draft.step} of {TOTAL_STEPS - 1}</span>
+            <span>Step {draft.step} of {TOTAL_STEPS - 2}</span>
           </div>
           <div className="h-1.5 bg-parchment rounded-full overflow-hidden">
             <div
               className="h-full bg-torii rounded-full transition-all duration-500 ease-out"
-              style={{ width: `${(draft.step / (TOTAL_STEPS - 1)) * 100}%` }}
+              style={{ width: `${(draft.step / (TOTAL_STEPS - 2)) * 100}%` }}
             />
           </div>
         </div>
