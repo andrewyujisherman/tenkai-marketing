@@ -35,23 +35,50 @@ const defaultDraft: OnboardingDraft = {
   tier: 'starter',
 }
 
+/** If OAuth handler already set step 3 or added integrations, preserve those */
+function pickOAuthOverrides(current: OnboardingDraft): Partial<OnboardingDraft> {
+  const overrides: Partial<OnboardingDraft> = {}
+  if (current.step === 3) overrides.step = 3
+  if (current.connectedIntegrations.length > 0) {
+    overrides.connectedIntegrations = current.connectedIntegrations
+  }
+  return overrides
+}
+
 export default function OnboardingPage() {
   const [draft, setDraft] = useState<OnboardingDraft>(defaultDraft)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [finishError, setFinishError] = useState<string | null>(null)
   const [oauthToast, setOauthToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
 
-  // Handle OAuth return — detect ?connected= or ?error= from callback redirect
+  // On mount: fetch actual connected integrations from DB + handle OAuth return params
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const connected = params.get('connected')
     const error = params.get('error')
+
+    // Fetch real integration status from DB
+    fetch('/api/integrations/status')
+      .then((r) => r.ok ? r.json() : { connected: [] })
+      .then((data: { connected?: string[] }) => {
+        const dbConnected = (data.connected ?? [])
+          .map((type: string) => OAUTH_TO_WIZARD_ID[type])
+          .filter(Boolean)
+
+        setDraft((d) => ({
+          ...d,
+          connectedIntegrations: [...new Set([...d.connectedIntegrations, ...dbConnected])],
+          ...(connected || error ? { step: 3 } : {}),
+        }))
+      })
+      .catch(() => {})
+
     if (connected) {
       const wizardId = OAUTH_TO_WIZARD_ID[connected]
       if (wizardId) {
         setDraft((d) => ({
           ...d,
-          step: 3, // Return to integrations step
+          step: 3,
           connectedIntegrations: d.connectedIntegrations.includes(wizardId)
             ? d.connectedIntegrations
             : [...d.connectedIntegrations, wizardId],
@@ -90,21 +117,51 @@ export default function OnboardingPage() {
       .catch(() => {})
   }, [])
 
-  // Restore from localStorage
+  // Restore draft: DB first, localStorage fallback
+  const [draftLoaded, setDraftLoaded] = useState(false)
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY)
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        if (parsed.step < TOTAL_STEPS - 1) {
-          setDraft({ ...defaultDraft, ...parsed })
+    let cancelled = false
+    fetch('/api/portal/onboarding/draft')
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (cancelled) return
+        if (data?.draft && data.draft.step < TOTAL_STEPS - 1) {
+          setDraft((d) => ({ ...defaultDraft, ...data.draft, ...pickOAuthOverrides(d) }))
+          setDraftLoaded(true)
+          return
         }
-      }
-    } catch { /* ignore */ }
+        // No DB draft — fall back to localStorage
+        try {
+          const saved = localStorage.getItem(STORAGE_KEY)
+          if (saved) {
+            const parsed = JSON.parse(saved)
+            if (parsed.step < TOTAL_STEPS - 1) {
+              setDraft((d) => ({ ...defaultDraft, ...parsed, ...pickOAuthOverrides(d) }))
+            }
+          }
+        } catch { /* ignore */ }
+        setDraftLoaded(true)
+      })
+      .catch(() => {
+        if (cancelled) return
+        // DB unreachable — fall back to localStorage
+        try {
+          const saved = localStorage.getItem(STORAGE_KEY)
+          if (saved) {
+            const parsed = JSON.parse(saved)
+            if (parsed.step < TOTAL_STEPS - 1) {
+              setDraft((d) => ({ ...defaultDraft, ...parsed, ...pickOAuthOverrides(d) }))
+            }
+          }
+        } catch { /* ignore */ }
+        setDraftLoaded(true)
+      })
+    return () => { cancelled = true }
   }, [])
 
-  // Persist to localStorage
+  // Persist to localStorage + DB on draft changes
   useEffect(() => {
+    if (!draftLoaded) return
     if (draft.step >= TOTAL_STEPS - 1) {
       localStorage.removeItem(STORAGE_KEY)
       return
@@ -112,7 +169,16 @@ export default function OnboardingPage() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(draft))
     } catch { /* ignore quota */ }
-  }, [draft])
+    // Debounced DB save — fire and forget
+    const timer = setTimeout(() => {
+      fetch('/api/portal/onboarding/draft', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ draft }),
+      }).catch(() => {})
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [draft, draftLoaded])
 
   function goTo(step: number) {
     setDraft((d) => ({ ...d, step }))

@@ -68,6 +68,7 @@ export async function POST(request: Request) {
     .from('clients')
     .update({
       onboarding_data,
+      onboarding_draft: null,
       status: 'active',
       ...(resolvedWebsiteUrl && !client.website_url ? { website_url: resolvedWebsiteUrl } : {}),
     })
