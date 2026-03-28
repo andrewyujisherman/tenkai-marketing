@@ -10,6 +10,8 @@ interface KeywordRecord {
   trend?: number[]
   page_url?: string
   recommendation?: string
+  monthly_searches?: number
+  difficulty?: 'easy' | 'medium' | 'hard'
 }
 
 export default async function RankingsPage() {
@@ -49,6 +51,16 @@ export default async function RankingsPage() {
   }
 
   const db = demo ? supabaseAdmin : supabase
+
+  // Check if GSC is connected
+  const { data: gscIntegration } = await supabaseAdmin
+    .from('client_integrations')
+    .select('status')
+    .eq('client_id', clientId)
+    .eq('integration_type', 'google_search_console')
+    .maybeSingle()
+
+  const gscConnected = gscIntegration?.status === 'active'
 
   // Fetch keyword data and strategy deliverable in parallel
   const [
@@ -118,14 +130,22 @@ export default async function RankingsPage() {
     period,
   }
 
-  const formattedKeywords = keywords.map((k) => ({
-    keyword: k.keyword ?? 'Unknown',
-    position: k.position ?? 0,
-    change: k.change ?? 0,
-    trend: Array.isArray(k.trend) ? k.trend : [],
-    page_url: k.page_url ?? '',
-    recommendation: k.recommendation ?? '',
-  }))
+  const formattedKeywords = keywords.map((k) => {
+    const pos = k.position ?? 0
+    const difficulty: 'easy' | 'medium' | 'hard' =
+      k.difficulty ?? (pos > 0 && pos <= 5 ? 'hard' : pos <= 20 ? 'medium' : 'easy')
+    const monthly_searches = k.monthly_searches ?? 0
+    return {
+      keyword: k.keyword ?? 'Unknown',
+      position: pos,
+      change: k.change ?? 0,
+      trend: Array.isArray(k.trend) ? k.trend : [],
+      page_url: k.page_url ?? '',
+      recommendation: k.recommendation ?? '',
+      monthly_searches,
+      difficulty,
+    }
+  })
 
   const strategy = strategyDeliverable
     ? {
@@ -147,6 +167,7 @@ export default async function RankingsPage() {
       strategy={strategy}
       clientTier={clientTier}
       hasData={hasData}
+      gscConnected={gscConnected}
     />
   )
 }
