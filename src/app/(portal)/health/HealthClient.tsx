@@ -29,7 +29,7 @@ interface VitalData {
   display_name: string
   value: string
   unit: string
-  status: 'pass' | 'fail'
+  status: 'pass' | 'fail' | 'unknown'
   explanation: string
 }
 
@@ -324,15 +324,17 @@ export default function HealthClient({
                         'inline-flex items-center gap-1 px-2 py-0.5 rounded-tenkai-sm text-xs font-semibold border',
                         vital.status === 'pass'
                           ? 'bg-success/10 border-success/20 text-success'
-                          : 'bg-error/10 border-error/20 text-error'
+                          : vital.status === 'fail'
+                          ? 'bg-error/10 border-error/20 text-error'
+                          : 'bg-warm-gray/10 border-warm-gray/20 text-warm-gray'
                       )}
                     >
                       {vital.status === 'pass' ? (
                         <CheckCircle2 className="size-3" />
-                      ) : (
+                      ) : vital.status === 'fail' ? (
                         <XCircle className="size-3" />
-                      )}
-                      {vital.status === 'pass' ? 'Good' : 'Needs Work'}
+                      ) : null}
+                      {vital.status === 'pass' ? 'Good' : vital.status === 'fail' ? 'Needs Work' : 'No Data'}
                     </span>
                   </div>
                   <div className="flex items-end gap-1">

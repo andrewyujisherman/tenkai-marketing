@@ -130,7 +130,7 @@ export default async function HealthPage() {
     display_name: string
     value: string
     unit: string
-    status: 'pass' | 'fail'
+    status: 'pass' | 'fail' | 'unknown'
     explanation: string
   }
 
@@ -195,7 +195,7 @@ export default async function HealthPage() {
       display_name: config.display_name,
       value: displayValue,
       unit: config.unit,
-      status: (numValue > 0 && numValue <= config.threshold ? 'pass' : numValue > config.threshold ? 'fail' : 'pass') as 'pass' | 'fail',
+      status: numValue > 0 ? (numValue <= config.threshold ? 'pass' : 'fail') : 'unknown',
       explanation: config.explanation,
     }
   })
