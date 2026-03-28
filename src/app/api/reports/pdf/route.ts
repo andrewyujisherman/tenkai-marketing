@@ -1,112 +1,158 @@
 import { NextRequest, NextResponse } from 'next/server'
-import React from 'react'
-import { Document, Page, Text, View, StyleSheet, renderToBuffer } from '@react-pdf/renderer'
+import { jsPDF } from 'jspdf'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { renderForBusinessOwner } from '@/lib/plain-english'
 import { generateSummary, extractScore } from '@/lib/deliverables'
 
 // ─── Brand Colors ────────────────────────────────────────────
-const TORII = '#B85042'
-const CHARCOAL = '#2C2C2C'
-const PARCHMENT = '#F5F0E8'
-const MUTED = '#666666'
+const TORII = [184, 80, 66] as const   // #B85042
+const CHARCOAL = [44, 44, 44] as const // #2C2C2C
+const PARCHMENT = [245, 240, 232] as const // #F5F0E8
+const MUTED = [102, 102, 102] as const // #666666
+const DIVIDER = [224, 216, 204] as const // #E0D8CC
 
-// ─── Styles ──────────────────────────────────────────────────
-const styles = StyleSheet.create({
-  page: { padding: 50, fontFamily: 'Helvetica', fontSize: 11, color: CHARCOAL },
-  // Cover page
-  coverPage: { padding: 50, fontFamily: 'Helvetica', justifyContent: 'center', alignItems: 'center', backgroundColor: PARCHMENT },
-  coverBrand: { fontSize: 36, fontFamily: 'Helvetica-Bold', color: TORII, marginBottom: 8 },
-  coverSubtitle: { fontSize: 14, color: MUTED, marginBottom: 60 },
-  coverTitle: { fontSize: 22, fontFamily: 'Helvetica-Bold', color: CHARCOAL, textAlign: 'center', marginBottom: 16 },
-  coverClient: { fontSize: 16, color: MUTED, textAlign: 'center', marginBottom: 8 },
-  coverDate: { fontSize: 12, color: MUTED, textAlign: 'center', marginTop: 40 },
-  // Content pages
-  sectionTitle: { fontSize: 18, fontFamily: 'Helvetica-Bold', color: TORII, marginBottom: 12, marginTop: 20 },
-  subsectionTitle: { fontSize: 14, fontFamily: 'Helvetica-Bold', color: CHARCOAL, marginBottom: 8, marginTop: 14 },
-  body: { fontSize: 11, lineHeight: 1.6, color: CHARCOAL, marginBottom: 8 },
-  label: { fontSize: 9, fontFamily: 'Helvetica-Bold', color: TORII, textTransform: 'uppercase' as const, letterSpacing: 1, marginBottom: 4, marginTop: 12 },
-  scoreBox: { backgroundColor: PARCHMENT, borderRadius: 6, padding: 12, marginBottom: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  scoreNumber: { fontSize: 28, fontFamily: 'Helvetica-Bold', color: TORII },
-  scoreLabel: { fontSize: 10, color: MUTED },
-  divider: { borderBottomWidth: 1, borderBottomColor: '#E0D8CC', marginVertical: 16 },
-  footer: { position: 'absolute', bottom: 30, left: 50, right: 50, flexDirection: 'row', justifyContent: 'space-between', fontSize: 8, color: MUTED },
-  bulletItem: { flexDirection: 'row', marginBottom: 4, paddingLeft: 8 },
-  bullet: { width: 12, fontSize: 11, color: TORII },
-  bulletText: { flex: 1, fontSize: 11, lineHeight: 1.5, color: CHARCOAL },
-})
+// ─── Layout Constants ────────────────────────────────────────
+const PAGE_W = 210
+const PAGE_H = 297
+const MARGIN = 25
+const CONTENT_W = PAGE_W - 2 * MARGIN
+const LINE_H = 6
+const FOOTER_Y = PAGE_H - 15
 
-// ─── Helper: render JSON sections as readable content ────────
-function renderContentSection(key: string, value: unknown, depth = 0): React.ReactElement[] {
-  const elements: React.ReactElement[] = []
-
-  if (value === null || value === undefined) return elements
-
-  const label = key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
-
-  if (typeof value === 'string') {
-    if (value.length > 0) {
-      elements.push(
-        React.createElement(View, { key: `${key}-${depth}`, style: { marginBottom: 6 } },
-          React.createElement(Text, { style: styles.label }, label),
-          React.createElement(Text, { style: styles.body }, value)
-        )
-      )
+// ─── Helper: wrap text and track Y, auto-paginate ───────────
+function addWrappedText(
+  doc: jsPDF,
+  text: string,
+  x: number,
+  y: number,
+  maxWidth: number,
+  lineHeight: number,
+): number {
+  const lines = doc.splitTextToSize(text, maxWidth)
+  for (const line of lines) {
+    if (y > FOOTER_Y - 10) {
+      addFooter(doc)
+      doc.addPage()
+      y = MARGIN
     }
-  } else if (typeof value === 'number' || typeof value === 'boolean') {
-    elements.push(
-      React.createElement(View, { key: `${key}-${depth}`, style: { marginBottom: 4 } },
-        React.createElement(Text, { style: styles.body }, `${label}: ${value}`)
-      )
-    )
-  } else if (Array.isArray(value)) {
-    elements.push(
-      React.createElement(View, { key: `${key}-${depth}-header` },
-        React.createElement(Text, { style: styles.label }, label)
-      )
-    )
-    value.slice(0, 20).forEach((item, i) => {
-      if (typeof item === 'string') {
-        elements.push(
-          React.createElement(View, { key: `${key}-${depth}-${i}`, style: styles.bulletItem },
-            React.createElement(Text, { style: styles.bullet }, '•'),
-            React.createElement(Text, { style: styles.bulletText }, item)
-          )
-        )
-      } else if (typeof item === 'object' && item !== null) {
-        const record = item as Record<string, unknown>
-        const name = record.title ?? record.name ?? record.keyword ?? record.url ?? record.description
-        if (typeof name === 'string') {
-          elements.push(
-            React.createElement(View, { key: `${key}-${depth}-${i}`, style: styles.bulletItem },
-              React.createElement(Text, { style: styles.bullet }, '•'),
-              React.createElement(Text, { style: styles.bulletText }, name)
-            )
-          )
-        }
-      }
-    })
-    if (value.length > 20) {
-      elements.push(
-        React.createElement(Text, { key: `${key}-more`, style: { ...styles.body, color: MUTED, fontStyle: 'italic' } },
-          `...and ${value.length - 20} more items`
-        )
-      )
-    }
-  } else if (typeof value === 'object' && depth < 2) {
-    elements.push(
-      React.createElement(Text, { key: `${key}-${depth}-title`, style: styles.subsectionTitle }, label)
-    )
-    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      elements.push(...renderContentSection(k, v, depth + 1))
-    }
+    doc.text(line, x, y)
+    y += lineHeight
   }
-
-  return elements
+  return y
 }
 
-// ─── PDF Document Component ──────────────────────────────────
-function TenkaiReport({
+function addFooter(doc: jsPDF) {
+  doc.setFontSize(7)
+  doc.setTextColor(...MUTED)
+  doc.text('Tenkai Marketing', MARGIN, FOOTER_Y)
+  doc.text('tenkai-marketing.vercel.app', PAGE_W - MARGIN, FOOTER_Y, { align: 'right' })
+}
+
+function addLabel(doc: jsPDF, label: string, y: number): number {
+  if (y > FOOTER_Y - 20) { addFooter(doc); doc.addPage(); y = MARGIN }
+  doc.setFontSize(8)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(...TORII)
+  doc.text(label.toUpperCase(), MARGIN, y)
+  return y + 5
+}
+
+function addBody(doc: jsPDF, text: string, y: number): number {
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(...CHARCOAL)
+  return addWrappedText(doc, text, MARGIN, y, CONTENT_W, LINE_H)
+}
+
+function addSectionTitle(doc: jsPDF, title: string, y: number): number {
+  if (y > FOOTER_Y - 25) { addFooter(doc); doc.addPage(); y = MARGIN }
+  y += 4
+  doc.setFontSize(16)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(...TORII)
+  doc.text(title, MARGIN, y)
+  return y + 10
+}
+
+function addSubsectionTitle(doc: jsPDF, title: string, y: number): number {
+  if (y > FOOTER_Y - 20) { addFooter(doc); doc.addPage(); y = MARGIN }
+  y += 3
+  doc.setFontSize(12)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(...CHARCOAL)
+  doc.text(title, MARGIN, y)
+  return y + 7
+}
+
+// ─── Skip keys (scores already shown in summary) ────────────
+const SKIP_KEYS = new Set([
+  'executive_summary', 'raw_response', 'overall_score', 'technical_score',
+  'analytics_score', 'article_score', 'rewrite_score', 'schema_score', 'redirect_score',
+  'robots_sitemap_score', 'outreach_score', 'guest_post_score', 'submission_score',
+  'response_score', 'campaign_score', 'seo_score', 'content_score', 'quality_score',
+  'link_profile_score', 'on_page_score', 'optimization_score', 'calendar_score',
+  'cluster_score', 'local_seo_score', 'gbp_score', 'geo_score', 'entity_score',
+  'competitive_score', 'decay_score', 'keyword_quality_score', 'performance_score',
+  'seo_health_score',
+])
+
+function formatKey(key: string): string {
+  return key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+function renderContentSection(doc: jsPDF, key: string, value: unknown, y: number, depth = 0): number {
+  if (value === null || value === undefined) return y
+  const label = formatKey(key)
+
+  if (typeof value === 'string' && value.trim()) {
+    y = addLabel(doc, label, y)
+    y = addBody(doc, value.trim(), y)
+    y += 2
+  } else if (typeof value === 'number' || typeof value === 'boolean') {
+    doc.setFontSize(10)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(...CHARCOAL)
+    y = addWrappedText(doc, `${label}: ${value}`, MARGIN, y, CONTENT_W, LINE_H)
+    y += 1
+  } else if (Array.isArray(value)) {
+    y = addLabel(doc, label, y)
+    const items = value.slice(0, 20)
+    for (const item of items) {
+      if (y > FOOTER_Y - 10) { addFooter(doc); doc.addPage(); y = MARGIN }
+      let text = ''
+      if (typeof item === 'string') {
+        text = item
+      } else if (typeof item === 'object' && item !== null) {
+        const rec = item as Record<string, unknown>
+        const name = rec.title ?? rec.name ?? rec.keyword ?? rec.url ?? rec.description
+        if (typeof name === 'string') text = name
+      }
+      if (text) {
+        doc.setFontSize(10)
+        doc.setFont('helvetica', 'normal')
+        doc.setTextColor(...CHARCOAL)
+        doc.text('\u2022', MARGIN + 2, y)
+        y = addWrappedText(doc, text, MARGIN + 8, y, CONTENT_W - 8, LINE_H)
+      }
+    }
+    if (value.length > 20) {
+      doc.setFontSize(9)
+      doc.setTextColor(...MUTED)
+      doc.text(`...and ${value.length - 20} more items`, MARGIN + 8, y)
+      y += LINE_H
+    }
+    y += 2
+  } else if (typeof value === 'object' && depth < 2) {
+    y = addSubsectionTitle(doc, label, y)
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      y = renderContentSection(doc, k, v, y, depth + 1)
+    }
+  }
+  return y
+}
+
+// ─── Build PDF ──────────────────────────────────────────────
+function buildPdf({
   title,
   clientName,
   date,
@@ -122,68 +168,97 @@ function TenkaiReport({
   plainEnglish: { headline: string; summary: string; impact: string; recommendedAction: string }
   technicalSummary: string
   content: Record<string, unknown>
-}) {
-  const contentElements: React.ReactElement[] = []
-  const skipKeys = new Set(['executive_summary', 'raw_response', 'overall_score', 'technical_score',
-    'analytics_score', 'article_score', 'rewrite_score', 'schema_score', 'redirect_score',
-    'robots_sitemap_score', 'outreach_score', 'guest_post_score', 'submission_score',
-    'response_score', 'campaign_score', 'seo_score', 'content_score', 'quality_score',
-    'link_profile_score', 'on_page_score', 'optimization_score', 'calendar_score',
-    'cluster_score', 'local_seo_score', 'gbp_score', 'geo_score', 'entity_score',
-    'competitive_score', 'decay_score', 'keyword_quality_score', 'performance_score',
-    'seo_health_score'])
+}): Buffer {
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' })
 
-  for (const [key, value] of Object.entries(content)) {
-    if (skipKeys.has(key)) continue
-    contentElements.push(...renderContentSection(key, value))
+  // ── Cover Page ──────────────────────────────────────────
+  doc.setFillColor(...PARCHMENT)
+  doc.rect(0, 0, PAGE_W, PAGE_H, 'F')
+
+  doc.setFontSize(32)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(...TORII)
+  doc.text('TENKAI', PAGE_W / 2, 100, { align: 'center' })
+
+  doc.setFontSize(12)
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(...MUTED)
+  doc.text('AI-Powered Marketing Intelligence', PAGE_W / 2, 112, { align: 'center' })
+
+  doc.setFontSize(20)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(...CHARCOAL)
+  const titleLines = doc.splitTextToSize(title, CONTENT_W)
+  doc.text(titleLines, PAGE_W / 2, 150, { align: 'center' })
+
+  doc.setFontSize(14)
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(...MUTED)
+  doc.text(`Prepared for ${clientName}`, PAGE_W / 2, 175, { align: 'center' })
+
+  doc.setFontSize(11)
+  doc.text(date, PAGE_W / 2, 200, { align: 'center' })
+
+  // ── Executive Summary Page ─────────────────────────────
+  doc.addPage()
+  let y = MARGIN
+
+  y = addSectionTitle(doc, 'Executive Summary', y)
+
+  // Score box
+  if (score !== null) {
+    doc.setFillColor(...PARCHMENT)
+    doc.roundedRect(MARGIN, y, CONTENT_W, 22, 3, 3, 'F')
+    doc.setFontSize(24)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(...TORII)
+    doc.text(`${score}`, MARGIN + 8, y + 15)
+    doc.setFontSize(9)
+    doc.setTextColor(...MUTED)
+    doc.text('/100', MARGIN + 8 + doc.getTextWidth(`${score}`) + 2, y + 15)
+    doc.setFontSize(11)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(...CHARCOAL)
+    const headlineLines = doc.splitTextToSize(plainEnglish.headline, CONTENT_W - 55)
+    doc.text(headlineLines, MARGIN + 50, y + 10)
+    y += 28
   }
 
-  return React.createElement(Document, {},
-    // Cover page
-    React.createElement(Page, { size: 'A4', style: styles.coverPage },
-      React.createElement(Text, { style: styles.coverBrand }, '鳥居 TENKAI'),
-      React.createElement(Text, { style: styles.coverSubtitle }, 'AI-Powered Marketing Intelligence'),
-      React.createElement(View, { style: { marginTop: 40 } }),
-      React.createElement(Text, { style: styles.coverTitle }, title),
-      React.createElement(Text, { style: styles.coverClient }, `Prepared for ${clientName}`),
-      React.createElement(Text, { style: styles.coverDate }, date),
-    ),
-    // Executive summary page
-    React.createElement(Page, { size: 'A4', style: styles.page },
-      React.createElement(Text, { style: styles.sectionTitle }, 'Executive Summary'),
-      score !== null && React.createElement(View, { style: styles.scoreBox },
-        React.createElement(View, {},
-          React.createElement(Text, { style: styles.scoreNumber }, `${score}`),
-          React.createElement(Text, { style: styles.scoreLabel }, 'out of 100'),
-        ),
-        React.createElement(View, { style: { flex: 1, marginLeft: 16 } },
-          React.createElement(Text, { style: { ...styles.body, fontFamily: 'Helvetica-Bold' } }, plainEnglish.headline),
-        ),
-      ),
-      React.createElement(Text, { style: styles.label }, 'What This Means'),
-      React.createElement(Text, { style: styles.body }, plainEnglish.summary),
-      React.createElement(Text, { style: styles.label }, 'Impact on Your Business'),
-      React.createElement(Text, { style: styles.body }, plainEnglish.impact),
-      React.createElement(Text, { style: styles.label }, 'Recommended Next Step'),
-      React.createElement(Text, { style: styles.body }, plainEnglish.recommendedAction),
-      React.createElement(View, { style: styles.divider }),
-      React.createElement(Text, { style: styles.label }, 'Technical Summary'),
-      React.createElement(Text, { style: styles.body }, technicalSummary),
-      React.createElement(View, { style: styles.footer },
-        React.createElement(Text, {}, '鳥居 Tenkai Marketing'),
-        React.createElement(Text, {}, 'tenkai-marketing.vercel.app'),
-      ),
-    ),
-    // Detail pages
-    React.createElement(Page, { size: 'A4', style: styles.page, wrap: true },
-      React.createElement(Text, { style: styles.sectionTitle }, 'Detailed Findings'),
-      ...contentElements,
-      React.createElement(View, { style: styles.footer },
-        React.createElement(Text, {}, '鳥居 Tenkai Marketing'),
-        React.createElement(Text, {}, 'tenkai-marketing.vercel.app'),
-      ),
-    ),
-  )
+  y = addLabel(doc, 'What This Means', y)
+  y = addBody(doc, plainEnglish.summary, y)
+  y += 2
+
+  y = addLabel(doc, 'Impact on Your Business', y)
+  y = addBody(doc, plainEnglish.impact, y)
+  y += 2
+
+  y = addLabel(doc, 'Recommended Next Step', y)
+  y = addBody(doc, plainEnglish.recommendedAction, y)
+  y += 4
+
+  // Divider
+  doc.setDrawColor(...DIVIDER)
+  doc.line(MARGIN, y, PAGE_W - MARGIN, y)
+  y += 6
+
+  y = addLabel(doc, 'Technical Summary', y)
+  y = addBody(doc, technicalSummary, y)
+
+  addFooter(doc)
+
+  // ── Detailed Findings Page(s) ──────────────────────────
+  doc.addPage()
+  y = MARGIN
+  y = addSectionTitle(doc, 'Detailed Findings', y)
+
+  for (const [key, value] of Object.entries(content)) {
+    if (SKIP_KEYS.has(key)) continue
+    y = renderContentSection(doc, key, value, y)
+  }
+
+  addFooter(doc)
+
+  return Buffer.from(doc.output('arraybuffer'))
 }
 
 // ─── API Route ───────────────────────────────────────────────
@@ -230,7 +305,7 @@ export async function GET(request: NextRequest) {
     year: 'numeric', month: 'long', day: 'numeric',
   })
 
-  const doc = React.createElement(TenkaiReport, {
+  const pdfBuffer = buildPdf({
     title: deliverable.title ?? 'Tenkai Report',
     clientName,
     date,
@@ -240,10 +315,8 @@ export async function GET(request: NextRequest) {
     content,
   })
 
-  const pdfBuffer = await renderToBuffer(doc)
-
   const filename = `tenkai-${requestType}-${deliverable.id.slice(0, 8)}.pdf`
-  return new NextResponse(Buffer.from(pdfBuffer) as unknown as BodyInit, {
+  return new NextResponse(pdfBuffer as unknown as BodyInit, {
     headers: {
       'Content-Type': 'application/pdf',
       'Content-Disposition': `attachment; filename="${filename}"`,
