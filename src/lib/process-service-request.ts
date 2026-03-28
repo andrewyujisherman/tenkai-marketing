@@ -10,6 +10,8 @@ import { getAgentForRequest, getDeliverableType, TENKAI_AGENTS } from '@/lib/age
 import { AGENT_PROMPTS, buildTaskMessage } from '@/lib/agents/prompts'
 import { buildDeliverableTitle, extractScore, generateSummary } from '@/lib/deliverables'
 import { fetchAllSiteData } from '@/lib/integrations'
+import { fetchKeywordSerpData } from '@/lib/integrations/serper'
+import type { KeywordSerpEnrichment } from '@/lib/integrations'
 import type { AgentId } from '@/lib/agents/index'
 
 // --------------- Site Scraping ---------------
@@ -99,6 +101,95 @@ async function scrapeUrl(url: string): Promise<ScrapedSite> {
   }
 }
 
+// --------------- Client SEO Context ---------------
+
+interface ClientSeoContext {
+  topKeywords: Array<{ keyword: string; position?: string; trend?: string }>
+  auditFindings: Array<{ finding: string; severity: string }>
+  contentGaps: Array<{ topic: string; priority: string }>
+  competitors: Array<{ domain: string }>
+  businessContext: { industry?: string; target_audience?: string; geography?: string; goals?: string }
+  cwvStatus: { overall?: string; lcp?: string; inp?: string; cls?: string }
+  lastAuditScore: number | null
+}
+
+/**
+ * Fetch accumulated SEO context for a client (~500 tokens max).
+ * Returns null if no context exists yet (first-time client).
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+async function fetchClientSeoContext(clientId: string): Promise<string | null> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('client_seo_context')
+      .select('*')
+      .eq('client_id', clientId)
+      .single()
+
+    if (error || !data) return null
+
+    const ctx = data as {
+      top_keywords: ClientSeoContext['topKeywords']
+      audit_findings: ClientSeoContext['auditFindings']
+      content_gaps: ClientSeoContext['contentGaps']
+      competitors: ClientSeoContext['competitors']
+      business_context: ClientSeoContext['businessContext']
+      cwv_status: ClientSeoContext['cwvStatus']
+      last_audit_score: number | null
+    }
+
+    const parts: string[] = []
+    parts.push('--- CLIENT SEO CONTEXT (accumulated from prior analyses) ---')
+
+    if (ctx.business_context?.industry) {
+      parts.push(`Industry: ${ctx.business_context.industry}`)
+    }
+    if (ctx.business_context?.target_audience) {
+      parts.push(`Target Audience: ${ctx.business_context.target_audience}`)
+    }
+    if (ctx.business_context?.geography) {
+      parts.push(`Geography: ${ctx.business_context.geography}`)
+    }
+    if (ctx.business_context?.goals) {
+      parts.push(`Goals: ${ctx.business_context.goals}`)
+    }
+    if (ctx.last_audit_score != null) {
+      parts.push(`Last Audit Score: ${ctx.last_audit_score}/100`)
+    }
+    if (ctx.cwv_status?.overall) {
+      parts.push(`CWV Status: ${ctx.cwv_status.overall}`)
+    }
+
+    const topKw = Array.isArray(ctx.top_keywords) ? ctx.top_keywords.slice(0, 5) : []
+    if (topKw.length > 0) {
+      parts.push('Top Keywords: ' + topKw.map((k) => `"${k.keyword}"${k.position ? ` (#${k.position})` : ''}`).join(', '))
+    }
+
+    const findings = Array.isArray(ctx.audit_findings) ? ctx.audit_findings.filter((f) => f.severity === 'critical' || f.severity === 'high').slice(0, 3) : []
+    if (findings.length > 0) {
+      parts.push('Key Issues: ' + findings.map((f) => f.finding).join('; '))
+    }
+
+    const gaps = Array.isArray(ctx.content_gaps) ? ctx.content_gaps.slice(0, 3) : []
+    if (gaps.length > 0) {
+      parts.push('Content Gaps: ' + gaps.map((g) => g.topic).join(', '))
+    }
+
+    const comps = Array.isArray(ctx.competitors) ? ctx.competitors.slice(0, 3) : []
+    if (comps.length > 0) {
+      parts.push('Competitors: ' + comps.map((c) => c.domain).join(', '))
+    }
+
+    parts.push('--- END CLIENT CONTEXT ---')
+
+    // Only return if we have meaningful context beyond the wrapper
+    if (parts.length <= 2) return null
+    return parts.join('\n')
+  } catch {
+    return null
+  }
+}
+
 // --------------- Model Routing ---------------
 
 const MODEL_MAP: Record<string, string> = {
@@ -178,7 +269,14 @@ export async function processServiceRequest(request: ProcessableRequest): Promis
     // Fetch site data if URL-based
     let scrapedSite: ScrapedSite | null = null
     let siteData: Awaited<ReturnType<typeof fetchAllSiteData>> | null = null
+    let keywordSerpData: KeywordSerpEnrichment[] | null = null
     const isUrlBased = request.target_url && URL_BASED_REQUESTS.has(request.request_type)
+
+    // Keyword-based requests that benefit from real SERP data
+    const KEYWORD_ENRICHED_REQUESTS = new Set([
+      'keyword_research', 'content_brief', 'content_article', 'content_calendar',
+      'topic_cluster_map', 'content_rewrite', 'content_decay_audit',
+    ])
 
     if (isUrlBased) {
       const [scraped, enriched] = await Promise.all([
@@ -193,18 +291,50 @@ export async function processServiceRequest(request: ProcessableRequest): Promis
       siteData = enriched
     }
 
+    // Fetch real SERP data for keyword-based requests
+    if (KEYWORD_ENRICHED_REQUESTS.has(request.request_type)) {
+      const params = request.parameters as Record<string, string>
+      const seedKeywords: string[] = []
+
+      // Extract keywords from various parameter formats
+      if (params.target_keyword) seedKeywords.push(params.target_keyword)
+      if (params.seed_keywords) {
+        const parsed = typeof params.seed_keywords === 'string'
+          ? params.seed_keywords.split(',').map((k: string) => k.trim())
+          : Array.isArray(params.seed_keywords) ? params.seed_keywords as string[] : []
+        seedKeywords.push(...parsed)
+      }
+      if (params.topic) seedKeywords.push(params.topic)
+      if (params.niche) seedKeywords.push(params.niche)
+
+      if (seedKeywords.length > 0) {
+        keywordSerpData = await fetchKeywordSerpData(
+          [...new Set(seedKeywords)].slice(0, 5),
+          { gl: params.country_code ?? params.gl }
+        ).catch(() => null)
+      }
+    }
+
+    // Fetch accumulated client SEO context
+    const clientContext = await fetchClientSeoContext(request.client_id)
+
     const taskMessage = buildTaskMessage(
       request.request_type,
       request.target_url,
       request.parameters ?? {},
       scrapedSite,
-      siteData
+      siteData,
+      keywordSerpData
     )
 
-    // Call Gemini API
+    // Call Gemini API — prepend client context to system prompt if available
+    const fullSystemPrompt = clientContext
+      ? `${clientContext}\n\n${systemPrompt}`
+      : systemPrompt
+
     const modelConfig: Record<string, unknown> = {
       model,
-      systemInstruction: systemPrompt,
+      systemInstruction: fullSystemPrompt,
     }
     if (isUrlBased) {
       modelConfig.tools = [{ googleSearch: {} }]

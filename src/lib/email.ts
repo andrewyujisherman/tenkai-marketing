@@ -41,6 +41,18 @@ export async function sendWelcomeEmail(to: string, name: string, tempPassword?: 
   }
 }
 
+export async function sendReportEmail(to: string, subject: string, html: string) {
+  const resend = getResend()
+  if (!resend) { console.warn('[Email] RESEND_API_KEY not set — skipping report email'); return { success: false, error: 'No API key' } }
+  try {
+    await resend.emails.send({ from: FROM_EMAIL, to, subject, html })
+    return { success: true }
+  } catch (error) {
+    console.error('[Email] Failed to send report email:', error)
+    return { success: false, error }
+  }
+}
+
 export async function sendContentReadyEmail(to: string, name: string, contentTitle: string) {
   const resend = getResend()
   if (!resend) { console.warn('[Email] RESEND_API_KEY not set — skipping content-ready email'); return { success: false, error: 'No API key' } }
