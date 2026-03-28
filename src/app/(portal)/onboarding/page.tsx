@@ -11,11 +11,18 @@ import { StepComplete } from '@/components/onboarding/step-complete'
 const TOTAL_STEPS = 5
 const STORAGE_KEY = 'tenkai_onboarding_draft'
 
+export interface IntegrationDetail {
+  connected: true
+  hasData: boolean
+  detail: string
+}
+
 interface OnboardingDraft {
   step: number
   businessInfo: BusinessInfoData
   customNames: Record<string, string>
   connectedIntegrations: string[]
+  integrationDetails: Record<string, IntegrationDetail>
   tier: string
 }
 
@@ -32,6 +39,7 @@ const defaultDraft: OnboardingDraft = {
   businessInfo: defaultBusinessInfo,
   customNames: {},
   connectedIntegrations: [],
+  integrationDetails: {},
   tier: 'starter',
 }
 
@@ -41,6 +49,9 @@ function pickOAuthOverrides(current: OnboardingDraft): Partial<OnboardingDraft> 
   if (current.step === 3) overrides.step = 3
   if (current.connectedIntegrations.length > 0) {
     overrides.connectedIntegrations = current.connectedIntegrations
+  }
+  if (Object.keys(current.integrationDetails).length > 0) {
+    overrides.integrationDetails = current.integrationDetails
   }
   return overrides
 }
@@ -57,17 +68,25 @@ export default function OnboardingPage() {
     const connected = params.get('connected')
     const error = params.get('error')
 
-    // Fetch real integration status from DB
+    // Fetch real integration status from DB (includes data availability details)
     fetch('/api/integrations/status')
-      .then((r) => r.ok ? r.json() : { connected: [] })
-      .then((data: { connected?: string[] }) => {
+      .then((r) => r.ok ? r.json() : { connected: [], details: {} })
+      .then((data: { connected?: string[]; details?: Record<string, IntegrationDetail> }) => {
         const dbConnected = (data.connected ?? [])
           .map((type: string) => OAUTH_TO_WIZARD_ID[type])
           .filter(Boolean)
 
+        // Map details from oauth type keys to wizard IDs
+        const mappedDetails: Record<string, IntegrationDetail> = {}
+        for (const [oauthType, detail] of Object.entries(data.details ?? {})) {
+          const wizardId = OAUTH_TO_WIZARD_ID[oauthType]
+          if (wizardId && detail) mappedDetails[wizardId] = detail
+        }
+
         setDraft((d) => ({
           ...d,
           connectedIntegrations: [...new Set([...d.connectedIntegrations, ...dbConnected])],
+          integrationDetails: { ...d.integrationDetails, ...mappedDetails },
           ...(connected || error ? { step: 3 } : {}),
         }))
       })
@@ -289,6 +308,7 @@ export default function OnboardingPage() {
           <div className="portal-card max-w-xl mx-auto">
             <StepIntegrations
               connectedIds={draft.connectedIntegrations}
+              integrationDetails={draft.integrationDetails}
               tier={draft.tier}
             />
           </div>
