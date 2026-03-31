@@ -12,6 +12,8 @@ import { buildDeliverableTitle, extractScore, generateSummary } from '@/lib/deli
 import { fetchAllSiteData } from '@/lib/integrations'
 import { fetchKeywordSerpData } from '@/lib/integrations/serper'
 import { crawlSite } from '@/lib/integrations/crawler'
+import { checkNAPConsistency } from '@/lib/integrations/directory-checker'
+import type { NAPConsistencyReport } from '@/lib/integrations/directory-checker'
 import type { CrawlResult } from '@/lib/integrations/crawler'
 import type { KeywordSerpEnrichment } from '@/lib/integrations'
 import type { AgentId } from '@/lib/agents/index'
@@ -277,6 +279,7 @@ export async function processServiceRequest(request: ProcessableRequest): Promis
     let siteData: Awaited<ReturnType<typeof fetchAllSiteData>> | null = null
     let keywordSerpData: KeywordSerpEnrichment[] | null = null
     let crawlData: CrawlResult | null = null
+    let napReport: NAPConsistencyReport | null = null
     const isUrlBased = request.target_url && URL_BASED_REQUESTS.has(request.request_type)
 
     // Request types that get a full site crawl
@@ -287,6 +290,9 @@ export async function processServiceRequest(request: ProcessableRequest): Promis
       'keyword_research', 'content_brief', 'content_article', 'content_calendar',
       'topic_cluster_map', 'content_rewrite', 'content_decay_audit',
     ])
+
+    // Request types that benefit from NAP directory consistency data
+    const NAP_CHECK_REQUESTS = new Set(['local_seo_audit'])
 
     if (isUrlBased) {
       const shouldCrawl = CRAWL_REQUESTS.has(request.request_type)
@@ -328,10 +334,29 @@ export async function processServiceRequest(request: ProcessableRequest): Promis
       }
     }
 
+    // Fetch NAP directory consistency data for local SEO requests
+    if (NAP_CHECK_REQUESTS.has(request.request_type)) {
+      const params = request.parameters as Record<string, string>
+      const bizName = params.business_name
+      const bizAddress = params.address
+      const bizPhone = params.phone
+      const bizCity = params.city
+      const bizState = params.state
+      if (bizName && bizCity && bizState) {
+        napReport = await checkNAPConsistency(
+          bizName,
+          bizAddress ?? '',
+          bizPhone ?? '',
+          bizCity,
+          bizState
+        ).catch(() => null)
+      }
+    }
+
     // Fetch accumulated client SEO context
     const clientContext = await fetchClientSeoContext(request.client_id)
 
-    const taskMessage = buildTaskMessage(
+    let taskMessage = buildTaskMessage(
       request.request_type,
       request.target_url,
       request.parameters ?? {},
@@ -340,6 +365,38 @@ export async function processServiceRequest(request: ProcessableRequest): Promis
       keywordSerpData,
       crawlData
     )
+
+    // Append NAP consistency data to task message
+    if (napReport) {
+      const napLines: string[] = [
+        '\n--- NAP DIRECTORY CONSISTENCY CHECK (real data from top directories) ---',
+        `Business: ${napReport.businessName}`,
+        `Source of Truth: ${napReport.sourceOfTruth.name} | ${napReport.sourceOfTruth.address} | ${napReport.sourceOfTruth.phone}`,
+        `Consistency Score: ${napReport.consistencyScore}/100`,
+        '',
+      ]
+      for (const dir of napReport.directories) {
+        if (dir.found) {
+          const flags = [
+            dir.nameMatch === true ? 'Name OK' : dir.nameMatch === false ? 'NAME MISMATCH' : '',
+            dir.addressMatch === true ? 'Address OK' : dir.addressMatch === false ? 'ADDRESS MISMATCH' : '',
+            dir.phoneMatch === true ? 'Phone OK' : dir.phoneMatch === false ? 'PHONE MISMATCH' : '',
+          ].filter(Boolean).join(', ')
+          napLines.push(`  ${dir.directory}: FOUND — ${flags}${dir.url ? ` — ${dir.url}` : ''}`)
+        } else {
+          napLines.push(`  ${dir.directory}: NOT FOUND`)
+        }
+      }
+      if (napReport.issues.length > 0) {
+        napLines.push('')
+        napLines.push('Issues:')
+        for (const issue of napReport.issues) {
+          napLines.push(`  - ${issue}`)
+        }
+      }
+      napLines.push('--- END NAP CHECK ---')
+      taskMessage += '\n' + napLines.join('\n')
+    }
 
     // Load professional reference material for this request type
     const referenceContext = getReferenceContext(request.request_type)
