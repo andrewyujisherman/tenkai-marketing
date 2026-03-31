@@ -20,6 +20,8 @@ import type { AgentId } from '@/lib/agents/index'
 import { writeBackClientContext, getNextServices, extractChainData, shouldAutoChain } from '@/lib/service-chain'
 import { tierAllowsRequestType } from '@/lib/tier-gates'
 import { getReferenceContext } from '@/lib/seo-reference'
+import { fetchGBPData } from '@/lib/integrations/google-business-profile'
+import type { GBPData } from '@/lib/integrations/google-business-profile'
 
 // --------------- Site Scraping ---------------
 
@@ -283,16 +285,20 @@ export async function processServiceRequest(request: ProcessableRequest): Promis
     const isUrlBased = request.target_url && URL_BASED_REQUESTS.has(request.request_type)
 
     // Request types that get a full site crawl
-    const CRAWL_REQUESTS = new Set(['site_audit', 'technical_audit', 'link_analysis'])
+    const CRAWL_REQUESTS = new Set(['site_audit', 'technical_audit', 'link_analysis', 'on_page_audit', 'redirect_map', 'schema_generation'])
 
     // Keyword-based requests that benefit from real SERP data
     const KEYWORD_ENRICHED_REQUESTS = new Set([
       'keyword_research', 'content_brief', 'content_article', 'content_calendar',
       'topic_cluster_map', 'content_rewrite', 'content_decay_audit',
+      'competitor_analysis', 'geo_audit',
     ])
 
     // Request types that benefit from NAP directory consistency data
-    const NAP_CHECK_REQUESTS = new Set(['local_seo_audit'])
+    const NAP_CHECK_REQUESTS = new Set(['local_seo_audit', 'directory_submissions'])
+
+    // Request types that benefit from GBP performance data
+    const GBP_REQUESTS = new Set(['local_seo_audit', 'gbp_optimization', 'review_responses', 'review_campaign'])
 
     if (isUrlBased) {
       const shouldCrawl = CRAWL_REQUESTS.has(request.request_type)
@@ -353,6 +359,12 @@ export async function processServiceRequest(request: ProcessableRequest): Promis
       }
     }
 
+    // Fetch GBP performance data for local SEO requests
+    let gbpData: GBPData | null = null
+    if (GBP_REQUESTS.has(request.request_type)) {
+      gbpData = await fetchGBPData(request.client_id).catch(() => null)
+    }
+
     // Fetch accumulated client SEO context
     const clientContext = await fetchClientSeoContext(request.client_id)
 
@@ -396,6 +408,21 @@ export async function processServiceRequest(request: ProcessableRequest): Promis
       }
       napLines.push('--- END NAP CHECK ---')
       taskMessage += '\n' + napLines.join('\n')
+    }
+
+    // Append GBP performance data to task message
+    if (gbpData) {
+      const gbpLines: string[] = [
+        '\n--- GOOGLE BUSINESS PROFILE PERFORMANCE DATA (real data) ---',
+        `Period: ${gbpData.period.start} to ${gbpData.period.end}`,
+        `Profile Views: ${gbpData.profileViews} | Search Appearances: ${gbpData.searchAppearances} | Map Views: ${gbpData.mapViews}`,
+        `Call Clicks: ${gbpData.callClicks}`,
+        `Direction Requests: ${gbpData.directionRequests}`,
+        `Website Clicks: ${gbpData.websiteClicks}`,
+      ]
+      if (gbpData.error) gbpLines.push(`Note: ${gbpData.error}`)
+      gbpLines.push('--- END GBP DATA ---')
+      taskMessage += '\n' + gbpLines.join('\n')
     }
 
     // Load professional reference material for this request type
