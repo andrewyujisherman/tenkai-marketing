@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { cn } from '@/lib/utils'
 import { X, CheckCircle, FileText, BarChart3, Shield, TrendingUp, FileBarChart, Link2, Loader2, Sparkles } from 'lucide-react'
 import { OutputViewer } from '@/components/ui/output-viewer'
+import { ProgressTracker } from '@/components/portal/ProgressTracker'
 import type {
   DashboardData,
   AgentStatus,
@@ -154,7 +155,7 @@ export default function DashboardClient({ data }: DashboardClientProps) {
   const [completedTasks, setCompletedTasks] = useState<CompletedTask[]>(initialTasks)
   const [actionItems, setActionItems] = useState<ActionItem[]>(initialActionItems)
   const [actionItemCount, setActionItemCount] = useState(initialCount)
-  const [metrics] = useState<DashboardMetric[]>(initialMetrics)
+  const [metrics, setMetrics] = useState<DashboardMetric[]>(initialMetrics)
   const [briefing] = useState(initialBriefing)
   const [viewerData, setViewerData] = useState<ViewerData | null>(null)
   const [resolvedItems, setResolvedItems] = useState<Set<string>>(new Set())
@@ -170,6 +171,14 @@ export default function DashboardClient({ data }: DashboardClientProps) {
       return () => clearTimeout(t)
     }
   }, [actionItemCount])
+
+  // Fetch metrics on mount (GA4/GSC are slow — fetched client-side to avoid blocking SSR)
+  useEffect(() => {
+    fetch('/api/dashboard/metrics')
+      .then(res => res.ok ? res.json() : null)
+      .then(data => { if (data?.metrics?.length) setMetrics(data.metrics) })
+      .catch(() => {})
+  }, [])
 
   // Polling: refresh activity + action items every 30s
   useEffect(() => {
@@ -308,7 +317,7 @@ export default function DashboardClient({ data }: DashboardClientProps) {
   return (
     <div className="max-w-7xl mx-auto space-y-6">
       {/* ── Briefing Banner ────────────────────────────── */}
-      {!briefingDismissed && briefing.summary && (
+      {!briefingDismissed && (data.progressNarrative || briefing.summary) && (
         <div className="briefing-banner relative animate-fade-in pr-10">
           <button
             onClick={handleDismissBriefing}
@@ -317,12 +326,25 @@ export default function DashboardClient({ data }: DashboardClientProps) {
           >
             <X className="size-4 text-warm-gray" />
           </button>
-          <h4 className="font-serif text-[13px] text-torii-dark font-medium mb-1">
-            Since you were last here
-          </h4>
-          <p className="text-[13px] text-charcoal leading-relaxed">
-            {briefing.summary}
-          </p>
+          {data.progressNarrative ? (
+            <>
+              <h4 className="font-serif text-[13px] text-torii-dark font-medium mb-1">
+                Your progress
+              </h4>
+              <p className="text-[13px] text-charcoal leading-relaxed">
+                {data.progressNarrative}
+              </p>
+            </>
+          ) : (
+            <>
+              <h4 className="font-serif text-[13px] text-torii-dark font-medium mb-1">
+                Since you were last here
+              </h4>
+              <p className="text-[13px] text-charcoal leading-relaxed">
+                {briefing.summary}
+              </p>
+            </>
+          )}
         </div>
       )}
 
@@ -628,59 +650,11 @@ export default function DashboardClient({ data }: DashboardClientProps) {
       </div>
 
       {/* ── Progress Over Time ────────────────────────── */}
-      {data.progress.initial && data.progress.current && (
-        <div className="portal-card animate-fade-in">
-          <h3 className="font-serif text-[15px] text-charcoal font-medium mb-3">Your Progress</h3>
-          <p className="text-[12px] text-warm-gray mb-4">
-            Since {data.clientStartDate ? new Date(data.clientStartDate).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : 'you started'}
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {data.progress.initial.healthScore !== null && data.progress.current.healthScore !== null && (
-              <div className="text-center p-3 rounded-tenkai" style={{ background: 'var(--parchment)' }}>
-                <div className="text-[11px] uppercase tracking-wide text-warm-gray font-semibold mb-1">Health Score</div>
-                <div className="flex items-center justify-center gap-2">
-                  <span className="text-warm-gray text-sm">{data.progress.initial.healthScore}</span>
-                  <TrendingUp className="size-3.5 text-torii" />
-                  <span className="font-serif text-lg text-charcoal font-medium">{data.progress.current.healthScore}</span>
-                </div>
-                <p className="text-[11px] text-warm-gray/80 mt-1">
-                  {data.progress.current.healthScore > data.progress.initial.healthScore
-                    ? `Improved ${data.progress.current.healthScore - data.progress.initial.healthScore} points`
-                    : data.progress.current.healthScore === data.progress.initial.healthScore
-                      ? 'Holding steady'
-                      : 'Working on improvements'}
-                </p>
-              </div>
-            )}
-            {data.progress.current.keywordsInTop10 !== null && (
-              <div className="text-center p-3 rounded-tenkai" style={{ background: 'var(--parchment)' }}>
-                <div className="text-[11px] uppercase tracking-wide text-warm-gray font-semibold mb-1">Page 1 Keywords</div>
-                <div className="font-serif text-lg text-charcoal font-medium">
-                  {data.progress.current.keywordsInTop10}
-                </div>
-                <p className="text-[11px] text-warm-gray/80 mt-1">
-                  {data.progress.current.keywordsInTop10 === 0
-                    ? 'Building momentum — results take 2-3 months'
-                    : `${data.progress.current.keywordsInTop10} search${data.progress.current.keywordsInTop10 !== 1 ? 'es' : ''} showing your business`}
-                </p>
-              </div>
-            )}
-            {data.progress.current.contentPublished > 0 && (
-              <div className="text-center p-3 rounded-tenkai" style={{ background: 'var(--parchment)' }}>
-                <div className="text-[11px] uppercase tracking-wide text-warm-gray font-semibold mb-1">Content Published</div>
-                <div className="font-serif text-lg text-charcoal font-medium">
-                  {data.progress.current.contentPublished}
-                </div>
-                <p className="text-[11px] text-warm-gray/80 mt-1">
-                  {data.progress.current.contentPublished === 1
-                    ? 'First piece live — each one compounds over time'
-                    : `${data.progress.current.contentPublished} articles working for you 24/7`}
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      <ProgressTracker
+        initial={data.progress.initial}
+        current={data.progress.current}
+        clientStartDate={data.clientStartDate}
+      />
 
       {/* ── 90-Day Roadmap ──────────────────────────────── */}
       {!data.isNewUser && (

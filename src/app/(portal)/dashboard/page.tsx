@@ -2,8 +2,6 @@ import { createServerClient } from '@/lib/supabase'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { isDemoMode, DEMO_CLIENT_ID } from '@/lib/demo'
 import { TENKAI_AGENTS, type AgentId } from '@/lib/agents'
-import { fetchGA4Data } from '@/lib/integrations/google-analytics'
-import { fetchGSCData } from '@/lib/integrations/google-search-console'
 import DashboardClient from './DashboardClient'
 
 // Types shared with DashboardClient
@@ -76,6 +74,7 @@ export interface DashboardData {
     current: ProgressSnapshot | null
   }
   clientStartDate: string | null
+  progressNarrative: string | null
 }
 
 function cleanTitle(title: string, contentType?: string, agentName?: string): string {
@@ -167,6 +166,7 @@ export default async function DashboardPage() {
     firstAuditDate: null,
     progress: { initial: null, current: null },
     clientStartDate: null,
+    progressNarrative: null,
   }
 
   if (!clientId) {
@@ -175,7 +175,7 @@ export default async function DashboardPage() {
 
   const db = demo ? supabaseAdmin : supabase
 
-  // Fetch all dashboard data in parallel
+  // Fetch ALL independent dashboard data in a single parallel batch
   const [
     { count: completedSinceLast },
     { count: pendingApprovalCount },
@@ -187,6 +187,8 @@ export default async function DashboardPage() {
     { data: auditData },
     { count: totalContent },
     { count: publishedContent },
+    { data: firstAudit },
+    { data: clientRow },
   ] = await Promise.all([
     db.from('content_posts')
       .select('*', { count: 'exact', head: true })
@@ -236,6 +238,18 @@ export default async function DashboardPage() {
       .select('*', { count: 'exact', head: true })
       .eq('client_id', clientId)
       .eq('status', 'published'),
+    db.from('deliverables')
+      .select('created_at')
+      .eq('client_id', clientId)
+      .eq('deliverable_type', 'audit_report')
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle(),
+    supabaseAdmin
+      .from('clients')
+      .select('created_at')
+      .eq('id', clientId)
+      .single(),
   ])
 
   // Build briefing
@@ -339,7 +353,7 @@ export default async function DashboardPage() {
     .slice(0, 15)
   data.actionItemCount = data.actionItems.length
 
-  // Build metrics
+  // Build fast metrics (no external API calls — GA4/GSC fetched client-side)
   let healthScore: number | null = auditData?.overall_score ?? null
   if (healthScore === null) {
     const { data: auditDeliverable } = await db
@@ -353,81 +367,24 @@ export default async function DashboardPage() {
     healthScore = auditDeliverable?.score ?? null
   }
 
-  // Fetch GA4 and GSC integration metadata
-  const [{ data: ga4Integ }, { data: gscInteg }] = await Promise.all([
-    supabaseAdmin
-      .from('client_integrations')
-      .select('metadata, status')
-      .eq('client_id', clientId)
-      .eq('integration_type', 'google_analytics')
-      .single(),
-    supabaseAdmin
-      .from('client_integrations')
-      .select('metadata, status')
-      .eq('client_id', clientId)
-      .eq('integration_type', 'google_search_console')
-      .single(),
-  ])
-
-  const ga4PropertyId = ga4Integ?.status === 'active'
-    ? (ga4Integ.metadata as Record<string, unknown> | null)?.property_id as string | undefined
-    : undefined
-  const gscSiteUrl = gscInteg?.status === 'active'
-    ? (gscInteg.metadata as Record<string, unknown> | null)?.site_url as string | undefined
-    : undefined
-
-  const [ga4Data, gscData] = await Promise.all([
-    ga4PropertyId
-      ? fetchGA4Data(ga4PropertyId, { clientId }).catch(() => null)
-      : Promise.resolve(null),
-    gscSiteUrl
-      ? fetchGSCData(gscSiteUrl, { clientId }).catch(() => null)
-      : Promise.resolve(null),
-  ])
-
-  const websiteVisitsMetric: DashboardMetric = ga4Data && !ga4Data.error && ga4Data.sessions > 0
-    ? {
-        name: 'Website Visits',
-        value: ga4Data.sessions.toLocaleString('en-US'),
-        trend: 'flat',
-        change_pct: '',
-        period: 'Last 28 days',
-        link_to: '/metrics?tab=traffic',
-      }
-    : {
-        name: 'Website Visits',
-        value: '--',
-        trend: 'flat',
-        change_pct: '',
-        period: 'Connect analytics to track',
-        link_to: '/metrics?tab=traffic',
-      }
-
-  const topKeywordsCount = gscData && !gscData.error && gscData.topQueries
-    ? gscData.topQueries.filter((q: { position: number }) => q.position <= 10).length
-    : null
-
-  const keywordsMetric: DashboardMetric = topKeywordsCount !== null
-    ? {
-        name: 'Keywords in Top 10',
-        value: topKeywordsCount,
-        trend: topKeywordsCount > 0 ? 'up' : 'flat',
-        change_pct: '',
-        period: 'Last 28 days',
-        link_to: '/rankings',
-      }
-    : {
-        name: 'Keywords in Top 10',
-        value: '--',
-        trend: 'flat',
-        change_pct: '',
-        period: 'Connect Search Console',
-        link_to: '/rankings',
-      }
-
+  // Placeholder metrics — GA4/GSC filled in client-side via /api/dashboard/metrics
   data.metrics = [
-    websiteVisitsMetric,
-    keywordsMetric,
+    {
+      name: 'Website Visits',
+      value: '--',
+      trend: 'flat',
+      change_pct: '',
+      period: 'Loading...',
+      link_to: '/metrics?tab=traffic',
+    },
+    {
+      name: 'Keywords in Top 10',
+      value: '--',
+      trend: 'flat',
+      change_pct: '',
+      period: 'Loading...',
+      link_to: '/rankings',
+    },
     {
       name: 'Health Score',
       value: healthScore !== null ? `${healthScore}/100` : '--',
@@ -450,30 +407,13 @@ export default async function DashboardPage() {
   const processingCount = (activeRequests ?? []).length
   const isNewUser = (recentDeliverables ?? []).length === 0 && processingCount > 0
 
-  // Get first audit date for the client
-  const { data: firstAudit } = await db
-    .from('deliverables')
-    .select('created_at')
-    .eq('client_id', clientId)
-    .eq('deliverable_type', 'audit_report')
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle()
-
   data.isNewUser = isNewUser
   data.processingCount = processingCount
   data.firstAuditDate = firstAudit?.created_at ?? null
-
-  // ── Progress-over-time: compare first audit snapshot vs current ──
-  const { data: clientRow } = await supabaseAdmin
-    .from('clients')
-    .select('created_at')
-    .eq('id', clientId)
-    .single()
-
+  data.progressNarrative = null
   data.clientStartDate = clientRow?.created_at ?? null
 
-  // First audit score (initial snapshot)
+  // First audit score (initial snapshot) — single conditional query
   if (firstAudit) {
     const { data: firstAuditScore } = await db
       .from('deliverables')
@@ -492,13 +432,39 @@ export default async function DashboardPage() {
     }
   }
 
-  // Current snapshot
-  if (healthScore !== null || topKeywordsCount !== null || (publishedContent ?? 0) > 0) {
+  // Current snapshot (without GA4/GSC — those come client-side)
+  if (healthScore !== null || (publishedContent ?? 0) > 0) {
     data.progress.current = {
-      keywordsInTop10: topKeywordsCount,
+      keywordsInTop10: null,
       healthScore,
       contentPublished: publishedContent ?? 0,
       asOf: new Date().toISOString(),
+    }
+  }
+
+  // Progress narrative (partial — keywords added client-side when available)
+  if (data.progress.initial && data.progress.current && data.clientStartDate) {
+    const ini = data.progress.initial
+    const cur = data.progress.current
+    const startDate = new Date(data.clientStartDate)
+    const now = new Date()
+    const months = Math.max(1,
+      (now.getFullYear() - startDate.getFullYear()) * 12 + (now.getMonth() - startDate.getMonth())
+    )
+    const monthLabel = `${months} month${months !== 1 ? 's' : ''}`
+    const parts: string[] = []
+
+    if (ini.healthScore !== null && cur.healthScore !== null && cur.healthScore !== ini.healthScore) {
+      const delta = cur.healthScore - ini.healthScore
+      parts.push(delta > 0
+        ? `Your website health improved from ${ini.healthScore} to ${cur.healthScore}`
+        : `Health score shifted from ${ini.healthScore} to ${cur.healthScore}`)
+    }
+    if (cur.contentPublished > 0) {
+      parts.push(`Your team published ${cur.contentPublished} article${cur.contentPublished !== 1 ? 's' : ''}`)
+    }
+    if (parts.length >= 2) {
+      data.progressNarrative = `Since you joined ${monthLabel} ago: ${parts.join('. ')}.`
     }
   }
 
