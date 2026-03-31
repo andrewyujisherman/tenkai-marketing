@@ -11,8 +11,13 @@ import { AGENT_PROMPTS, buildTaskMessage } from '@/lib/agents/prompts'
 import { buildDeliverableTitle, extractScore, generateSummary } from '@/lib/deliverables'
 import { fetchAllSiteData } from '@/lib/integrations'
 import { fetchKeywordSerpData } from '@/lib/integrations/serper'
+import { crawlSite } from '@/lib/integrations/crawler'
+import type { CrawlResult } from '@/lib/integrations/crawler'
 import type { KeywordSerpEnrichment } from '@/lib/integrations'
 import type { AgentId } from '@/lib/agents/index'
+import { writeBackClientContext, getNextServices, extractChainData, shouldAutoChain } from '@/lib/service-chain'
+import { tierAllowsRequestType } from '@/lib/tier-gates'
+import { getReferenceContext } from '@/lib/seo-reference'
 
 // --------------- Site Scraping ---------------
 
@@ -231,6 +236,7 @@ interface ProcessableRequest {
   target_url: string | null
   parameters: Record<string, unknown>
   assigned_agent: string | null
+  client_tier?: string | null
 }
 
 /**
@@ -270,7 +276,11 @@ export async function processServiceRequest(request: ProcessableRequest): Promis
     let scrapedSite: ScrapedSite | null = null
     let siteData: Awaited<ReturnType<typeof fetchAllSiteData>> | null = null
     let keywordSerpData: KeywordSerpEnrichment[] | null = null
+    let crawlData: CrawlResult | null = null
     const isUrlBased = request.target_url && URL_BASED_REQUESTS.has(request.request_type)
+
+    // Request types that get a full site crawl
+    const CRAWL_REQUESTS = new Set(['site_audit', 'technical_audit', 'link_analysis'])
 
     // Keyword-based requests that benefit from real SERP data
     const KEYWORD_ENRICHED_REQUESTS = new Set([
@@ -279,16 +289,19 @@ export async function processServiceRequest(request: ProcessableRequest): Promis
     ])
 
     if (isUrlBased) {
-      const [scraped, enriched] = await Promise.all([
+      const shouldCrawl = CRAWL_REQUESTS.has(request.request_type)
+      const [scraped, enriched, crawled] = await Promise.all([
         scrapeUrl(request.target_url!),
         fetchAllSiteData(request.target_url!, {
           gscSiteUrl: request.parameters?.gsc_site_url as string | undefined,
           ga4PropertyId: request.parameters?.ga4_property_id as string | undefined,
           clientId: request.client_id,
         }).catch(() => null),
+        shouldCrawl ? crawlSite(request.target_url!).catch(() => null) : Promise.resolve(null),
       ])
       scrapedSite = scraped
       siteData = enriched
+      crawlData = crawled
     }
 
     // Fetch real SERP data for keyword-based requests
@@ -324,13 +337,20 @@ export async function processServiceRequest(request: ProcessableRequest): Promis
       request.parameters ?? {},
       scrapedSite,
       siteData,
-      keywordSerpData
+      keywordSerpData,
+      crawlData
     )
 
-    // Call Gemini API — prepend client context to system prompt if available
+    // Load professional reference material for this request type
+    const referenceContext = getReferenceContext(request.request_type)
+    const referenceBlock = referenceContext
+      ? `\n\n--- PROFESSIONAL REFERENCE ---\n${referenceContext}\n--- END REFERENCE ---\n\n`
+      : ''
+
+    // Call Gemini API — prepend client context + reference to system prompt
     const fullSystemPrompt = clientContext
-      ? `${clientContext}\n\n${systemPrompt}`
-      : systemPrompt
+      ? `${clientContext}${referenceBlock}${systemPrompt}`
+      : referenceBlock ? `${referenceBlock}${systemPrompt}` : systemPrompt
 
     const modelConfig: Record<string, unknown> = {
       model,
@@ -412,6 +432,35 @@ export async function processServiceRequest(request: ProcessableRequest): Promis
         .then(({ error }) => {
           if (error) console.warn(`[process] Content post promotion failed: ${error.message}`)
         })
+    }
+
+    // Write back key findings to client_seo_context (fire-and-forget)
+    writeBackClientContext(request.client_id, request.request_type, parsedContent)
+      .catch((err) => console.warn(`[process] writeBackClientContext failed:`, err))
+
+    // Auto-chain: queue next services if client tier allows
+    if (shouldAutoChain(request.client_tier ?? null, request.request_type)) {
+      const chainable = getNextServices(request.request_type)
+        .filter((svcType) => tierAllowsRequestType(request.client_tier, svcType))
+      if (chainable.length > 0) {
+        const chainData = extractChainData(request.request_type, parsedContent, request.target_url)
+        const chainedRows = chainable.map((svcType) => ({
+          client_id: request.client_id,
+          request_type: svcType,
+          target_url: (chainData.target_url as string | null) ?? request.target_url,
+          parameters: chainData,
+          status: 'queued',
+          triggered_by: request.id,
+          priority: 3,
+        }))
+        supabaseAdmin
+          .from('service_requests')
+          .insert(chainedRows)
+          .then(({ error }) => {
+            if (error) console.warn(`[process] Auto-chain insert failed: ${error.message}`)
+            else console.log(`[process] Auto-chained ${chainable.join(', ')} from ${request.request_type}`)
+          })
+      }
     }
 
     // Mark completed
