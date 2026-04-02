@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
-import { X, Maximize2, Download, FileDown } from 'lucide-react'
+import { X, Maximize2, Download, FileDown, FileText } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import Link from 'next/link'
 
@@ -1245,8 +1245,33 @@ function hasCodeContent(data: OutputData): boolean {
 
 export function OutputViewer({ data, variant = 'modal', open, onClose, className }: OutputViewerProps) {
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [pdfLoading, setPdfLoading] = useState(false)
 
   if (variant === 'modal' && !open) return null
+
+  async function handleDownloadPdf() {
+    if (!data.id || pdfLoading) return
+    setPdfLoading(true)
+    try {
+      const res = await fetch('/api/reports/pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deliverableId: data.id }),
+      })
+      if (!res.ok) throw new Error('PDF generation failed')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${data.title.replace(/\s+/g, '-').toLowerCase()}.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('PDF download error:', err)
+    } finally {
+      setPdfLoading(false)
+    }
+  }
 
   function handleDownload() {
     const text = generatePlainText(data)
@@ -1347,6 +1372,16 @@ export function OutputViewer({ data, variant = 'modal', open, onClose, className
               title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
             >
               <Maximize2 className="size-4 text-warm-gray" />
+            </button>
+          )}
+          {data.id && (
+            <button
+              onClick={handleDownloadPdf}
+              disabled={pdfLoading}
+              className="p-2 rounded-tenkai hover:bg-parchment transition-colors disabled:opacity-50"
+              title="Download PDF report"
+            >
+              <FileText className={cn('size-4 text-warm-gray', pdfLoading && 'animate-pulse')} />
             </button>
           )}
           <button

@@ -5,11 +5,21 @@ import { renderForBusinessOwner } from '@/lib/plain-english'
 import { generateSummary, extractScore } from '@/lib/deliverables'
 
 // ─── Brand Colors ────────────────────────────────────────────
-const TORII = [184, 80, 66] as const   // #B85042
+const TORII = [197, 61, 61] as const   // #C53D3D
 const CHARCOAL = [44, 44, 44] as const // #2C2C2C
 const PARCHMENT = [245, 240, 232] as const // #F5F0E8
 const MUTED = [102, 102, 102] as const // #666666
 const DIVIDER = [224, 216, 204] as const // #E0D8CC
+const WHITE = [255, 255, 255] as const
+const SCORE_GREEN = [34, 139, 34] as const  // ≥70
+const SCORE_AMBER = [204, 153, 0] as const  // 40-69
+const SCORE_RED = [197, 61, 61] as const    // <40
+
+function scoreColor(score: number): readonly [number, number, number] {
+  if (score >= 70) return SCORE_GREEN
+  if (score >= 40) return SCORE_AMBER
+  return SCORE_RED
+}
 
 // ─── Layout Constants ────────────────────────────────────────
 const PAGE_W = 210
@@ -20,6 +30,7 @@ const LINE_H = 6
 const FOOTER_Y = PAGE_H - 15
 
 // ─── Helper: wrap text and track Y, auto-paginate ───────────
+let _footerDate = ''
 function addWrappedText(
   doc: jsPDF,
   text: string,
@@ -31,7 +42,7 @@ function addWrappedText(
   const lines = doc.splitTextToSize(text, maxWidth)
   for (const line of lines) {
     if (y > FOOTER_Y - 10) {
-      addFooter(doc)
+      addFooter(doc, _footerDate)
       doc.addPage()
       y = MARGIN
     }
@@ -41,11 +52,13 @@ function addWrappedText(
   return y
 }
 
-function addFooter(doc: jsPDF) {
+function addFooter(doc: jsPDF, dateStr?: string) {
+  const pageNum = doc.getNumberOfPages()
   doc.setFontSize(7)
   doc.setTextColor(...MUTED)
-  doc.text('Tenkai Marketing', MARGIN, FOOTER_Y)
-  doc.text('tenkai-marketing.vercel.app', PAGE_W - MARGIN, FOOTER_Y, { align: 'right' })
+  const footerText = `Prepared by Tenkai SEO${dateStr ? ` · ${dateStr}` : ''} · Confidential`
+  doc.text(footerText, MARGIN, FOOTER_Y)
+  doc.text(`Page ${pageNum}`, PAGE_W - MARGIN, FOOTER_Y, { align: 'right' })
 }
 
 function addLabel(doc: jsPDF, label: string, y: number): number {
@@ -171,9 +184,19 @@ function buildPdf({
 }): Buffer {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' })
 
+  _footerDate = date
+
   // ── Cover Page ──────────────────────────────────────────
   doc.setFillColor(...PARCHMENT)
   doc.rect(0, 0, PAGE_W, PAGE_H, 'F')
+
+  // Torii red header bar
+  doc.setFillColor(...TORII)
+  doc.rect(0, 0, PAGE_W, 18, 'F')
+  doc.setFontSize(11)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(...WHITE)
+  doc.text('TENKAI SEO', PAGE_W / 2, 12, { align: 'center' })
 
   doc.setFontSize(32)
   doc.setFont('helvetica', 'bold')
@@ -183,7 +206,7 @@ function buildPdf({
   doc.setFontSize(12)
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(...MUTED)
-  doc.text('AI-Powered Marketing Intelligence', PAGE_W / 2, 112, { align: 'center' })
+  doc.text('AI-Powered SEO Intelligence', PAGE_W / 2, 112, { align: 'center' })
 
   doc.setFontSize(20)
   doc.setFont('helvetica', 'bold')
@@ -205,13 +228,13 @@ function buildPdf({
 
   y = addSectionTitle(doc, 'Executive Summary', y)
 
-  // Score box
+  // Score box with color-coded score
   if (score !== null) {
     doc.setFillColor(...PARCHMENT)
     doc.roundedRect(MARGIN, y, CONTENT_W, 22, 3, 3, 'F')
     doc.setFontSize(24)
     doc.setFont('helvetica', 'bold')
-    doc.setTextColor(...TORII)
+    doc.setTextColor(...scoreColor(score))
     doc.text(`${score}`, MARGIN + 8, y + 15)
     doc.setFontSize(9)
     doc.setTextColor(...MUTED)
@@ -244,7 +267,7 @@ function buildPdf({
   y = addLabel(doc, 'Technical Summary', y)
   y = addBody(doc, technicalSummary, y)
 
-  addFooter(doc)
+  addFooter(doc, date)
 
   // ── Detailed Findings Page(s) ──────────────────────────
   doc.addPage()
@@ -256,19 +279,13 @@ function buildPdf({
     y = renderContentSection(doc, key, value, y)
   }
 
-  addFooter(doc)
+  addFooter(doc, date)
 
   return Buffer.from(doc.output('arraybuffer'))
 }
 
-// ─── API Route ───────────────────────────────────────────────
-export async function GET(request: NextRequest) {
-  const deliverableId = request.nextUrl.searchParams.get('id')
-  if (!deliverableId) {
-    return NextResponse.json({ error: 'Missing deliverable id' }, { status: 400 })
-  }
-
-  // Fetch deliverable + client info
+// ─── Shared: fetch deliverable + generate PDF response ──────
+async function generatePdfResponse(deliverableId: string): Promise<NextResponse> {
   const { data: deliverable, error: delError } = await supabaseAdmin
     .from('deliverables')
     .select('id, client_id, deliverable_type, title, content, summary, score, created_at, request_id')
@@ -279,7 +296,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Deliverable not found' }, { status: 404 })
   }
 
-  // Get request_type from service_requests for accurate plain-english rendering
   let requestType = deliverable.deliverable_type
   if (deliverable.request_id) {
     const { data: req } = await supabaseAdmin
@@ -323,4 +339,27 @@ export async function GET(request: NextRequest) {
       'Cache-Control': 'private, max-age=3600',
     },
   })
+}
+
+// ─── GET /api/reports/pdf?id=<deliverableId> ────────────────
+export async function GET(request: NextRequest) {
+  const deliverableId = request.nextUrl.searchParams.get('id')
+  if (!deliverableId) {
+    return NextResponse.json({ error: 'Missing deliverable id' }, { status: 400 })
+  }
+  return generatePdfResponse(deliverableId)
+}
+
+// ─── POST /api/reports/pdf { deliverableId } ────────────────
+export async function POST(request: NextRequest) {
+  let body: { deliverableId?: string }
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+  }
+  if (!body.deliverableId) {
+    return NextResponse.json({ error: 'Missing deliverableId' }, { status: 400 })
+  }
+  return generatePdfResponse(body.deliverableId)
 }
