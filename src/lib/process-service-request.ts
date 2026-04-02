@@ -24,6 +24,13 @@ import { fetchGBPData } from '@/lib/integrations/google-business-profile'
 import type { GBPData } from '@/lib/integrations/google-business-profile'
 import { fetchKeywordVolumes } from '@/lib/integrations/google-ads-keywords'
 import type { KeywordVolumeResult } from '@/lib/integrations/google-ads-keywords'
+import {
+  fetchBacklinkSummary,
+  fetchBacklinks,
+  fetchReferringDomains,
+  fetchBacklinkCompetitors,
+} from '@/lib/integrations/dataforseo-backlinks'
+import type { BacklinkSummary, Backlink, ReferringDomain, CompetitorDomain } from '@/lib/integrations/dataforseo-backlinks'
 
 // --------------- Site Scraping ---------------
 
@@ -285,6 +292,10 @@ export async function processServiceRequest(request: ProcessableRequest): Promis
     let crawlData: CrawlResult | null = null
     let napReport: NAPConsistencyReport | null = null
     let keywordVolumeData: KeywordVolumeResult[] | null = null
+    let backlinkSummary: BacklinkSummary | null = null
+    let backlinkList: Backlink[] | null = null
+    let referringDomains: ReferringDomain[] | null = null
+    let backlinkCompetitors: CompetitorDomain[] | null = null
     const isUrlBased = request.target_url && URL_BASED_REQUESTS.has(request.request_type)
 
     // Request types that get a full site crawl
@@ -346,6 +357,52 @@ export async function processServiceRequest(request: ProcessableRequest): Promis
         ])
         keywordSerpData = serp
         if (vol && vol.length > 0) keywordVolumeData = vol
+      }
+    }
+
+    // Fetch backlink data for relevant request types
+    const BACKLINK_SUMMARY_REQUESTS = new Set(['link_analysis', 'competitor_analysis', 'outreach_emails', 'site_audit'])
+    const BACKLINK_FULL_REQUESTS = new Set(['link_analysis'])
+
+    if (isUrlBased && BACKLINK_SUMMARY_REQUESTS.has(request.request_type)) {
+      const domain = new URL(request.target_url!).hostname.replace(/^www\./, '')
+
+      if (request.request_type === 'link_analysis') {
+        // Full backlink analysis
+        const [summary, links, refDomains, competitors] = await Promise.all([
+          fetchBacklinkSummary(domain).catch(() => null),
+          BACKLINK_FULL_REQUESTS.has(request.request_type) ? fetchBacklinks(domain, 20).catch(() => []) : Promise.resolve([]),
+          fetchReferringDomains(domain, 10).catch(() => []),
+          fetchBacklinkCompetitors(domain, 5).catch(() => []),
+        ])
+        backlinkSummary = summary
+        backlinkList = links.length > 0 ? links : null
+        referringDomains = refDomains.length > 0 ? refDomains : null
+        backlinkCompetitors = competitors.length > 0 ? competitors : null
+      } else if (request.request_type === 'competitor_analysis') {
+        // Summary for target + any competitor domains in parameters
+        backlinkSummary = await fetchBacklinkSummary(domain).catch(() => null)
+        const params = request.parameters as Record<string, string>
+        const competitorDomains: string[] = []
+        if (params.competitors) {
+          competitorDomains.push(...params.competitors.split(',').map((d: string) => d.trim()).filter(Boolean).slice(0, 5))
+        }
+        if (competitorDomains.length > 0) {
+          const summaries = await Promise.all(
+            competitorDomains.map(d => fetchBacklinkSummary(d).catch(() => null))
+          )
+          const valid = summaries.filter(Boolean) as BacklinkSummary[]
+          if (valid.length > 0) {
+            backlinkCompetitors = valid.map(s => ({
+              domain: s.domain,
+              domain_rank: s.domain_rank,
+              common_referring_domains: s.referring_domains,
+            }))
+          }
+        }
+      } else {
+        // Simple summary for outreach_emails and site_audit
+        backlinkSummary = await fetchBacklinkSummary(domain).catch(() => null)
       }
     }
 
@@ -447,6 +504,42 @@ export async function processServiceRequest(request: ProcessableRequest): Promis
       }
       volLines.push('--- END VOLUME DATA ---')
       taskMessage += '\n' + volLines.join('\n')
+    }
+
+    // Append backlink data to task message
+    if (backlinkSummary) {
+      const blLines: string[] = [
+        '\n--- BACKLINK PROFILE (DataForSEO — real data) ---',
+        `Domain: ${backlinkSummary.domain}`,
+        `Domain Rank: ${backlinkSummary.domain_rank ?? 'n/a'} (0–1000 scale)`,
+        `Total Backlinks: ${backlinkSummary.backlinks_total.toLocaleString()}`,
+        `Referring Domains: ${backlinkSummary.referring_domains.toLocaleString()}`,
+        `Referring Domains (Nofollow): ${backlinkSummary.referring_domains_nofollow.toLocaleString()}`,
+        `Broken Backlinks: ${backlinkSummary.broken_backlinks.toLocaleString()}`,
+      ]
+      if (backlinkList && backlinkList.length > 0) {
+        blLines.push('', 'Top Backlinks (by source domain rank):')
+        blLines.push('source_domain | anchor | dofollow | domain_rank | first_seen')
+        for (const bl of backlinkList.slice(0, 20)) {
+          blLines.push(`${bl.source_domain} | "${bl.anchor}" | ${bl.dofollow ? 'dofollow' : 'nofollow'} | ${bl.domain_rank ?? 'n/a'} | ${bl.first_seen ?? 'n/a'}`)
+        }
+      }
+      if (referringDomains && referringDomains.length > 0) {
+        blLines.push('', 'Top Referring Domains:')
+        blLines.push('domain | backlinks_to_target | domain_rank')
+        for (const rd of referringDomains.slice(0, 10)) {
+          blLines.push(`${rd.domain} | ${rd.backlinks} | ${rd.domain_rank ?? 'n/a'}`)
+        }
+      }
+      if (backlinkCompetitors && backlinkCompetitors.length > 0) {
+        blLines.push('', 'Backlink Competitors (domains sharing backlink profile):')
+        blLines.push('domain | domain_rank | shared_referring_domains')
+        for (const comp of backlinkCompetitors.slice(0, 5)) {
+          blLines.push(`${comp.domain} | ${comp.domain_rank ?? 'n/a'} | ${comp.common_referring_domains}`)
+        }
+      }
+      blLines.push('--- END BACKLINK DATA ---')
+      taskMessage += '\n' + blLines.join('\n')
     }
 
     // Load professional reference material for this request type

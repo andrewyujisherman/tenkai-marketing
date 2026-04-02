@@ -20,6 +20,9 @@ export const CHAIN_MAP: Record<string, string[]> = {
   local_seo_audit: ['gbp_optimization'],
   content_article: ['outreach_emails'],
   technical_audit: ['meta_optimization', 'schema_generation'],
+  topic_cluster_map: ['content_brief'],
+  analytics_audit: ['monthly_report'],
+  geo_audit: ['entity_optimization'],
 }
 
 // ─── Helpers ──────────────────────────────────────────────────
@@ -151,6 +154,39 @@ export function extractChainData(
         ...base,
         local_issues: localIssues.slice(0, 10),
         gbp_gaps: gbpGaps.slice(0, 10),
+      }
+    }
+
+    case 'topic_cluster_map': {
+      const pillars = toArr(content.pillar_topics ?? content.pillars ?? content.clusters)
+      const clusters = toArr(content.cluster_structure ?? content.topic_clusters ?? content.subtopics)
+      return {
+        ...base,
+        pillar_topics: pillars.slice(0, 10),
+        cluster_structure: clusters.slice(0, 20),
+        from_topic_cluster: true,
+      }
+    }
+
+    case 'analytics_audit': {
+      const anomalies = toArr(content.anomalies ?? content.issues ?? content.findings)
+      const metrics = content.key_metrics ?? content.metrics ?? content.summary ?? {}
+      return {
+        ...base,
+        key_metrics: metrics,
+        anomalies: anomalies.slice(0, 10),
+        from_analytics_audit: true,
+      }
+    }
+
+    case 'geo_audit': {
+      const gaps = toArr(content.ai_visibility_gaps ?? content.visibility_gaps ?? content.gaps)
+      const citations = toArr(content.citation_issues ?? content.citations ?? content.local_citations)
+      return {
+        ...base,
+        ai_visibility_gaps: gaps.slice(0, 10),
+        citation_issues: citations.slice(0, 10),
+        from_geo_audit: true,
       }
     }
 
