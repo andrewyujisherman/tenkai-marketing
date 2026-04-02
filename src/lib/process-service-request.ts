@@ -540,6 +540,17 @@ export async function processServiceRequest(request: ProcessableRequest): Promis
     // Fetch accumulated client SEO context
     const clientContext = await fetchClientSeoContext(request.client_id)
 
+    // Backfill service area from client_seo_context into request parameters for chained requests
+    // This ensures the SERVICE AREA block in buildTaskMessage fires even when the original
+    // onboarding parameters weren't passed through the chain
+    const params = request.parameters as Record<string, unknown>
+    if (!params.serviceArea && !params.service_area && clientContext) {
+      const areaMatch = clientContext.match(/Service Area:\s*(.+)/i)
+      const geoMatch = clientContext.match(/Geography:\s*(.+)/i)
+      if (areaMatch) params.serviceArea = areaMatch[1].trim()
+      if (geoMatch && !params.targetGeography) params.targetGeography = geoMatch[1].trim()
+    }
+
     let taskMessage = buildTaskMessage(
       request.request_type,
       request.target_url,

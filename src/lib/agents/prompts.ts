@@ -1450,6 +1450,18 @@ export function buildTaskMessage(
     parts.push(`Target URL: ${targetUrl}`)
   }
 
+  // Extract and prominently inject service area — this is the foundation for all localized work
+  const params = (parameters ?? {}) as Record<string, unknown>
+  const serviceArea = params.serviceArea ?? params.service_area ?? params.city ?? ''
+  const geography = params.targetGeography ?? params.target_geography ?? params.geography ?? ''
+  if (serviceArea || geography) {
+    parts.push(`\n=== SERVICE AREA (ALL output must be localized to this area) ===`)
+    if (serviceArea) parts.push(`Primary Service Area: ${serviceArea}`)
+    if (geography) parts.push(`Geographic Scope: ${geography}`)
+    parts.push(`CRITICAL: All keywords, recommendations, competitor analysis, and content must be targeted to this specific service area. National-level data must be clearly labeled as national with a local estimate provided. Never present national search volumes as if they are local volumes.`)
+    parts.push(`=== END SERVICE AREA ===\n`)
+  }
+
   if (parameters && Object.keys(parameters).length > 0) {
     parts.push(`Additional parameters: ${JSON.stringify(parameters)}`)
   }
