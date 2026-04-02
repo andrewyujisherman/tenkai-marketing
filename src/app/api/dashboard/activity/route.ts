@@ -75,7 +75,7 @@ export async function GET() {
       db.from('service_requests')
         .select('id, request_type, status, created_at')
         .eq('client_id', clientId)
-        .eq('status', 'processing')
+        .in('status', ['processing', 'queued'])
         .order('created_at', { ascending: false })
         .limit(9),
       db.from('deliverables')
@@ -84,6 +84,34 @@ export async function GET() {
         .order('created_at', { ascending: false })
         .limit(10),
     ])
+
+    // Fetch triggered_by chain info for completed tasks
+    const requestIds = (completedTasks ?? []).map((d) => d.request_id).filter(Boolean) as string[]
+    const triggeredByMap = new Map<string, { triggered_by: string | null; request_type: string }>()
+    const parentTypeMap = new Map<string, string>()
+
+    if (requestIds.length > 0) {
+      const { data: reqData } = await supabaseAdmin
+        .from('service_requests')
+        .select('id, triggered_by, request_type')
+        .in('id', requestIds)
+
+      if (reqData) {
+        for (const r of reqData) {
+          triggeredByMap.set(r.id, { triggered_by: r.triggered_by ?? null, request_type: r.request_type })
+        }
+        const parentIds = reqData.map((r) => r.triggered_by).filter(Boolean) as string[]
+        if (parentIds.length > 0) {
+          const { data: parents } = await supabaseAdmin
+            .from('service_requests')
+            .select('id, request_type')
+            .in('id', parentIds)
+          if (parents) {
+            for (const p of parents) parentTypeMap.set(p.id, p.request_type)
+          }
+        }
+      }
+    }
 
     // Build agent statuses from the TENKAI_AGENTS registry
     const workingAgentNames = new Set(
@@ -118,6 +146,8 @@ export async function GET() {
       const agentEntry = Object.values(TENKAI_AGENTS).find(
         ag => ag.name.toLowerCase() === (d.agent_name ?? '').toLowerCase()
       )
+      const reqInfo = d.request_id ? triggeredByMap.get(d.request_id) : null
+      const parentType = reqInfo?.triggered_by ? parentTypeMap.get(reqInfo.triggered_by) : null
       return {
         id: d.id,
         title: cleanTitle(d.title ?? '', d.deliverable_type ?? '', d.agent_name ?? ''),
@@ -126,6 +156,9 @@ export async function GET() {
         content_type: d.deliverable_type ?? 'report',
         completed_at: d.created_at,
         deliverable_id: d.id,
+        triggered_by_type: parentType
+          ? parentType.replace(/_/g, ' ')
+          : null,
       }
     })
 

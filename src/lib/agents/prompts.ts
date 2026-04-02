@@ -49,6 +49,16 @@ When performing a SITE AUDIT, return this exact JSON:
     {"priority": "high"|"medium"|"low", "title": "<action>", "description": "<detail>", "estimated_impact": "<impact description>"}
   ],
   "competitive_landscape": "<brief analysis of the competitive environment>",
+  "internal_link_architecture": {
+    "pages_crawled": <number — from real crawl data if available>,
+    "orphan_pages": [{"url": "<path>", "fix": "<which existing pages should link here>"}],
+    "max_link_depth": <number — deepest page found>,
+    "deep_pages": [{"url": "<path>", "depth": <number>, "fix": "<add internal links to reduce depth>"}],
+    "broken_links": [{"from": "<page>", "to": "<dead link>", "status": <code>}],
+    "anchor_text_health": "healthy"|"over_optimized"|"needs_branded",
+    "anchor_text_alert": "<alert from crawl data if exact match >10% or branded <25% — null if healthy>",
+    "top_recommendations": ["<specific internal link to add>", "<orphan rescue>", "<link equity flow fix>"]
+  },
   "quick_wins": ["<immediate action 1>", "<immediate action 2>", "<immediate action 3>"]
 }
 
@@ -515,6 +525,15 @@ When performing a TECHNICAL AUDIT, return this exact JSON:
     "risk_level": "none"|"low"|"high",
     "issues": [{"description": "<content invisible to non-JS crawlers>", "fix": "<recommendation>"}]
   },
+  "crawl_findings": {
+    "pages_crawled": <number — from real crawl data if available, else 0>,
+    "orphan_pages": [{"url": "<path>", "inbound_count": <number>, "fix": "<specific pages that should link here>"}],
+    "broken_links": [{"from": "<page>", "to": "<dead URL>", "status_code": <number>, "fix": "<update or remove link>"}],
+    "redirect_chains": [{"from": "<URL>", "final": "<destination>", "fix": "Update links to point directly to final destination"}],
+    "pages_missing_meta": [{"url": "<path>", "missing": ["title"|"meta_description"|"h1"]}],
+    "avg_response_time_ms": <number — from crawl data if available>,
+    "slow_pages": [{"url": "<path>", "response_time_ms": <number>, "fix": "<server-side optimization>"}]
+  },
   "priority_fixes": [
     {"rank": <1-10>, "issue": "<title>", "category": "<category>", "impact_score": <1-5>, "effort_score": <1-5>, "priority_ratio": <impact/effort>, "description": "<specific detail>", "implementation": "<exact steps to fix>"}
   ]
@@ -524,7 +543,7 @@ Keep your response concise. Target 2000-3000 tokens. Every field should be speci
 
 IMPORTANT:
 - Use real CWV thresholds — never invent pass/fail criteria.
-- Orphan page detection is mandatory — pages with 0-1 internal links pointing to them rarely rank.
+- Orphan page detection is mandatory — use REAL crawl data when provided (SITE CRAWL DATA section). If no crawl data, estimate from site structure.
 - Schema recommendations must include which specific fields are required, not just the type.
 - Priority fixes must be ordered by impact/effort ratio, highest first.
 - Limit arrays to 5-8 items max. If there are more, select the highest-impact items. A client paying for expert advice wants your TOP picks, not an exhaustive dump.
@@ -838,9 +857,13 @@ When performing a LINK ANALYSIS, return this exact JSON:
     "estimated_referring_domains": <number>,
     "estimated_backlinks": <number>,
     "domain_authority_estimate": <0-100>,
-    "anchor_text_distribution": {"branded": <percent>, "exact_match": <percent>, "partial_match": <percent>, "generic": <percent>, "naked_url": <percent>},
+    "anchor_text_distribution": {
+      "data_source": "real_crawl"|"estimated",
+      "branded": <percent>, "exact_match": <percent>, "partial_match": <percent>, "generic": <percent>, "naked_url": <percent>,
+      "total_links_analyzed": <number — from crawl data if provided, else 0>
+    },
     "anchor_text_health": "healthy"|"over_optimized"|"under_branded",
-    "anchor_text_alert": "<specific warning if exact match >10% or branded <25%>",
+    "anchor_text_alert": "<use ALERT from SITE CRAWL DATA section if provided — otherwise flag if exact match >10% or branded <25%>",
     "link_quality_breakdown": {"high_quality": <percent>, "medium_quality": <percent>, "low_quality": <percent>, "toxic": <percent>}
   },
   "internal_link_audit": {
@@ -1372,13 +1395,52 @@ export interface KeywordSerpEnrichmentData {
   aiOverviewPresent: boolean
 }
 
+export interface CrawlData {
+  startUrl: string
+  pagesCrawled: number
+  pagesFound: number
+  crawlDurationMs: number
+  orphanPages: string[]
+  brokenLinks: Array<{ from: string; to: string; statusCode: number }>
+  redirectChains: Array<{ from: string; chain: string[]; final: string }>
+  robotsBlocked: boolean
+  hubPages: Array<{ url: string; outboundLinks: number }>
+  inboundLinkCounts: Record<string, number>
+  linkDepthMap: Record<string, number>
+  anchorTextDistribution: {
+    brandedPct: number
+    partialMatchPct: number
+    exactMatchPct: number
+    genericPct: number
+    nakedUrlPct: number
+    total: number
+    overOptimized: boolean
+    alert: string | null
+  }
+  pages: Array<{
+    url: string
+    statusCode: number
+    title: string
+    metaDescription: string
+    h1: string
+    canonicalUrl: string | null
+    responseTimeMs: number
+    internalLinks: Array<{ href: string; anchorText: string }>
+    externalLinks: Array<{ href: string; anchorText: string }>
+    isRedirect: boolean
+    error?: string
+  }>
+  error?: string
+}
+
 export function buildTaskMessage(
   requestType: string,
   targetUrl: string | null,
   parameters: Record<string, unknown>,
   scrapedSite?: ScrapedSiteData | null,
   enrichedData?: EnrichedSiteData | null,
-  keywordSerpData?: KeywordSerpEnrichmentData[] | null
+  keywordSerpData?: KeywordSerpEnrichmentData[] | null,
+  crawlData?: CrawlData | null
 ): string {
   const parts: string[] = []
 
@@ -1515,6 +1577,88 @@ export function buildTaskMessage(
     }
 
     parts.push('\nIMPORTANT: Use the REAL data above in your analysis. These are actual measurements, not estimates. Reference specific numbers from the data.')
+  }
+
+  // Include crawl data for site_audit, technical_audit, link_analysis
+  if (crawlData && !crawlData.error) {
+    parts.push('\n--- SITE CRAWL DATA (real crawl of every page found on the site) ---')
+    parts.push(`Pages Crawled: ${crawlData.pagesCrawled} | Pages Found: ${crawlData.pagesFound} | Crawl Time: ${(crawlData.crawlDurationMs / 1000).toFixed(1)}s`)
+    if (crawlData.robotsBlocked) {
+      parts.push('WARNING: robots.txt is blocking the crawler — some pages may not have been crawled.')
+    }
+
+    // Orphan pages
+    if (crawlData.orphanPages.length > 0) {
+      parts.push(`\nOrphan Pages (${crawlData.orphanPages.length} pages with 0 internal links pointing to them — these rarely rank):`)
+      crawlData.orphanPages.slice(0, 10).forEach(url => parts.push(`  - ${url}`))
+      if (crawlData.orphanPages.length > 10) parts.push(`  ... and ${crawlData.orphanPages.length - 10} more`)
+    } else {
+      parts.push('\nOrphan Pages: None detected — good internal link coverage.')
+    }
+
+    // Broken links
+    if (crawlData.brokenLinks.length > 0) {
+      parts.push(`\nBroken Links (${crawlData.brokenLinks.length} links returning 4xx/5xx):`)
+      crawlData.brokenLinks.slice(0, 8).forEach(b => parts.push(`  - [${b.statusCode}] ${b.to} (linked from: ${b.from})`))
+    } else {
+      parts.push('\nBroken Links: None detected.')
+    }
+
+    // Redirect chains
+    if (crawlData.redirectChains.length > 0) {
+      parts.push(`\nRedirect Chains (${crawlData.redirectChains.length}):`)
+      crawlData.redirectChains.slice(0, 5).forEach(r => parts.push(`  - ${r.from} → ${r.final}`))
+    }
+
+    // Link depth
+    const depthGroups: Record<number, number> = {}
+    for (const depth of Object.values(crawlData.linkDepthMap)) {
+      depthGroups[depth] = (depthGroups[depth] ?? 0) + 1
+    }
+    const depthSummary = Object.entries(depthGroups).sort(([a],[b]) => Number(a)-Number(b))
+      .map(([d, count]) => `depth ${d}: ${count} pages`).join(' | ')
+    parts.push(`\nLink Depth Distribution: ${depthSummary}`)
+
+    // Hub pages (most outbound links)
+    if (crawlData.hubPages.length > 0) {
+      parts.push('\nHub Pages (highest link equity distribution):')
+      crawlData.hubPages.slice(0, 5).forEach(h => parts.push(`  - ${h.url} (${h.outboundLinks} outbound internal links)`))
+    }
+
+    // Top pages by inbound internal links (link equity)
+    const topByInbound = Object.entries(crawlData.inboundLinkCounts)
+      .sort(([,a],[,b]) => b - a).slice(0, 8)
+    if (topByInbound.length > 0) {
+      parts.push('\nPages with Most Inbound Internal Links (highest link equity):')
+      topByInbound.forEach(([url, count]) => parts.push(`  - ${url} (${count} inbound links)`))
+    }
+
+    // Anchor text distribution
+    const atd = crawlData.anchorTextDistribution
+    if (atd.total > 0) {
+      parts.push(`\nAnchor Text Distribution (${atd.total} total links analyzed):`)
+      parts.push(`  Branded: ${atd.brandedPct}% | Partial Match: ${atd.partialMatchPct}% | Exact Match: ${atd.exactMatchPct}% | Generic: ${atd.genericPct}% | Naked URL: ${atd.nakedUrlPct}%`)
+      if (atd.alert) parts.push(`  ALERT: ${atd.alert}`)
+    }
+
+    // Sample of pages crawled with key SEO data
+    const pagesWithIssues = crawlData.pages.filter(p =>
+      !p.title || !p.metaDescription || !p.h1 || p.statusCode >= 400
+    ).slice(0, 10)
+    if (pagesWithIssues.length > 0) {
+      parts.push('\nPages with SEO Issues (missing title/meta/H1 or errors):')
+      pagesWithIssues.forEach(p => {
+        const issues = []
+        if (!p.title) issues.push('no title')
+        if (!p.metaDescription) issues.push('no meta desc')
+        if (!p.h1) issues.push('no H1')
+        if (p.statusCode >= 400) issues.push(`HTTP ${p.statusCode}`)
+        parts.push(`  - ${p.url}: ${issues.join(', ')}`)
+      })
+    }
+
+    parts.push('--- END CRAWL DATA ---')
+    parts.push('\nIMPORTANT: The crawl data above is REAL — actual HTTP requests to every page. Use it to identify specific broken links, orphan pages, and link depth issues. These are facts, not estimates.')
   }
 
   // Include keyword SERP enrichment data for keyword-based requests

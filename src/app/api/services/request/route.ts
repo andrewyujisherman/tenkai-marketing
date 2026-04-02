@@ -118,6 +118,7 @@ async function createRequest(
     target_url: url,
     parameters: parameters ?? {},
     assigned_agent: agentId,
+    client_tier: client.tier,
   }).catch((err) => {
     console.error(`[services/request] Background processing failed for ${serviceRequest.id}:`, err)
   })

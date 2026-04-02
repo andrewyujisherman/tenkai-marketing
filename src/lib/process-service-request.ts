@@ -22,6 +22,8 @@ import { tierAllowsRequestType } from '@/lib/tier-gates'
 import { getReferenceContext } from '@/lib/seo-reference'
 import { fetchGBPData } from '@/lib/integrations/google-business-profile'
 import type { GBPData } from '@/lib/integrations/google-business-profile'
+import { fetchKeywordVolumes } from '@/lib/integrations/google-ads-keywords'
+import type { KeywordVolumeResult } from '@/lib/integrations/google-ads-keywords'
 
 // --------------- Site Scraping ---------------
 
@@ -282,6 +284,7 @@ export async function processServiceRequest(request: ProcessableRequest): Promis
     let keywordSerpData: KeywordSerpEnrichment[] | null = null
     let crawlData: CrawlResult | null = null
     let napReport: NAPConsistencyReport | null = null
+    let keywordVolumeData: KeywordVolumeResult[] | null = null
     const isUrlBased = request.target_url && URL_BASED_REQUESTS.has(request.request_type)
 
     // Request types that get a full site crawl
@@ -333,10 +336,16 @@ export async function processServiceRequest(request: ProcessableRequest): Promis
       if (params.niche) seedKeywords.push(params.niche)
 
       if (seedKeywords.length > 0) {
-        keywordSerpData = await fetchKeywordSerpData(
-          [...new Set(seedKeywords)].slice(0, 5),
-          { gl: params.country_code ?? params.gl }
-        ).catch(() => null)
+        const uniqueKeywords = [...new Set(seedKeywords)]
+        const [serp, vol] = await Promise.all([
+          fetchKeywordSerpData(
+            uniqueKeywords.slice(0, 5),
+            { gl: params.country_code ?? params.gl }
+          ).catch(() => null),
+          fetchKeywordVolumes(uniqueKeywords.slice(0, 2000)).catch(() => null),
+        ])
+        keywordSerpData = serp
+        if (vol && vol.length > 0) keywordVolumeData = vol
       }
     }
 
@@ -423,6 +432,21 @@ export async function processServiceRequest(request: ProcessableRequest): Promis
       if (gbpData.error) gbpLines.push(`Note: ${gbpData.error}`)
       gbpLines.push('--- END GBP DATA ---')
       taskMessage += '\n' + gbpLines.join('\n')
+    }
+
+    // Append keyword search volume data to task message
+    if (keywordVolumeData && keywordVolumeData.length > 0) {
+      const volLines: string[] = [
+        '\n--- KEYWORD SEARCH VOLUME DATA (Google Ads API — real data) ---',
+        'keyword | avg_monthly_searches | competition | low_bid_cents | high_bid_cents',
+      ]
+      for (const kv of keywordVolumeData) {
+        volLines.push(
+          `${kv.keyword} | ${kv.avg_monthly_searches ?? 'n/a'} | ${kv.competition ?? 'n/a'} | ${kv.low_bid ?? 'n/a'} | ${kv.high_bid ?? 'n/a'}`
+        )
+      }
+      volLines.push('--- END VOLUME DATA ---')
+      taskMessage += '\n' + volLines.join('\n')
     }
 
     // Load professional reference material for this request type
@@ -528,22 +552,39 @@ export async function processServiceRequest(request: ProcessableRequest): Promis
         .filter((svcType) => tierAllowsRequestType(request.client_tier, svcType))
       if (chainable.length > 0) {
         const chainData = extractChainData(request.request_type, parsedContent, request.target_url)
-        const chainedRows = chainable.map((svcType) => ({
-          client_id: request.client_id,
-          request_type: svcType,
-          target_url: (chainData.target_url as string | null) ?? request.target_url,
-          parameters: chainData,
-          status: 'queued',
-          triggered_by: request.id,
-          priority: 3,
-        }))
-        supabaseAdmin
-          .from('service_requests')
-          .insert(chainedRows)
-          .then(({ error }) => {
-            if (error) console.warn(`[process] Auto-chain insert failed: ${error.message}`)
-            else console.log(`[process] Auto-chained ${chainable.join(', ')} from ${request.request_type}`)
-          })
+        const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+        const eligibleTypes: string[] = []
+        for (const svcType of chainable) {
+          const { count } = await supabaseAdmin
+            .from('service_requests')
+            .select('*', { count: 'exact', head: true })
+            .eq('client_id', request.client_id)
+            .eq('request_type', svcType)
+            .gte('created_at', cutoff)
+          if ((count ?? 0) > 0) {
+            console.log(`[process] Auto-chain skipped ${svcType} — already ran in last 24h`)
+            continue
+          }
+          eligibleTypes.push(svcType)
+        }
+        if (eligibleTypes.length > 0) {
+          const chainedRows = eligibleTypes.map((svcType) => ({
+            client_id: request.client_id,
+            request_type: svcType,
+            target_url: (chainData.target_url as string | null) ?? request.target_url,
+            parameters: chainData,
+            status: 'queued',
+            triggered_by: request.id,
+            priority: 3,
+          }))
+          supabaseAdmin
+            .from('service_requests')
+            .insert(chainedRows)
+            .then(({ error }) => {
+              if (error) console.warn(`[process] Auto-chain insert failed: ${error.message}`)
+              else console.log(`[process] Auto-chained ${eligibleTypes.join(', ')} from ${request.request_type}`)
+            })
+        }
       }
     }
 

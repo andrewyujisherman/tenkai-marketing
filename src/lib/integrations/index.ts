@@ -3,6 +3,7 @@ export * from './serper'
 export * from './crux'
 export * from './google-search-console'
 export * from './google-analytics'
+export * from './crawler'
 
 import { fetchPageSpeed, PageSpeedData } from './pagespeed'
 import { searchSerp, SerpData, KeywordSerpEnrichment } from './serper'

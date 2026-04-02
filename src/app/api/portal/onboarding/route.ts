@@ -78,7 +78,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: updateError.message }, { status: 500 })
   }
 
-  // Auto-trigger strategy chain: site_audit → keyword_research → content_calendar → competitor_analysis
+  // Auto-trigger: site_audit + keyword_research + competitor_analysis
+  // content_calendar fires automatically via CHAIN_MAP when keyword_research completes
   // These run in parallel so the client sees immediate progress from their AI team.
   const websiteUrl =
     (onboarding_data?.business?.url as string | undefined) ??
@@ -88,7 +89,6 @@ export async function POST(request: Request) {
     const strategyChain = [
       { type: 'site_audit', priority: 9 },
       { type: 'keyword_research', priority: 8 },
-      { type: 'content_calendar', priority: 7 },
       { type: 'competitor_analysis', priority: 7 },
     ] as const
 
