@@ -211,38 +211,85 @@ export async function writeBackClientContext(
     const update: Record<string, unknown> = { client_id: clientId }
 
     if (serviceType === 'keyword_research') {
-      const raw = toArr(content.keywords ?? content.top_keywords ?? content.seed_keywords)
-      const topKeywords = raw.slice(0, 20).map((k) => {
-        if (typeof k === 'string') return { keyword: k }
-        const obj = k as Record<string, unknown>
-        return {
-          keyword: toStr(obj.keyword ?? obj.term ?? obj.phrase, ''),
-          position: obj.position != null ? toStr(obj.position) : undefined,
-          trend: obj.trend != null ? toStr(obj.trend) : undefined,
+      // Agents produce: keyword_clusters[].primary_keyword, quick_wins[].keyword, primary_keywords[]
+      const allKws: Array<{ keyword: string; volume?: string; difficulty?: string }> = []
+      for (const c of toArr(content.keyword_clusters)) {
+        const obj = c as Record<string, unknown>
+        if (obj.primary_keyword) allKws.push({
+          keyword: toStr(obj.primary_keyword, ''),
+          volume: obj.volume != null ? toStr(obj.volume) : undefined,
+          difficulty: obj.execution_priority != null ? toStr(obj.execution_priority) : undefined,
+        })
+      }
+      for (const q of toArr(content.quick_wins)) {
+        const obj = q as Record<string, unknown>
+        if (obj.keyword || obj.term) allKws.push({
+          keyword: toStr(obj.keyword ?? obj.term, ''),
+          volume: obj.volume != null ? toStr(obj.volume) : undefined,
+          difficulty: obj.difficulty_score != null ? toStr(obj.difficulty_score) : undefined,
+        })
+      }
+      for (const p of toArr(content.primary_keywords)) {
+        if (typeof p === 'string') allKws.push({ keyword: p })
+        else { const obj = p as Record<string, unknown>; allKws.push({ keyword: toStr(obj.keyword ?? obj.term, '') }) }
+      }
+      // Fallback for alternative structures
+      if (allKws.length === 0) {
+        for (const k of toArr(content.keywords ?? content.top_keywords ?? content.seed_keywords)) {
+          if (typeof k === 'string') allKws.push({ keyword: k })
+          else { const obj = k as Record<string, unknown>; allKws.push({ keyword: toStr(obj.keyword ?? obj.term ?? obj.phrase, '') }) }
         }
-      }).filter((k) => k.keyword)
+      }
+      const topKeywords = allKws.filter((k) => k.keyword).slice(0, 20)
       if (topKeywords.length > 0) update.top_keywords = topKeywords
+
+      // Also extract content_gaps from keyword research
+      const gaps = toArr(content.content_gaps)
+      const contentGaps = gaps.slice(0, 20).map((g) => {
+        if (typeof g === 'string') return { topic: g, priority: 'medium' }
+        const obj = g as Record<string, unknown>
+        return {
+          topic: toStr(obj.topic ?? obj.keyword ?? obj.title, ''),
+          priority: toStr(obj.estimated_difficulty ?? obj.priority, 'medium').toLowerCase(),
+          opportunity: toStr(obj.opportunity, ''),
+        }
+      }).filter((g) => g.topic)
+      if (contentGaps.length > 0) update.content_gaps = contentGaps
     }
 
     if (['site_audit', 'technical_audit', 'on_page_audit', 'local_seo_audit'].includes(serviceType)) {
-      const raw = toArr(
-        content.issues ?? content.findings ?? content.critical_issues ??
-        content.recommendations ?? content.audit_findings
-      )
-      const auditFindings = raw.slice(0, 20).map((f) => {
-        if (typeof f === 'string') return { finding: f, severity: 'medium' }
-        const obj = f as Record<string, unknown>
-        return {
-          finding: toStr(obj.finding ?? obj.issue ?? obj.description ?? obj.title, ''),
-          severity: toStr(obj.severity ?? obj.priority, 'medium').toLowerCase(),
-        }
-      }).filter((f) => f.finding)
-      if (auditFindings.length > 0) update.audit_findings = auditFindings
+      // Agents produce: categories{key: {score, issues[{title, severity, description}]}}, or top-level issues[]
+      const auditFindings: Array<{ finding: string; severity: string }> = []
 
-      const score = content.score ?? content.overall_score ?? content.health_score
+      // Primary path: extract from nested categories (actual agent output)
+      const categories = content.categories
+      if (categories && typeof categories === 'object' && !Array.isArray(categories)) {
+        for (const cat of Object.values(categories as Record<string, unknown>)) {
+          const catObj = cat as Record<string, unknown>
+          for (const issue of toArr(catObj.issues)) {
+            const obj = issue as Record<string, unknown>
+            const finding = toStr(obj.title ?? obj.description ?? obj.issue, '')
+            if (finding) auditFindings.push({ finding, severity: toStr(obj.severity, 'medium').toLowerCase() })
+          }
+        }
+      }
+      // Fallback: top-level issues/findings
+      if (auditFindings.length === 0) {
+        for (const f of toArr(content.issues ?? content.findings ?? content.critical_issues ?? content.recommendations ?? content.audit_findings)) {
+          if (typeof f === 'string') auditFindings.push({ finding: f, severity: 'medium' })
+          else {
+            const obj = f as Record<string, unknown>
+            const finding = toStr(obj.finding ?? obj.issue ?? obj.description ?? obj.title, '')
+            if (finding) auditFindings.push({ finding, severity: toStr(obj.severity ?? obj.priority, 'medium').toLowerCase() })
+          }
+        }
+      }
+      if (auditFindings.length > 0) update.audit_findings = auditFindings.slice(0, 20)
+
+      const score = content.overall_score ?? content.score ?? content.health_score
       if (typeof score === 'number') update.last_audit_score = score
 
-      const cwv = content.cwv ?? content.core_web_vitals ?? content.cwv_status
+      const cwv = content.core_web_vitals ?? content.cwv ?? content.cwv_status
       if (cwv && typeof cwv === 'object') {
         const c = cwv as Record<string, unknown>
         update.cwv_status = {
@@ -252,6 +299,11 @@ export async function writeBackClientContext(
           cls: c.cls,
         }
       }
+
+      // Extract business_context from executive_summary
+      if (typeof content.executive_summary === 'string') {
+        update.business_context = { ...(typeof update.business_context === 'object' ? update.business_context as Record<string, unknown> : {}), last_audit_summary: content.executive_summary }
+      }
     }
 
     if (serviceType === 'competitor_analysis') {
@@ -259,19 +311,23 @@ export async function writeBackClientContext(
       const competitors = raw.slice(0, 10).map((c) => {
         if (typeof c === 'string') return { domain: c }
         const obj = c as Record<string, unknown>
-        return { domain: toStr(obj.domain ?? obj.url ?? obj.website, '') }
+        return {
+          domain: toStr(obj.domain ?? obj.url ?? obj.website, ''),
+          strengths: toArr(obj.strengths).map((s) => typeof s === 'string' ? s : toStr(s, '')).filter(Boolean).slice(0, 5),
+          weaknesses: toArr(obj.weaknesses).map((s) => typeof s === 'string' ? s : toStr(s, '')).filter(Boolean).slice(0, 5),
+        }
       }).filter((c) => c.domain)
       if (competitors.length > 0) update.competitors = competitors
     }
 
-    if (serviceType === 'content_calendar') {
-      const raw = toArr(content.topics ?? content.calendar ?? content.content_plan ?? content.items)
+    if (serviceType === 'content_calendar' || serviceType === 'topic_cluster_map') {
+      const raw = toArr(content.topics ?? content.calendar ?? content.content_plan ?? content.items ?? content.clusters)
       const contentGaps = raw.slice(0, 20).map((t) => {
         if (typeof t === 'string') return { topic: t, priority: 'medium' }
         const obj = t as Record<string, unknown>
         return {
-          topic: toStr(obj.topic ?? obj.title ?? obj.keyword, ''),
-          priority: toStr(obj.priority ?? obj.importance, 'medium').toLowerCase(),
+          topic: toStr(obj.topic ?? obj.title ?? obj.keyword ?? obj.cluster_name, ''),
+          priority: toStr(obj.priority ?? obj.importance ?? obj.execution_priority, 'medium').toLowerCase(),
         }
       }).filter((t) => t.topic)
       if (contentGaps.length > 0) update.content_gaps = contentGaps

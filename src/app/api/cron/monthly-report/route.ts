@@ -122,18 +122,80 @@ export async function GET(request: NextRequest) {
         }
       }
 
+      // ── Fetch richer context for AI narrative ──────────────
+      const [{ data: seoContext }, { data: prevSnapshot }] = await Promise.all([
+        supabaseAdmin
+          .from('client_seo_context')
+          .select('top_keywords, audit_findings, content_gaps, competitors, last_audit_score')
+          .eq('client_id', client.id)
+          .maybeSingle(),
+        supabaseAdmin
+          .from('client_metrics_history')
+          .select('metrics, snapshot_month')
+          .eq('client_id', client.id)
+          .order('snapshot_month', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+      ])
+
+      const taskTitles = (recentDeliverables ?? []).map(d => d.title ?? d.deliverable_type)
+      const tasksByType: Record<string, number> = {}
+      for (const d of recentDeliverables ?? []) {
+        const t = d.deliverable_type ?? 'other'
+        tasksByType[t] = (tasksByType[t] ?? 0) + 1
+      }
+
+      const prevHealth = prevSnapshot?.metrics?.health_score ?? null
+      const prevTasks = prevSnapshot?.metrics?.tasks_completed ?? null
+      const healthTrend = healthScore !== null && prevHealth !== null
+        ? (healthScore > prevHealth ? `improved from ${prevHealth} to ${healthScore}` : healthScore < prevHealth ? `decreased from ${prevHealth} to ${healthScore}` : `maintained at ${healthScore}`)
+        : null
+
       // ── AI narrative ─────────────────────────────────────────
       let executiveSummary = `Your Tenkai team completed ${taskCount} task${taskCount !== 1 ? 's' : ''} this month.${healthScore !== null ? ` Current website health score: ${healthScore}/100.` : ''} ${publishedCount ?? 0} pieces of content are published and working for you.`
+      let strategicRecommendations: string[] = []
+      let keyHighlights: string[] = []
 
       const geminiApiKey = process.env.GEMINI_API_KEY
       if (geminiApiKey) {
         try {
           const genAI = new GoogleGenerativeAI(geminiApiKey)
           const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
-          const prompt = `Write a 3-4 sentence plain-English SEO progress summary for a business owner. Be specific, positive, and actionable. Data: month=${monthLabel}, tasks_completed=${taskCount}, health_score=${healthScore ?? 'unknown'}/100, published_content=${publishedCount ?? 0} pieces. No jargon. No bullet points. No sign-offs.`
+
+          const contextParts: string[] = [
+            `Month: ${monthLabel}`,
+            `Company: ${client.company_name ?? client.name ?? 'Unknown'}`,
+            `Tasks completed this month: ${taskCount}`,
+            `Task breakdown: ${Object.entries(tasksByType).map(([k, v]) => `${k.replace(/_/g, ' ')}: ${v}`).join(', ')}`,
+            `Specific deliverables: ${taskTitles.slice(0, 10).join('; ')}`,
+            `Website health score: ${healthScore ?? 'unknown'}/100`,
+            healthTrend ? `Health trend: ${healthTrend}` : '',
+            `Published content: ${publishedCount ?? 0} pieces`,
+            seoContext?.top_keywords?.length ? `Top keywords being tracked: ${(seoContext.top_keywords as Array<{keyword: string}>).slice(0, 5).map(k => k.keyword).join(', ')}` : '',
+            seoContext?.audit_findings?.length ? `Key audit findings: ${(seoContext.audit_findings as Array<{finding: string}>).slice(0, 3).map(f => f.finding).join('; ')}` : '',
+            seoContext?.competitors?.length ? `Competitors being tracked: ${(seoContext.competitors as Array<{domain: string}>).slice(0, 3).map(c => c.domain).join(', ')}` : '',
+            prevTasks !== null ? `Previous month tasks: ${prevTasks}` : '',
+          ].filter(Boolean)
+
+          const prompt = `You are writing a monthly SEO progress report for a business owner who has zero SEO knowledge. Write in plain English — no jargon.
+
+Data:
+${contextParts.join('\n')}
+
+Return ONLY valid JSON with this structure (no markdown fences):
+{
+  "executive_summary": "3-4 sentences. Be specific about what was accomplished and what it means for their business. Reference specific deliverables by name. If health score changed, explain what that means.",
+  "key_highlights": ["3-4 bullet points of the most important wins or findings this month"],
+  "strategic_recommendations": ["2-3 specific, actionable next steps for next month"],
+  "month_over_month": "1-2 sentences comparing to previous month if data available, or noting this as a baseline month"
+}`
           const result = await model.generateContent(prompt)
           const text = result.response.text().trim()
-          if (text) executiveSummary = text
+          const cleaned = text.replace(/^```json?\s*/i, '').replace(/```\s*$/, '')
+          const parsed = JSON.parse(cleaned)
+          if (parsed.executive_summary) executiveSummary = parsed.executive_summary
+          if (Array.isArray(parsed.key_highlights)) keyHighlights = parsed.key_highlights
+          if (Array.isArray(parsed.strategic_recommendations)) strategicRecommendations = parsed.strategic_recommendations
         } catch (aiErr) {
           console.warn(`[monthly-cron] Gemini narrative failed for ${client.id}:`, aiErr)
           // fall through to hardcoded summary
@@ -147,9 +209,13 @@ export async function GET(request: NextRequest) {
           content_published: publishedCount ?? 0,
           health_score: healthScore,
           tasks_completed: taskCount,
+          previous_health_score: prevHealth,
         },
+        key_highlights: keyHighlights,
+        strategic_recommendations: strategicRecommendations.map((r, i) => ({ title: `Recommendation ${i + 1}`, description: r, priority: i === 0 ? 'high' : 'medium' })),
         month: monthLabel,
-        tasks_this_month: (recentDeliverables ?? []).map(d => d.title ?? d.deliverable_type),
+        tasks_this_month: taskTitles,
+        task_breakdown: tasksByType,
       }
 
       // Create a service_request + deliverable for the monthly report

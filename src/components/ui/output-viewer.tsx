@@ -92,23 +92,64 @@ function ReportParagraph({ children }: { children: React.ReactNode }) {
 }
 
 function renderAuditReport(data: Record<string, unknown>, title: string): React.ReactNode {
-  const categories = data.categories as Record<string, { score: number; issues?: Array<{ title: string; severity: string; description: string }> }> | undefined
+  const categories = data.categories as Record<string, { score: number; issues?: Array<{ title: string; severity: string; description: string; recommendation?: string }> }> | undefined
   if (!categories) return renderGenericAsReport(data, title)
 
-  const overallScore = Object.values(categories).reduce((sum, c) => sum + (c.score ?? 0), 0) / Object.keys(categories).length
+  const agentOverallScore = typeof data.overall_score === 'number' ? data.overall_score : null
+  const calculatedScore = Object.values(categories).reduce((sum, c) => sum + (c.score ?? 0), 0) / Object.keys(categories).length
+  const overallScore = agentOverallScore ?? Math.round(calculatedScore)
+
+  const executiveSummary = typeof data.executive_summary === 'string' ? data.executive_summary : null
+  const quickWins = Array.isArray(data.quick_wins) ? (data.quick_wins as string[]) : null
+  const topRecommendations = Array.isArray(data.top_recommendations)
+    ? (data.top_recommendations as Array<{ title: string; priority?: string; description: string; estimated_impact?: string }>)
+    : null
+  const competitiveLandscape = typeof data.competitive_landscape === 'string' ? data.competitive_landscape : null
+  const internalLinks = (data.internal_link_architecture ?? null) as {
+    pages_crawled?: number; orphan_pages?: string[]; max_link_depth?: number;
+    anchor_text_health?: string; anchor_text_alert?: string; top_recommendations?: unknown
+  } | null
+
+  const scoreColor = overallScore >= 70 ? 'text-green-600' : overallScore >= 40 ? 'text-amber-500' : 'text-red-500'
 
   return (
     <div className="report-content max-w-[800px] mx-auto">
       <ReportHeader title={title} />
 
+      {/* Overall Score */}
+      <div className="text-center mb-6">
+        <span className={cn('font-serif text-5xl font-bold', scoreColor)}>{overallScore}</span>
+        <span className="text-warm-gray text-lg">/100</span>
+      </div>
+
+      {/* Executive Summary */}
       <ReportSection heading="Executive Summary">
         <ReportParagraph>
-          Your site scored an average of <strong>{Math.round(overallScore)}/100</strong> across{' '}
-          {Object.keys(categories).length} categories. Below is a breakdown of each area with specific issues
-          identified and their severity.
+          {executiveSummary ?? (
+            <>Your site scored an average of <strong>{Math.round(calculatedScore)}/100</strong> across{' '}
+            {Object.keys(categories).length} categories. Below is a breakdown of each area with specific issues
+            identified and their severity.</>
+          )}
         </ReportParagraph>
       </ReportSection>
 
+      {/* Quick Wins */}
+      {quickWins && quickWins.length > 0 && (
+        <ReportSection heading="Quick Wins">
+          <div className="bg-cream/40 rounded-tenkai border border-tenkai-border p-4">
+            <ol className="space-y-2">
+              {quickWins.map((win, i) => (
+                <li key={i} className="flex items-start gap-3 text-sm text-[#444] leading-relaxed">
+                  <input type="checkbox" className="mt-1 flex-shrink-0 accent-torii" readOnly />
+                  <span><strong className="text-charcoal">{i + 1}.</strong> {win}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </ReportSection>
+      )}
+
+      {/* Categories + Issues */}
       {Object.entries(categories).map(([catKey, cat]) => (
         <ReportSection key={catKey} heading={`${formatKey(catKey)} — ${cat.score}/100`}>
           {cat.issues && cat.issues.length > 0 ? (
@@ -128,6 +169,9 @@ function renderAuditReport(data: Record<string, unknown>, title: string): React.
                     <span className="text-sm font-medium text-charcoal">{issue.title}</span>
                   </div>
                   <p className="text-sm text-[#444] leading-relaxed">{issue.description}</p>
+                  {issue.recommendation && (
+                    <p className="text-sm text-torii mt-1 italic">{issue.recommendation}</p>
+                  )}
                 </div>
               ))}
             </div>
@@ -136,49 +180,309 @@ function renderAuditReport(data: Record<string, unknown>, title: string): React.
           )}
         </ReportSection>
       ))}
+
+      {/* Top Recommendations */}
+      {topRecommendations && topRecommendations.length > 0 && (
+        <ReportSection heading="Top Recommendations">
+          <div className="space-y-3">
+            {topRecommendations.map((rec, i) => {
+              const prio = (rec.priority ?? 'medium').toLowerCase()
+              const prioClass = prio === 'high' ? 'bg-red-100 text-red-700' : prio === 'low' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'
+              return (
+                <div key={i} className="bg-cream/40 rounded-tenkai border border-tenkai-border p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase', prioClass)}>{prio}</span>
+                    <span className="text-sm font-semibold text-charcoal">{rec.title}</span>
+                  </div>
+                  <p className="text-sm text-[#444] leading-relaxed">{rec.description}</p>
+                  {rec.estimated_impact && (
+                    <p className="text-xs text-warm-gray mt-2">Estimated impact: <strong className="text-charcoal">{rec.estimated_impact}</strong></p>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </ReportSection>
+      )}
+
+      {/* Competitive Landscape */}
+      {competitiveLandscape && (
+        <ReportSection heading="Competitive Landscape">
+          <ReportParagraph>{competitiveLandscape}</ReportParagraph>
+        </ReportSection>
+      )}
+
+      {/* Internal Link Architecture */}
+      {internalLinks && typeof internalLinks === 'object' && (
+        <ReportSection heading="Internal Link Architecture">
+          <div className="bg-cream/40 rounded-tenkai border border-tenkai-border p-4 space-y-2">
+            {internalLinks.pages_crawled != null && (
+              <div className="flex justify-between text-sm">
+                <span className="text-warm-gray">Pages Crawled</span>
+                <span className="text-charcoal font-medium">{internalLinks.pages_crawled}</span>
+              </div>
+            )}
+            {internalLinks.orphan_pages && (
+              <div className="flex justify-between text-sm">
+                <span className="text-warm-gray">Orphan Pages</span>
+                <span className="text-charcoal font-medium">{internalLinks.orphan_pages.length}</span>
+              </div>
+            )}
+            {internalLinks.max_link_depth != null && (
+              <div className="flex justify-between text-sm">
+                <span className="text-warm-gray">Max Link Depth</span>
+                <span className="text-charcoal font-medium">{internalLinks.max_link_depth}</span>
+              </div>
+            )}
+            {internalLinks.anchor_text_health && (
+              <div className="flex justify-between text-sm">
+                <span className="text-warm-gray">Anchor Text Health</span>
+                <span className="text-charcoal font-medium">{internalLinks.anchor_text_health}</span>
+              </div>
+            )}
+            {internalLinks.anchor_text_alert && (
+              <p className="text-xs text-amber-600 mt-1">{internalLinks.anchor_text_alert}</p>
+            )}
+            {internalLinks.top_recommendations != null && (
+              <div className="mt-2 pt-2 border-t border-tenkai-border">
+                {renderValueAsText(internalLinks.top_recommendations)}
+              </div>
+            )}
+          </div>
+        </ReportSection>
+      )}
     </div>
   )
 }
 
 function renderKeywordList(data: Record<string, unknown>, title: string): React.ReactNode {
-  const allKeywords: Array<{ keyword: string; volume: string; why_now?: string; category?: string }> = []
+  const executiveSummary = typeof data.executive_summary === 'string' ? data.executive_summary : null
+  const keywordClusters = Array.isArray(data.keyword_clusters)
+    ? (data.keyword_clusters as Array<{
+        cluster_name?: string; primary_keyword?: string; supporting_keywords?: string[];
+        content_types?: unknown; search_intent?: string; execution_priority?: number
+      }>)
+    : null
+  const quickWins = Array.isArray(data.quick_wins)
+    ? (data.quick_wins as Array<{ keyword: string; volume?: unknown; difficulty_score?: unknown; why_now?: string; content_type?: string }>)
+    : null
+  const contentGaps = Array.isArray(data.content_gaps)
+    ? (data.content_gaps as Array<{ topic?: string; keywords?: string[]; opportunity?: string; competitor_coverage?: string; estimated_difficulty?: string }>)
+    : null
+  const localKeywords = Array.isArray(data.local_keywords)
+    ? (data.local_keywords as Array<{ keyword: string; local_modifier?: string; opportunity_score?: unknown }>)
+    : null
+  const aiSearchKeywords = Array.isArray(data.ai_search_keywords)
+    ? (data.ai_search_keywords as Array<Record<string, unknown>>)
+    : null
+
+  // Backward compat: collect flat keyword arrays for non-cluster data
+  const flatGroups = new Map<string, Array<{ keyword: string; volume: string; why_now?: string }>>()
   for (const [groupKey, groupVal] of Object.entries(data)) {
+    if (['executive_summary', 'keyword_clusters', 'quick_wins', 'content_gaps', 'local_keywords', 'ai_search_keywords'].includes(groupKey)) continue
+    if (groupKey === 'long_tail' || groupKey === 'branded') {
+      // These are flat keyword arrays — render as tables
+    } else {
+      continue
+    }
     if (Array.isArray(groupVal)) {
+      const items: Array<{ keyword: string; volume: string; why_now?: string }> = []
       groupVal.forEach((item) => {
         if (item && typeof item === 'object' && ('keyword' in item || 'term' in item)) {
-          allKeywords.push({
-            keyword: String((item as Record<string, unknown>).keyword ?? (item as Record<string, unknown>).term ?? ''),
-            volume: String((item as Record<string, unknown>).volume ?? (item as Record<string, unknown>).search_volume ?? '—'),
-            why_now: (item as Record<string, unknown>).why_now as string | undefined,
-            category: groupKey,
+          const r = item as Record<string, unknown>
+          items.push({
+            keyword: String(r.keyword ?? r.term ?? ''),
+            volume: String(r.volume ?? r.search_volume ?? '—'),
+            why_now: r.why_now as string | undefined,
           })
         }
       })
+      if (items.length > 0) flatGroups.set(groupKey, items)
     }
   }
 
-  if (allKeywords.length === 0) return renderGenericAsReport(data, title)
+  // Also pick up any other arrays of keyword objects not already handled
+  for (const [groupKey, groupVal] of Object.entries(data)) {
+    if (['executive_summary', 'keyword_clusters', 'quick_wins', 'content_gaps', 'local_keywords', 'ai_search_keywords', 'long_tail', 'branded'].includes(groupKey)) continue
+    if (Array.isArray(groupVal) && groupVal.length > 0 && typeof groupVal[0] === 'object' && groupVal[0] !== null && ('keyword' in groupVal[0] || 'term' in groupVal[0])) {
+      const items: Array<{ keyword: string; volume: string; why_now?: string }> = []
+      groupVal.forEach((item) => {
+        const r = item as Record<string, unknown>
+        items.push({
+          keyword: String(r.keyword ?? r.term ?? ''),
+          volume: String(r.volume ?? r.search_volume ?? '—'),
+          why_now: r.why_now as string | undefined,
+        })
+      })
+      if (items.length > 0) flatGroups.set(groupKey, items)
+    }
+  }
 
-  // Group by category
-  const groups = new Map<string, typeof allKeywords>()
-  allKeywords.forEach((kw) => {
-    const cat = kw.category ?? 'Keywords'
-    if (!groups.has(cat)) groups.set(cat, [])
-    groups.get(cat)!.push(kw)
-  })
+  const hasContent = keywordClusters || quickWins || contentGaps || localKeywords || aiSearchKeywords || flatGroups.size > 0
+  if (!hasContent) return renderGenericAsReport(data, title)
 
   return (
     <div className="report-content max-w-[800px] mx-auto">
       <ReportHeader title={title} />
 
-      <ReportSection heading="Overview">
-        <ReportParagraph>
-          We identified <strong>{allKeywords.length} keywords</strong> across {groups.size} categories
-          that represent the best opportunities for your business. Here&apos;s what we recommend targeting and why.
-        </ReportParagraph>
-      </ReportSection>
+      {/* Executive Summary */}
+      {executiveSummary && (
+        <ReportSection heading="Executive Summary">
+          <ReportParagraph>{executiveSummary}</ReportParagraph>
+        </ReportSection>
+      )}
 
-      {Array.from(groups.entries()).map(([cat, keywords]) => (
+      {/* Keyword Clusters */}
+      {keywordClusters && keywordClusters.length > 0 && (
+        <ReportSection heading="Keyword Clusters">
+          <div className="space-y-4">
+            {keywordClusters.map((cluster, i) => (
+              <div key={i} className="bg-cream/40 rounded-tenkai border border-tenkai-border p-4">
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <h4 className="font-serif text-sm font-semibold text-charcoal">{cluster.cluster_name ?? `Cluster ${i + 1}`}</h4>
+                  {cluster.search_intent && (
+                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 uppercase">{cluster.search_intent}</span>
+                  )}
+                  {cluster.execution_priority != null && (
+                    <span className={cn(
+                      'text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase',
+                      cluster.execution_priority === 1 ? 'bg-red-100 text-red-700' : cluster.execution_priority === 2 ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-100 text-blue-700'
+                    )}>
+                      Priority {cluster.execution_priority}
+                    </span>
+                  )}
+                </div>
+                {cluster.primary_keyword && (
+                  <p className="text-sm mb-2">
+                    <span className="text-warm-gray">Primary: </span>
+                    <KeywordLink keyword={cluster.primary_keyword} />
+                  </p>
+                )}
+                {cluster.supporting_keywords && cluster.supporting_keywords.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {cluster.supporting_keywords.map((kw, j) => (
+                      <span key={j} className="text-xs bg-ivory border border-tenkai-border rounded-tenkai px-2 py-0.5 text-charcoal/70">{kw}</span>
+                    ))}
+                  </div>
+                )}
+                {cluster.content_types != null && (
+                  <p className="text-xs text-warm-gray">Content types: {typeof cluster.content_types === 'string' ? cluster.content_types : Array.isArray(cluster.content_types) ? (cluster.content_types as string[]).join(', ') : String(cluster.content_types)}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </ReportSection>
+      )}
+
+      {/* Quick Wins */}
+      {quickWins && quickWins.length > 0 && (
+        <ReportSection heading="Quick Wins">
+          <div className="overflow-x-auto rounded-tenkai border border-tenkai-border mb-4">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-cream">
+                  <th className="px-4 py-2.5 text-left font-medium text-charcoal border-b border-tenkai-border">Keyword</th>
+                  <th className="px-4 py-2.5 text-left font-medium text-charcoal border-b border-tenkai-border">Volume</th>
+                  <th className="px-4 py-2.5 text-left font-medium text-charcoal border-b border-tenkai-border">Difficulty</th>
+                  <th className="px-4 py-2.5 text-left font-medium text-charcoal border-b border-tenkai-border">Content Type</th>
+                  <th className="px-4 py-2.5 text-left font-medium text-charcoal border-b border-tenkai-border">Why Now</th>
+                </tr>
+              </thead>
+              <tbody>
+                {quickWins.map((kw, i) => (
+                  <tr key={i} className="border-b border-tenkai-border last:border-0 hover:bg-cream/40 transition-colors">
+                    <td className="px-4 py-2.5"><KeywordLink keyword={kw.keyword} /></td>
+                    <td className="px-4 py-2.5 text-charcoal/70">{String(kw.volume ?? '—')}</td>
+                    <td className="px-4 py-2.5 text-charcoal/70">{String(kw.difficulty_score ?? '—')}</td>
+                    <td className="px-4 py-2.5 text-charcoal/70">{kw.content_type ?? '—'}</td>
+                    <td className="px-4 py-2.5 text-[#444] leading-relaxed">{kw.why_now ?? '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </ReportSection>
+      )}
+
+      {/* Content Gaps */}
+      {contentGaps && contentGaps.length > 0 && (
+        <ReportSection heading="Content Gaps">
+          <div className="space-y-3">
+            {contentGaps.map((gap, i) => (
+              <div key={i} className="pl-4 border-l-2 border-tenkai-border">
+                <p className="text-sm font-medium text-charcoal mb-1">{gap.topic ?? `Gap ${i + 1}`}</p>
+                {gap.keywords && gap.keywords.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mb-1">
+                    {gap.keywords.map((kw, j) => (
+                      <span key={j} className="text-xs bg-cream border border-tenkai-border rounded-tenkai px-2 py-0.5 text-charcoal/70">{kw}</span>
+                    ))}
+                  </div>
+                )}
+                {gap.opportunity && <p className="text-xs text-[#444]"><span className="text-warm-gray">Opportunity:</span> {gap.opportunity}</p>}
+                {gap.competitor_coverage && <p className="text-xs text-[#444]"><span className="text-warm-gray">Competitor coverage:</span> {gap.competitor_coverage}</p>}
+                {gap.estimated_difficulty && <p className="text-xs text-[#444]"><span className="text-warm-gray">Difficulty:</span> {gap.estimated_difficulty}</p>}
+              </div>
+            ))}
+          </div>
+        </ReportSection>
+      )}
+
+      {/* Local Keywords */}
+      {localKeywords && localKeywords.length > 0 && (
+        <ReportSection heading="Local Keywords">
+          <div className="overflow-x-auto rounded-tenkai border border-tenkai-border mb-4">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-cream">
+                  <th className="px-4 py-2.5 text-left font-medium text-charcoal border-b border-tenkai-border">Keyword</th>
+                  <th className="px-4 py-2.5 text-left font-medium text-charcoal border-b border-tenkai-border">Local Modifier</th>
+                  <th className="px-4 py-2.5 text-left font-medium text-charcoal border-b border-tenkai-border">Opportunity Score</th>
+                </tr>
+              </thead>
+              <tbody>
+                {localKeywords.map((kw, i) => (
+                  <tr key={i} className="border-b border-tenkai-border last:border-0 hover:bg-cream/40 transition-colors">
+                    <td className="px-4 py-2.5"><KeywordLink keyword={kw.keyword} /></td>
+                    <td className="px-4 py-2.5 text-charcoal/70">{kw.local_modifier ?? '—'}</td>
+                    <td className="px-4 py-2.5 text-charcoal/70">{String(kw.opportunity_score ?? '—')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </ReportSection>
+      )}
+
+      {/* AI Search Keywords */}
+      {aiSearchKeywords && aiSearchKeywords.length > 0 && (
+        <ReportSection heading="AI Search Keywords">
+          <div className="overflow-x-auto rounded-tenkai border border-tenkai-border mb-4">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-cream">
+                  {Object.keys(aiSearchKeywords[0]).map((key) => (
+                    <th key={key} className="px-4 py-2.5 text-left font-medium text-charcoal border-b border-tenkai-border">{formatKey(key)}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {aiSearchKeywords.map((kw, i) => (
+                  <tr key={i} className="border-b border-tenkai-border last:border-0 hover:bg-cream/40 transition-colors">
+                    {Object.entries(kw).map(([key, val]) => (
+                      <td key={key} className="px-4 py-2.5 text-charcoal/70">
+                        {key === 'keyword' ? <KeywordLink keyword={String(val)} /> : String(val ?? '—')}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </ReportSection>
+      )}
+
+      {/* Backward-compat flat keyword groups (long_tail, branded, etc.) */}
+      {Array.from(flatGroups.entries()).map(([cat, keywords]) => (
         <ReportSection key={cat} heading={formatKey(cat)}>
           <div className="overflow-x-auto rounded-tenkai border border-tenkai-border mb-4">
             <table className="w-full text-sm">
@@ -192,9 +496,7 @@ function renderKeywordList(data: Record<string, unknown>, title: string): React.
               <tbody>
                 {keywords.map((kw, i) => (
                   <tr key={i} className="border-b border-tenkai-border last:border-0 hover:bg-cream/40 transition-colors">
-                    <td className="px-4 py-2.5">
-                      <KeywordLink keyword={kw.keyword} />
-                    </td>
+                    <td className="px-4 py-2.5"><KeywordLink keyword={kw.keyword} /></td>
                     <td className="px-4 py-2.5 text-charcoal/70">{kw.volume}</td>
                     <td className="px-4 py-2.5 text-[#444] leading-relaxed">{kw.why_now ?? '—'}</td>
                   </tr>
@@ -210,9 +512,25 @@ function renderKeywordList(data: Record<string, unknown>, title: string): React.
 
 function renderContentDraftOrArticle(data: Record<string, unknown>, title: string): React.ReactNode {
   const meta = (data.meta ?? data.brief ?? {}) as Record<string, unknown>
-  const body = data.body ?? data.content ?? data.sections ?? null
+  // Article content may be nested under data.article (production structure)
+  const articleObj = (typeof data.article === 'object' && data.article !== null && !Array.isArray(data.article))
+    ? (data.article as Record<string, unknown>) : null
+  const body = data.body ?? data.content ?? data.sections ?? articleObj?.sections ?? null
   const metaTitle = meta.meta_title ?? meta.title ?? title
   const targetKw = meta.target_keyword ?? meta.keyword ?? null
+  // Introduction + conclusion from nested article
+  const introduction = typeof (articleObj?.introduction ?? data.introduction) === 'string' ? String(articleObj?.introduction ?? data.introduction) : null
+  const conclusion = typeof (articleObj?.conclusion ?? data.conclusion) === 'string' ? String(articleObj?.conclusion ?? data.conclusion) : null
+  // FAQ: check data.faq, data.article.faq_section, data.article.faq
+  const rawFaq = data.faq ?? articleObj?.faq_section ?? articleObj?.faq ?? null
+  const faq = Array.isArray(rawFaq) ? (rawFaq as Array<{ question: string; answer: string }>) : null
+  // Internal link suggestions: check multiple key patterns
+  const rawLinks = data.internal_link_suggestions ?? data.internal_linking_suggestions ?? articleObj?.internal_linking_suggestions ?? articleObj?.internal_link_suggestions ?? null
+  const internalLinkSuggestions = Array.isArray(rawLinks)
+    ? (rawLinks as Array<{ anchor_text: string; target_url: string; context?: string }>)
+    : null
+  // SEO checklist from nested article
+  const seoChecklist = Array.isArray(articleObj?.seo_checklist) ? (articleObj.seo_checklist as string[]) : null
 
   return (
     <div className="report-content max-w-[800px] mx-auto">
@@ -225,7 +543,7 @@ function renderContentDraftOrArticle(data: Record<string, unknown>, title: strin
             {Object.entries(meta).map(([k, v]) => (
               <div key={k} className="flex gap-3 py-1.5 border-b border-tenkai-border/50 last:border-0">
                 <span className="text-xs font-medium text-warm-gray uppercase tracking-wide w-32 flex-shrink-0 pt-0.5">{formatKey(k)}</span>
-                <span className="text-sm text-charcoal/80">{String(v ?? '—')}</span>
+                <span className="text-sm text-charcoal/80">{typeof v === 'object' ? (Array.isArray(v) ? (v as string[]).join(', ') : JSON.stringify(v)) : String(v ?? '—')}</span>
               </div>
             ))}
           </div>
@@ -276,15 +594,414 @@ function renderContentDraftOrArticle(data: Record<string, unknown>, title: strin
           )}
         </div>
       )}
+
+      {/* Introduction (from nested article) */}
+      {introduction && !body && (
+        <ReportSection heading="Introduction">
+          <ReportParagraph>{introduction}</ReportParagraph>
+        </ReportSection>
+      )}
+
+      {/* Conclusion */}
+      {conclusion && (
+        <ReportSection heading="Conclusion">
+          <ReportParagraph>{conclusion}</ReportParagraph>
+        </ReportSection>
+      )}
+
+      {/* SEO Checklist */}
+      {seoChecklist && seoChecklist.length > 0 && (
+        <ReportSection heading="SEO Checklist">
+          <ul className="space-y-1.5">
+            {seoChecklist.map((item, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm text-[#444]">
+                <span className="text-torii mt-0.5">☐</span>
+                <span>{String(item)}</span>
+              </li>
+            ))}
+          </ul>
+        </ReportSection>
+      )}
+
+      {/* FAQ */}
+      {faq && faq.length > 0 && (
+        <ReportSection heading="Frequently Asked Questions">
+          <div className="space-y-2">
+            {faq.map((item, i) => (
+              <details key={i} className="group rounded-tenkai border border-tenkai-border overflow-hidden">
+                <summary className="cursor-pointer px-4 py-3 bg-cream/40 text-sm font-medium text-charcoal hover:bg-cream transition-colors select-none">
+                  {item.question}
+                </summary>
+                <div className="px-4 py-3 text-sm text-[#444] leading-relaxed border-t border-tenkai-border">
+                  {item.answer}
+                </div>
+              </details>
+            ))}
+          </div>
+        </ReportSection>
+      )}
+
+      {/* Internal Link Suggestions */}
+      {internalLinkSuggestions && internalLinkSuggestions.length > 0 && (
+        <ReportSection heading="Internal Link Suggestions">
+          <div className="overflow-x-auto rounded-tenkai border border-tenkai-border">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-cream">
+                  <th className="px-4 py-2.5 text-left font-medium text-charcoal border-b border-tenkai-border">Anchor Text</th>
+                  <th className="px-4 py-2.5 text-left font-medium text-charcoal border-b border-tenkai-border">Target URL</th>
+                  <th className="px-4 py-2.5 text-left font-medium text-charcoal border-b border-tenkai-border">Context</th>
+                </tr>
+              </thead>
+              <tbody>
+                {internalLinkSuggestions.map((link, i) => (
+                  <tr key={i} className="border-b border-tenkai-border last:border-0 hover:bg-cream/40 transition-colors">
+                    <td className="px-4 py-2.5 font-medium text-charcoal">{link.anchor_text}</td>
+                    <td className="px-4 py-2.5 text-torii break-all">{link.target_url}</td>
+                    <td className="px-4 py-2.5 text-[#444] leading-relaxed">{link.context ?? '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </ReportSection>
+      )}
+    </div>
+  )
+}
+
+function looksLikeCode(val: string): boolean {
+  return /[{<]/.test(val) && (/^\s*\{/.test(val.trim()) || /server\s*\{/.test(val) || /RewriteRule/.test(val) || /"@context"/.test(val) || /<[a-zA-Z]/.test(val))
+}
+
+function isUniformArray(val: unknown): val is Array<Record<string, unknown>> {
+  if (!Array.isArray(val) || val.length < 3) return false
+  if (!val.every((v) => v && typeof v === 'object' && !Array.isArray(v))) return false
+  const keys0 = Object.keys(val[0] as Record<string, unknown>).sort().join(',')
+  return val.slice(1).every((v) => Object.keys(v as Record<string, unknown>).sort().join(',') === keys0)
+}
+
+function renderUniformTable(items: Array<Record<string, unknown>>): React.ReactNode {
+  const headers = Object.keys(items[0])
+  return (
+    <div className="overflow-x-auto rounded-tenkai border border-tenkai-border mb-4">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="bg-cream">
+            {headers.map((h) => (
+              <th key={h} className="px-4 py-2.5 text-left font-medium text-charcoal border-b border-tenkai-border">{formatKey(h)}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((row, i) => (
+            <tr key={i} className="border-b border-tenkai-border last:border-0 hover:bg-cream/40 transition-colors">
+              {headers.map((h) => (
+                <td key={h} className="px-4 py-2.5 text-[#444]">
+                  {typeof row[h] === 'object' ? JSON.stringify(row[h]) : String(row[h] ?? '—')}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false)
+  return (
+    <button
+      onClick={() => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000) }}
+      className="text-xs px-2 py-1 rounded bg-warm-gray/20 text-cream hover:bg-warm-gray/40 transition-colors"
+    >
+      {copied ? 'Copied!' : 'Copy'}
+    </button>
+  )
+}
+
+function renderCodeBlock(code: string): React.ReactNode {
+  return (
+    <div className="relative rounded-tenkai overflow-hidden mb-4">
+      <div className="flex items-center justify-between px-4 py-2 bg-charcoal border-b border-warm-gray/20">
+        <span className="text-xs text-warm-gray">Code</span>
+        <CopyButton text={code} />
+      </div>
+      <pre className="bg-charcoal text-green-300 text-sm p-4 overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed">
+        {code}
+      </pre>
+    </div>
+  )
+}
+
+function renderPriorityCards(items: Array<Record<string, unknown>>): React.ReactNode {
+  return (
+    <div className="space-y-3">
+      {items.map((rec, i) => {
+        const prio = String(rec.priority ?? rec.level ?? 'medium').toLowerCase()
+        const prioClass = prio === 'high' || prio === 'critical' ? 'bg-red-100 text-red-700' : prio === 'low' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'
+        const recTitle = String(rec.title ?? rec.name ?? rec.action ?? `Item ${i + 1}`)
+        const desc = String(rec.description ?? rec.detail ?? rec.rationale ?? '')
+        const impact = rec.estimated_impact ?? rec.impact ?? null
+        return (
+          <div key={i} className="bg-cream/40 rounded-tenkai border border-tenkai-border p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase', prioClass)}>{prio}</span>
+              <span className="text-sm font-semibold text-charcoal">{recTitle}</span>
+            </div>
+            {desc && <p className="text-sm text-[#444] leading-relaxed">{desc}</p>}
+            {impact && <p className="text-xs text-warm-gray mt-2">Estimated impact: <strong className="text-charcoal">{String(impact)}</strong></p>}
+          </div>
+        )
+      })}
     </div>
   )
 }
 
 function renderGenericAsReport(data: Record<string, unknown>, title: string): React.ReactNode {
+  // Extract well-known fields first
+  const executiveSummary = typeof data.executive_summary === 'string' ? data.executive_summary : null
+  const overallScore = typeof data.overall_score === 'number' ? data.overall_score : typeof data.score === 'number' ? data.score : null
+  const quickWins = Array.isArray(data.quick_wins) ? (data.quick_wins as unknown[]) : null
+
+  // Find recommendation-like keys
+  const recKeys = Object.keys(data).filter((k) => /recommendations|priority_actions/i.test(k))
+  const recData: Record<string, Array<Record<string, unknown>>> = {}
+  recKeys.forEach((k) => {
+    const val = data[k]
+    if (Array.isArray(val) && val.length > 0 && typeof val[0] === 'object') {
+      recData[k] = val as Array<Record<string, unknown>>
+    }
+  })
+
+  // Remaining keys
+  const handledKeys = new Set(['executive_summary', 'overall_score', 'score', 'quick_wins', ...recKeys])
+  const remaining = Object.entries(data).filter(([k]) => !handledKeys.has(k))
+
+  const scoreColor = overallScore != null ? (overallScore >= 70 ? 'text-green-600' : overallScore >= 40 ? 'text-amber-500' : 'text-red-500') : ''
+
   return (
     <div className="report-content max-w-[800px] mx-auto">
       <ReportHeader title={title} />
-      {Object.entries(data).map(([key, val]) => (
+
+      {/* Overall Score */}
+      {overallScore != null && (
+        <div className="text-center mb-6">
+          <span className={cn('font-serif text-5xl font-bold', scoreColor)}>{overallScore}</span>
+          <span className="text-warm-gray text-lg">/100</span>
+        </div>
+      )}
+
+      {/* Executive Summary */}
+      {executiveSummary && (
+        <div className="bg-cream/60 border-l-4 border-torii p-4 mb-6 rounded-r-tenkai">
+          <p className="text-sm leading-[1.8] text-[#444]">{executiveSummary}</p>
+        </div>
+      )}
+
+      {/* Quick Wins */}
+      {quickWins && quickWins.length > 0 && (
+        <ReportSection heading="Quick Wins">
+          <div className="bg-cream/40 rounded-tenkai border border-tenkai-border p-4">
+            <ol className="space-y-2">
+              {quickWins.map((win, i) => (
+                <li key={i} className="flex items-start gap-3 text-sm text-[#444] leading-relaxed">
+                  <input type="checkbox" className="mt-1 flex-shrink-0 accent-torii" readOnly />
+                  <span><strong className="text-charcoal">{i + 1}.</strong> {String(win)}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </ReportSection>
+      )}
+
+      {/* Recommendation-like sections */}
+      {Object.entries(recData).map(([key, items]) => (
+        <ReportSection key={key} heading={formatKey(key)}>
+          {renderPriorityCards(items)}
+        </ReportSection>
+      ))}
+
+      {/* Remaining fields with smart rendering */}
+      {remaining.map(([key, val]) => (
+        <ReportSection key={key} heading={formatKey(key)}>
+          {typeof val === 'string' && looksLikeCode(val) ? (
+            renderCodeBlock(val)
+          ) : isUniformArray(val) ? (
+            renderUniformTable(val)
+          ) : (
+            renderValueAsText(val)
+          )}
+        </ReportSection>
+      ))}
+    </div>
+  )
+}
+
+function renderCodeOutput(data: Record<string, unknown>, title: string): React.ReactNode {
+  const executiveSummary = typeof data.executive_summary === 'string' ? data.executive_summary : null
+  const schemaType = typeof data.schema_type === 'string' ? data.schema_type : typeof data.description === 'string' ? data.description : null
+  const implementationInstructions = typeof data.implementation_instructions === 'string' ? data.implementation_instructions : null
+  const validationNotes = typeof data.validation_notes === 'string' ? data.validation_notes : null
+
+  // Find the code field — could be "code", "schema_code", "config", or any string that looks like code
+  let codeContent: string | null = null
+  for (const key of ['code', 'schema_code', 'config', 'output', 'robots_txt', 'htaccess']) {
+    if (typeof data[key] === 'string') { codeContent = data[key] as string; break }
+  }
+  if (!codeContent) {
+    // Scan for any string value that looks like code
+    for (const val of Object.values(data)) {
+      if (typeof val === 'string' && looksLikeCode(val)) { codeContent = val; break }
+    }
+  }
+
+  // Remaining fields not already handled
+  const handledKeys = new Set(['executive_summary', 'schema_type', 'description', 'implementation_instructions', 'validation_notes', 'code', 'schema_code', 'config', 'output', 'robots_txt', 'htaccess'])
+  const remaining = Object.entries(data).filter(([k, v]) => !handledKeys.has(k) && !(typeof v === 'string' && v === codeContent))
+
+  return (
+    <div className="report-content max-w-[800px] mx-auto">
+      <ReportHeader title={title} subtitle={schemaType ?? undefined} />
+
+      {executiveSummary && (
+        <div className="bg-cream/60 border-l-4 border-torii p-4 mb-6 rounded-r-tenkai">
+          <p className="text-sm leading-[1.8] text-[#444]">{executiveSummary}</p>
+        </div>
+      )}
+
+      {codeContent && (
+        <ReportSection heading="Code">
+          {renderCodeBlock(codeContent)}
+        </ReportSection>
+      )}
+
+      {implementationInstructions && (
+        <ReportSection heading="Implementation Instructions">
+          <ReportParagraph>{implementationInstructions}</ReportParagraph>
+        </ReportSection>
+      )}
+
+      {validationNotes && (
+        <ReportSection heading="Validation Notes">
+          <ReportParagraph>{validationNotes}</ReportParagraph>
+        </ReportSection>
+      )}
+
+      {remaining.map(([key, val]) => (
+        <ReportSection key={key} heading={formatKey(key)}>
+          {typeof val === 'string' && looksLikeCode(val) ? renderCodeBlock(val) : renderValueAsText(val)}
+        </ReportSection>
+      ))}
+    </div>
+  )
+}
+
+function renderCompetitiveReport(data: Record<string, unknown>, title: string): React.ReactNode {
+  const executiveSummary = typeof data.executive_summary === 'string' ? data.executive_summary : null
+  const competitors = Array.isArray(data.competitors)
+    ? (data.competitors as Array<{ domain?: string; estimated_traffic?: unknown; strengths?: string[]; weaknesses?: string[]; top_keywords?: string[] }>)
+    : null
+  const marketPosition = typeof data.market_position === 'string' ? data.market_position : null
+  const strategicRecommendations = Array.isArray(data.strategic_recommendations)
+    ? (data.strategic_recommendations as Array<Record<string, unknown>>)
+    : null
+
+  // Analysis sections (can be string or object)
+  const analysisKeys = ['content_gap_analysis', 'keyword_gap_analysis', 'backlink_comparison', 'serp_feature_analysis']
+  const analyses = analysisKeys
+    .filter((k) => data[k] != null)
+    .map((k) => ({ key: k, value: data[k] }))
+
+  const handledKeys = new Set(['executive_summary', 'competitors', 'market_position', 'strategic_recommendations', ...analysisKeys])
+  const remaining = Object.entries(data).filter(([k]) => !handledKeys.has(k))
+
+  return (
+    <div className="report-content max-w-[800px] mx-auto">
+      <ReportHeader title={title} />
+
+      {executiveSummary && (
+        <div className="bg-cream/60 border-l-4 border-torii p-4 mb-6 rounded-r-tenkai">
+          <p className="text-sm leading-[1.8] text-[#444]">{executiveSummary}</p>
+        </div>
+      )}
+
+      {/* Competitors Table */}
+      {competitors && competitors.length > 0 && (
+        <ReportSection heading="Competitor Overview">
+          <div className="overflow-x-auto rounded-tenkai border border-tenkai-border mb-4">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-cream">
+                  <th className="px-4 py-2.5 text-left font-medium text-charcoal border-b border-tenkai-border">Domain</th>
+                  <th className="px-4 py-2.5 text-left font-medium text-charcoal border-b border-tenkai-border">Est. Traffic</th>
+                  <th className="px-4 py-2.5 text-left font-medium text-charcoal border-b border-tenkai-border">Key Strengths</th>
+                  <th className="px-4 py-2.5 text-left font-medium text-charcoal border-b border-tenkai-border">Key Weaknesses</th>
+                </tr>
+              </thead>
+              <tbody>
+                {competitors.map((comp, i) => (
+                  <tr key={i} className="border-b border-tenkai-border last:border-0">
+                    <td className="px-4 py-2.5 font-medium text-charcoal align-top">{comp.domain ?? '—'}</td>
+                    <td className="px-4 py-2.5 text-charcoal/70 align-top">{String(comp.estimated_traffic ?? '—')}</td>
+                    <td className="px-4 py-2.5 text-[#444] align-top">
+                      {comp.strengths?.slice(0, 3).join(', ') ?? '—'}
+                    </td>
+                    <td className="px-4 py-2.5 text-[#444] align-top">
+                      {comp.weaknesses?.slice(0, 3).join(', ') ?? '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Expandable detail per competitor */}
+          {competitors.map((comp, i) => (
+            comp.top_keywords && comp.top_keywords.length > 0 ? (
+              <details key={i} className="mb-2 rounded-tenkai border border-tenkai-border overflow-hidden">
+                <summary className="cursor-pointer px-4 py-2 bg-cream/40 text-sm font-medium text-charcoal hover:bg-cream transition-colors select-none">
+                  {comp.domain ?? `Competitor ${i + 1}`} — Top Keywords
+                </summary>
+                <div className="px-4 py-3 flex flex-wrap gap-1.5">
+                  {comp.top_keywords.map((kw, j) => (
+                    <span key={j} className="text-xs bg-ivory border border-tenkai-border rounded-tenkai px-2 py-0.5 text-charcoal/70">{kw}</span>
+                  ))}
+                </div>
+              </details>
+            ) : null
+          ))}
+        </ReportSection>
+      )}
+
+      {/* Market Position */}
+      {marketPosition && (
+        <ReportSection heading="Market Position">
+          <ReportParagraph>{marketPosition}</ReportParagraph>
+        </ReportSection>
+      )}
+
+      {/* Analysis Sections */}
+      {analyses.map(({ key, value }) => (
+        <ReportSection key={key} heading={formatKey(key)}>
+          {typeof value === 'string' ? (
+            <ReportParagraph>{value}</ReportParagraph>
+          ) : (
+            renderValueAsText(value)
+          )}
+        </ReportSection>
+      ))}
+
+      {/* Strategic Recommendations */}
+      {strategicRecommendations && strategicRecommendations.length > 0 && (
+        <ReportSection heading="Strategic Recommendations">
+          {renderPriorityCards(strategicRecommendations)}
+        </ReportSection>
+      )}
+
+      {/* Remaining */}
+      {remaining.map(([key, val]) => (
         <ReportSection key={key} heading={formatKey(key)}>
           {renderValueAsText(val)}
         </ReportSection>
@@ -351,15 +1068,22 @@ function renderValueAsText(value: unknown, depth = 0): React.ReactNode {
 
 function renderJsonContent(data: Record<string, unknown>, title: string, deliverableType?: string): React.ReactNode {
   const type = (deliverableType ?? '').toLowerCase()
-  if (type.includes('audit_report') || type.includes('audit')) return renderAuditReport(data, title)
+
+  // Type-based routing
+  if (type.includes('audit')) return renderAuditReport(data, title)
   if (type.includes('keyword')) return renderKeywordList(data, title)
   if (type.includes('article') || type.includes('content_draft') || type.includes('content_brief')) return renderContentDraftOrArticle(data, title)
+  if (type.includes('schema') || type.includes('redirect') || type.includes('robots')) return renderCodeOutput(data, title)
+  if (type.includes('competitive') || type.includes('competitor')) return renderCompetitiveReport(data, title)
 
-  // Heuristic detection
+  // Heuristic detection by data shape
   if ('categories' in data && typeof data.categories === 'object') return renderAuditReport(data, title)
-  if ('quick_wins' in data || 'long_tail' in data || 'branded' in data) return renderKeywordList(data, title)
+  if ('keyword_clusters' in data || 'quick_wins' in data || 'long_tail' in data || 'branded' in data) return renderKeywordList(data, title)
   if ('brief' in data || 'meta' in data) return renderContentDraftOrArticle(data, title)
+  if ('code' in data || 'schema_type' in data) return renderCodeOutput(data, title)
+  if ('competitors' in data) return renderCompetitiveReport(data, title)
 
+  // Smart generic handles everything else
   return renderGenericAsReport(data, title)
 }
 
