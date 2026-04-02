@@ -585,6 +585,57 @@ export async function processServiceRequest(request: ProcessableRequest): Promis
       parsedContent = { raw_response: responseText }
     }
 
+    // Post-process: enrich keyword research with real DataForSEO volume data
+    if (request.request_type === 'keyword_research' && typeof parsedContent === 'object') {
+      try {
+        console.log('[process] Starting keyword volume enrichment...')
+        // Collect all keywords from the agent output
+        const allKeywords: string[] = []
+        const extract = (arr: unknown[]) => {
+          for (const item of arr) {
+            if (typeof item === 'string') allKeywords.push(item)
+            else if (item && typeof item === 'object') {
+              const o = item as Record<string, unknown>
+              if (typeof o.keyword === 'string') allKeywords.push(o.keyword)
+              if (typeof o.term === 'string') allKeywords.push(o.term)
+              if (typeof o.primary_keyword === 'string') allKeywords.push(o.primary_keyword)
+            }
+          }
+        }
+        for (const val of Object.values(parsedContent)) {
+          if (Array.isArray(val)) extract(val)
+        }
+        const unique = [...new Set(allKeywords.filter(Boolean).map(k => k.toLowerCase()))]
+        if (unique.length > 0) {
+          console.log(`[process] Fetching volumes for ${unique.length} keywords: ${unique.slice(0, 5).join(', ')}...`)
+          const volumes = await fetchKeywordVolumes(unique).catch((err) => { console.error('[process] fetchKeywordVolumes FAILED:', err); return [] })
+          if (volumes.length > 0) {
+            const volMap = new Map(volumes.filter(v => v.avg_monthly_searches != null).map(v => [v.keyword.toLowerCase(), v]))
+            // Replace estimated volumes in all arrays containing keyword objects
+            const enrich = (arr: unknown[]) => {
+              for (const item of arr) {
+                if (item && typeof item === 'object') {
+                  const o = item as Record<string, unknown>
+                  const kw = String(o.keyword ?? o.term ?? o.primary_keyword ?? '').toLowerCase()
+                  const real = volMap.get(kw)
+                  if (real && real.avg_monthly_searches != null) {
+                    o.volume = `${real.avg_monthly_searches.toLocaleString()}/mo`
+                    if (real.competition) o.competition = real.competition
+                    if (real.cpc != null) o.cpc = `$${real.cpc.toFixed(2)}`
+                  }
+                }
+              }
+            }
+            for (const val of Object.values(parsedContent)) {
+              if (Array.isArray(val)) enrich(val)
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[process] keyword volume enrichment failed:', err)
+      }
+    }
+
     const title = buildDeliverableTitle(request.request_type, request.parameters, request.target_url)
     const summary = generateSummary(request.request_type, parsedContent)
     const score = extractScore(request.request_type, parsedContent)
