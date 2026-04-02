@@ -1,4 +1,3 @@
-import { GoogleAdsApi } from 'google-ads-api'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 
 export type KeywordVolumeResult = {
@@ -7,22 +6,23 @@ export type KeywordVolumeResult = {
   competition: string | null
   low_bid: number | null  // cents
   high_bid: number | null // cents
+  cpc: number | null      // dollars
 }
 
 const CACHE_TTL_DAYS = 7
 
-function isConfigured(): boolean {
-  return !!(
-    process.env.GOOGLE_ADS_DEVELOPER_TOKEN &&
-    process.env.GOOGLE_ADS_CLIENT_ID &&
-    process.env.GOOGLE_ADS_CLIENT_SECRET &&
-    process.env.GOOGLE_ADS_REFRESH_TOKEN &&
-    process.env.GOOGLE_ADS_CUSTOMER_ID
-  )
+function hasDataForSEO(): boolean {
+  return !!(process.env.DATAFORSEO_LOGIN && process.env.DATAFORSEO_PASSWORD)
 }
 
+/**
+ * Fetch real keyword search volume data via DataForSEO Google Ads API.
+ * Results are cached in keyword_volume_cache (7-day TTL).
+ * Costs ~$0.05 per batch of up to 700 keywords.
+ */
 export async function fetchKeywordVolumes(keywords: string[]): Promise<KeywordVolumeResult[]> {
-  if (!isConfigured() || keywords.length === 0) return []
+  if (keywords.length === 0) return []
+  if (!hasDataForSEO()) return keywords.map(k => ({ keyword: k, avg_monthly_searches: null, competition: null, low_bid: null, high_bid: null, cpc: null }))
 
   const unique = [...new Set(keywords.map(k => k.toLowerCase().trim()))].filter(Boolean)
   if (unique.length === 0) return []
@@ -43,65 +43,54 @@ export async function fetchKeywordVolumes(keywords: string[]): Promise<KeywordVo
       competition: row.competition,
       low_bid: row.low_bid_cents,
       high_bid: row.high_bid_cents,
+      cpc: row.high_bid_cents != null ? row.high_bid_cents / 100 : null,
     })
   }
 
   const misses = unique.filter(k => !hit.has(k))
 
   if (misses.length > 0) {
-    const client = new GoogleAdsApi({
-      client_id: process.env.GOOGLE_ADS_CLIENT_ID!,
-      client_secret: process.env.GOOGLE_ADS_CLIENT_SECRET!,
-      developer_token: process.env.GOOGLE_ADS_DEVELOPER_TOKEN!,
-    })
-    const customer = client.Customer({
-      customer_id: process.env.GOOGLE_ADS_CUSTOMER_ID!,
-      refresh_token: process.env.GOOGLE_ADS_REFRESH_TOKEN!,
-      login_customer_id: process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID,
-    })
-
-    // Batch in chunks of 2000 (API limit)
-    for (let i = 0; i < misses.length; i += 2000) {
-      const chunk = misses.slice(i, i + 2000)
-      // @ts-expect-error -- google-ads-api types require customer_id but SDK injects it automatically
-      const response = await customer.keywordPlanIdeas.generateKeywordHistoricalMetrics({
-        keywords: chunk,
-        geo_target_constants: ['geoTargetConstants/2840'],
-        language: 'languageConstants/1000',
-        keyword_plan_network: 'GOOGLE_SEARCH',
-      })
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const rows = (response.results ?? []).map((result: any) => {
-        const m = result.keyword_metrics
-        return {
-          keyword: String(result.text ?? '').toLowerCase().trim(),
-          volume: m?.avg_monthly_searches ?? null,
-          competition: (m?.competition as string) ?? null,
-          low_bid_cents: m?.low_top_of_page_bid_micros != null
-            ? Math.round(m.low_top_of_page_bid_micros / 10000)
-            : null,
-          high_bid_cents: m?.high_top_of_page_bid_micros != null
-            ? Math.round(m.high_top_of_page_bid_micros / 10000)
-            : null,
-          fetched_at: new Date().toISOString(),
-        }
-      }).filter((r: { keyword: string }) => r.keyword)
-
-      if (rows.length > 0) {
-        await supabaseAdmin
-          .from('keyword_volume_cache')
-          .upsert(rows, { onConflict: 'keyword' })
-      }
-
-      for (const row of rows) {
-        hit.set(row.keyword, {
-          keyword: row.keyword,
-          avg_monthly_searches: row.volume,
-          competition: row.competition,
-          low_bid: row.low_bid_cents,
-          high_bid: row.high_bid_cents,
+    // DataForSEO allows up to 700 keywords per request
+    for (let i = 0; i < misses.length; i += 700) {
+      const chunk = misses.slice(i, i + 700)
+      try {
+        const auth = Buffer.from(`${process.env.DATAFORSEO_LOGIN}:${process.env.DATAFORSEO_PASSWORD}`).toString('base64')
+        const res = await fetch('https://api.dataforseo.com/v3/keywords_data/google_ads/search_volume/live', {
+          method: 'POST',
+          headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify([{ keywords: chunk, location_code: 2840, language_code: 'en' }]),
         })
+        const data = await res.json()
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const results = (data?.tasks?.[0]?.result ?? []) as Array<any>
+        const rows = results.map((r) => ({
+          keyword: String(r.keyword ?? '').toLowerCase().trim(),
+          volume: r.search_volume ?? null,
+          competition: r.competition != null ? String(r.competition).toUpperCase() : null,
+          low_bid_cents: r.low_top_of_page_bid != null ? Math.round(r.low_top_of_page_bid * 100) : null,
+          high_bid_cents: r.high_top_of_page_bid != null ? Math.round(r.high_top_of_page_bid * 100) : null,
+          fetched_at: new Date().toISOString(),
+        })).filter((r) => r.keyword)
+
+        if (rows.length > 0) {
+          await supabaseAdmin
+            .from('keyword_volume_cache')
+            .upsert(rows, { onConflict: 'keyword' })
+        }
+
+        for (const row of rows) {
+          hit.set(row.keyword, {
+            keyword: row.keyword,
+            avg_monthly_searches: row.volume,
+            competition: row.competition,
+            low_bid: row.low_bid_cents,
+            high_bid: row.high_bid_cents,
+            cpc: row.high_bid_cents != null ? row.high_bid_cents / 100 : null,
+          })
+        }
+      } catch (err) {
+        console.warn('[keyword-volume] DataForSEO request failed:', err)
       }
     }
   }
@@ -112,5 +101,6 @@ export async function fetchKeywordVolumes(keywords: string[]): Promise<KeywordVo
     competition: null,
     low_bid: null,
     high_bid: null,
+    cpc: null,
   })
 }
