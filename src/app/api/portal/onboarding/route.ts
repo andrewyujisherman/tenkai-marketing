@@ -96,6 +96,7 @@ export async function POST(request: Request) {
           geography: targetGeo,
           service_area: serviceArea,
           services,
+          ideal_customer: onboarding_data?.idealCustomer ?? '',
         },
       }, { onConflict: 'client_id' })
       .then(({ error }) => {
@@ -122,6 +123,7 @@ export async function POST(request: Request) {
       source: 'onboarding',
       industry: onboarding_data?.industry ?? onboarding_data?.businessType ?? null,
       businessDescription: onboarding_data?.businessDescription ?? null,
+      idealCustomer: onboarding_data?.idealCustomer ?? null,
       services: onboarding_data?.services ?? null,
       serviceArea: onboarding_data?.serviceArea ?? null,
       competitors: onboarding_data?.competitors ?? null,

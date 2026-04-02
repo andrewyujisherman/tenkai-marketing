@@ -1454,12 +1454,14 @@ export function buildTaskMessage(
   const params = (parameters ?? {}) as Record<string, unknown>
   const serviceArea = params.serviceArea ?? params.service_area ?? params.city ?? ''
   const geography = params.targetGeography ?? params.target_geography ?? params.geography ?? ''
-  if (serviceArea || geography) {
-    parts.push(`\n=== SERVICE AREA (ALL output must be localized to this area) ===`)
+  const idealCustomer = params.idealCustomer ?? params.ideal_customer ?? ''
+  if (serviceArea || geography || idealCustomer) {
+    parts.push(`\n=== CLIENT CONTEXT (ALL output must be tailored to this) ===`)
     if (serviceArea) parts.push(`Primary Service Area: ${serviceArea}`)
     if (geography) parts.push(`Geographic Scope: ${geography}`)
-    parts.push(`CRITICAL: All keywords, recommendations, competitor analysis, and content must be targeted to this specific service area. National-level data must be clearly labeled as national with a local estimate provided. Never present national search volumes as if they are local volumes.`)
-    parts.push(`=== END SERVICE AREA ===\n`)
+    if (idealCustomer) parts.push(`Ideal Customer: ${idealCustomer}`)
+    parts.push(`CRITICAL: All keywords, recommendations, competitor analysis, and content must be targeted to this specific service area and ideal customer. National-level data must be clearly labeled as national with a local estimate provided. Never present national search volumes as if they are local volumes. Content tone and keyword intent should match the ideal customer profile.`)
+    parts.push(`=== END CLIENT CONTEXT ===\n`)
   }
 
   if (parameters && Object.keys(parameters).length > 0) {

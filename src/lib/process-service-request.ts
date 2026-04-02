@@ -214,7 +214,7 @@ interface ClientSeoContext {
   auditFindings: Array<{ finding: string; severity: string }>
   contentGaps: Array<{ topic: string; priority: string }>
   competitors: Array<{ domain: string }>
-  businessContext: { industry?: string; target_audience?: string; geography?: string; goals?: string; description?: string; services?: string; service_area?: string; last_audit_summary?: string }
+  businessContext: { industry?: string; target_audience?: string; geography?: string; goals?: string; description?: string; services?: string; service_area?: string; ideal_customer?: string; last_audit_summary?: string }
   cwvStatus: { overall?: string; lcp?: string; inp?: string; cls?: string }
   lastAuditScore: number | null
 }
@@ -258,6 +258,9 @@ async function fetchClientSeoContext(clientId: string): Promise<string | null> {
     }
     if (ctx.business_context?.service_area) {
       parts.push(`Service Area: ${ctx.business_context.service_area}`)
+    }
+    if (ctx.business_context?.ideal_customer) {
+      parts.push(`Ideal Customer: ${ctx.business_context.ideal_customer}`)
     }
     if (ctx.business_context?.target_audience) {
       parts.push(`Target Audience: ${ctx.business_context.target_audience}`)

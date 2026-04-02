@@ -44,6 +44,7 @@ export interface BusinessInfoData {
   websiteUrl: string
   businessType: string
   businessDescription: string
+  idealCustomer: string
   services: string
   serviceArea: string
   competitors: string[]
@@ -149,6 +150,20 @@ export function StepBusinessInfo({ data, onChange }: StepBusinessInfoProps) {
             value={data.businessDescription}
             onChange={(e) => update('businessDescription', e.target.value)}
             placeholder="e.g., We're an electronics manufacturer specializing in custom PCB assembly and embedded systems for aerospace and defense clients in the Western US."
+            rows={3}
+            className="w-full px-3 py-2.5 text-sm border border-tenkai-border rounded-tenkai bg-transparent outline-none resize-none focus:border-torii focus:ring-2 focus:ring-torii/20 placeholder:text-muted-gray"
+          />
+        </div>
+
+        <div>
+          <label className="text-sm font-medium text-charcoal mb-1.5 block">
+            Who Is Your Ideal Customer?
+          </label>
+          <p className="text-xs text-warm-gray mb-1.5">Describe who you're trying to reach — this shapes your keyword strategy and content tone.</p>
+          <textarea
+            value={data.idealCustomer}
+            onChange={(e) => update('idealCustomer', e.target.value)}
+            placeholder="e.g., Homeowners in Vernal ages 25-55 who need quick, affordable electronics repairs. They'd rather fix their PS5 locally than ship it to Sony and wait 3 weeks."
             rows={3}
             className="w-full px-3 py-2.5 text-sm border border-tenkai-border rounded-tenkai bg-transparent outline-none resize-none focus:border-torii focus:ring-2 focus:ring-torii/20 placeholder:text-muted-gray"
           />
