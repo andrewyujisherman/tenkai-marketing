@@ -32,6 +32,89 @@ import {
 } from '@/lib/integrations/dataforseo-backlinks'
 import type { BacklinkSummary, Backlink, ReferringDomain, CompetitorDomain } from '@/lib/integrations/dataforseo-backlinks'
 
+// --------------- Deliverable Sanitization ---------------
+
+/**
+ * Strip bracket placeholders like [city name, e.g., New York] and literal "null" strings
+ * from agent output before saving to DB. Prevents customers seeing template artifacts.
+ */
+function sanitizeDeliverable(content: Record<string, unknown>): Record<string, unknown> {
+  function sanitize(val: unknown): unknown {
+    if (typeof val === 'string') {
+      let s = val
+      // Strip bracket placeholders: [city], [state], [location], [company name, e.g., ...], etc.
+      s = s.replace(/\[(?:city|state|location|region|client|your|company|business|client's)[^\]]*\]/gi, '')
+      // Replace literal "null" string values
+      if (/^null$/i.test(s.trim())) return ''
+      // Clean up double spaces from removals
+      s = s.replace(/\s{2,}/g, ' ').trim()
+      return s
+    }
+    if (Array.isArray(val)) return val.map(sanitize)
+    if (val && typeof val === 'object') {
+      const result: Record<string, unknown> = {}
+      for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
+        result[k] = sanitize(v)
+      }
+      return result
+    }
+    return val
+  }
+  return sanitize(content) as Record<string, unknown>
+}
+
+/**
+ * Normalize volume strings to consistent X/mo format.
+ * Real data: "1,500/mo" (unchanged). Estimated ranges: "1,200-1,800/mo (estimated)" → "~1,500/mo (est.)"
+ */
+function normalizeVolumes(content: Record<string, unknown>): Record<string, unknown> {
+  function normalizeVol(val: string): string {
+    // Already clean format without estimate marker: "1,500/mo" — keep as-is
+    if (/^\d[\d,]*\/mo$/.test(val)) return val
+    // Range: "1,200-1,800/mo (estimated)" or "1,200 - 1,800/month"
+    const rangeMatch = val.match(/^~?(\d[\d,]*)\s*[-–]\s*(\d[\d,]*)\s*(?:\/mo(?:nth)?)?/i)
+    if (rangeMatch) {
+      const low = parseInt(rangeMatch[1].replace(/,/g, ''))
+      const high = parseInt(rangeMatch[2].replace(/,/g, ''))
+      const avg = Math.round((low + high) / 2)
+      return `~${avg.toLocaleString()}/mo (est.)`
+    }
+    // "2,900/month (estimated)" or "2,900/mo (est)"
+    const estMatch = val.match(/^~?(\d[\d,]*)\s*\/mo(?:nth)?\s*\(est(?:imated?)?\)/i)
+    if (estMatch) return `~${estMatch[1]}/mo (est.)`
+    // "Estimated: 10,000-50,000/month"
+    const prefixMatch = val.match(/estimated:\s*(\d[\d,]*)\s*[-–]\s*(\d[\d,]*)/i)
+    if (prefixMatch) {
+      const low = parseInt(prefixMatch[1].replace(/,/g, ''))
+      const high = parseInt(prefixMatch[2].replace(/,/g, ''))
+      const avg = Math.round((low + high) / 2)
+      return `~${avg.toLocaleString()}/mo (est.)`
+    }
+    // "Estimated: 10,000/month"
+    const prefixSingle = val.match(/estimated:\s*(\d[\d,]*)(?:\s*\/mo(?:nth)?)?/i)
+    if (prefixSingle) return `~${prefixSingle[1]}/mo (est.)`
+    return val
+  }
+
+  function walk(val: unknown): unknown {
+    if (typeof val === 'string') return val
+    if (Array.isArray(val)) return val.map(walk)
+    if (val && typeof val === 'object') {
+      const result: Record<string, unknown> = {}
+      for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
+        if (typeof v === 'string' && (k === 'volume' || k === 'search_volume' || k === 'avg_monthly_searches' || k === 'monthly_searches')) {
+          result[k] = normalizeVol(v)
+        } else {
+          result[k] = walk(v)
+        }
+      }
+      return result
+    }
+    return val
+  }
+  return walk(content) as Record<string, unknown>
+}
+
 // --------------- Site Scraping ---------------
 
 const URL_BASED_REQUESTS = new Set([
@@ -313,6 +396,12 @@ export async function processServiceRequest(request: ProcessableRequest): Promis
 
     // Request types that benefit from GBP performance data
     const GBP_REQUESTS = new Set(['local_seo_audit', 'gbp_optimization', 'review_responses', 'review_campaign'])
+
+    // Always scrape the site if we have a URL — agents need to know the actual business.
+    // This prevents hallucinated business models (e.g. "metal detectors" for a PCB company).
+    if (request.target_url && !isUrlBased) {
+      scrapedSite = await scrapeUrl(request.target_url).catch(() => null) as ScrapedSite | null
+    }
 
     if (isUrlBased) {
       const shouldCrawl = CRAWL_REQUESTS.has(request.request_type)
@@ -635,6 +724,10 @@ export async function processServiceRequest(request: ProcessableRequest): Promis
         console.warn('[process] keyword volume enrichment failed:', err)
       }
     }
+
+    // Post-process: sanitize placeholders and normalize volumes before saving
+    parsedContent = sanitizeDeliverable(parsedContent)
+    parsedContent = normalizeVolumes(parsedContent)
 
     const title = buildDeliverableTitle(request.request_type, request.parameters, request.target_url)
     const summary = generateSummary(request.request_type, parsedContent)

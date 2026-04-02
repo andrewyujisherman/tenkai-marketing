@@ -1692,6 +1692,17 @@ export function buildTaskMessage(
 
   // Execution task instructions — tell the agent exactly what to produce
   const executionInstructions: Record<string, string> = {
+    content_brief: `\nCREATE A COMPREHENSIVE CONTENT BRIEF for producing a high-quality SEO article.
+Topic/keyword: ${(parameters as Record<string, string>).target_keyword ?? (parameters as Record<string, string>).topic ?? 'See parameters above'}
+REQUIREMENTS: Include content angle, detailed outline with word counts per section, E-E-A-T requirements, featured snippet target, internal linking strategy, FAQ section, and SEO checklist.
+CRITICAL — COMPETITOR ANALYSIS RULES:
+- For the competitor_analysis section, you MUST use ONLY real URLs from the "REAL SERP DATA" section above.
+- Do NOT fabricate or invent competitor URLs like "competitor-ecm.com" or "engineering-publication.com".
+- Every competitor URL you cite must come from the actual Google search results provided in the SERP data.
+- If no SERP data is available, state "No live competitor data available" rather than inventing URLs.
+- Competitor word counts and content gaps must be based on real SERP results, not estimates.
+Return in the content_brief JSON format.`,
+
     content_article: `\nPRODUCE A FULL SEO-OPTIMIZED ARTICLE. This is a content production task — write the complete article, not a brief or outline.
 Topic: ${(parameters as Record<string, string>).topic ?? 'See parameters above'}
 Target keyword: ${(parameters as Record<string, string>).target_keyword ?? 'See parameters above'}

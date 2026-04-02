@@ -78,6 +78,30 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: updateError.message }, { status: 500 })
   }
 
+  // Seed client_seo_context with onboarding business info so first agent requests have context
+  const businessDesc = onboarding_data?.businessDescription ?? onboarding_data?.business_description ?? ''
+  const businessType = onboarding_data?.businessType ?? onboarding_data?.industry ?? ''
+  const serviceArea = onboarding_data?.serviceArea ?? ''
+  const services = onboarding_data?.services ?? ''
+  const targetGeo = onboarding_data?.targetGeography ?? ''
+  if (businessDesc || businessType || serviceArea) {
+    supabaseAdmin
+      .from('client_seo_context')
+      .upsert({
+        client_id: client.id,
+        business_context: {
+          description: businessDesc,
+          industry: businessType,
+          geography: targetGeo,
+          service_area: serviceArea,
+          services,
+        },
+      }, { onConflict: 'client_id' })
+      .then(({ error }) => {
+        if (error) console.error('[onboarding] Failed to seed client_seo_context:', error.message)
+      })
+  }
+
   // Auto-trigger: site_audit + keyword_research + competitor_analysis
   // content_calendar fires automatically via CHAIN_MAP when keyword_research completes
   // These run in parallel so the client sees immediate progress from their AI team.
@@ -94,7 +118,10 @@ export async function POST(request: Request) {
 
     const sharedParams = {
       source: 'onboarding',
-      industry: onboarding_data?.industry ?? null,
+      industry: onboarding_data?.industry ?? onboarding_data?.businessType ?? null,
+      businessDescription: onboarding_data?.businessDescription ?? null,
+      services: onboarding_data?.services ?? null,
+      serviceArea: onboarding_data?.serviceArea ?? null,
       competitors: onboarding_data?.competitors ?? null,
       businessGoals: onboarding_data?.businessGoals ?? null,
       targetGeography: onboarding_data?.targetGeography ?? null,

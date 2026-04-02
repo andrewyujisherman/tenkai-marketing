@@ -30,6 +30,7 @@ const defaultBusinessInfo: BusinessInfoData = {
   businessName: '',
   websiteUrl: '',
   businessType: '',
+  businessDescription: '',
   services: '',
   serviceArea: '',
   competitors: ['', '', ''],

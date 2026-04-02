@@ -63,12 +63,20 @@ async function post<T>(path: string, body: unknown): Promise<T | null> {
       },
       body: JSON.stringify(body),
     })
-    if (!res.ok) return null
+    if (!res.ok) {
+      const text = await res.text().catch(() => res.statusText)
+      console.error(`[DataForSEO] HTTP ${res.status} on ${path}: ${text.slice(0, 200)}`)
+      return null
+    }
     const data = await res.json()
     const task = data?.tasks?.[0]
-    if (!task || task.status_code !== 20000) return null
+    if (!task || task.status_code !== 20000) {
+      console.error(`[DataForSEO] Task failed on ${path}: status=${task?.status_code}, message=${task?.status_message}`)
+      return null
+    }
     return task.result?.[0] ?? null
-  } catch {
+  } catch (err) {
+    console.error(`[DataForSEO] Exception on ${path}:`, err instanceof Error ? err.message : err)
     return null
   }
 }
