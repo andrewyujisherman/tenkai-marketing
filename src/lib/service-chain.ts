@@ -333,6 +333,41 @@ export async function writeBackClientContext(
       if (contentGaps.length > 0) update.content_gaps = contentGaps
     }
 
+    if (serviceType === 'link_analysis') {
+      const summary = content.backlink_summary ?? content.link_profile ?? content
+      if (typeof summary === 'object' && summary !== null) {
+        const s = summary as Record<string, unknown>
+        update.link_profile = {
+          total_backlinks: s.total_backlinks ?? s.backlinks_total,
+          referring_domains: s.referring_domains,
+          domain_rank: s.domain_rank,
+          anchor_distribution: s.anchor_text_distribution ?? s.anchor_distribution,
+        }
+      }
+    }
+
+    if (serviceType === 'content_article' || serviceType === 'content_brief') {
+      // Track what content has been produced/planned
+      const topic = toStr(content.topic ?? content.target_keyword ?? content.title, '')
+      if (topic) {
+        const existingGaps = (update.content_gaps ?? []) as Array<{ topic: string; priority: string }>
+        existingGaps.push({ topic, priority: serviceType === 'content_article' ? 'completed' : 'planned' })
+        update.content_gaps = existingGaps.slice(0, 30)
+      }
+    }
+
+    if (serviceType === 'analytics_audit') {
+      if (typeof content.executive_summary === 'string') {
+        update.business_context = { ...(typeof update.business_context === 'object' ? update.business_context as Record<string, unknown> : {}), last_analytics_summary: content.executive_summary }
+      }
+    }
+
+    if (serviceType === 'geo_audit' || serviceType === 'entity_optimization') {
+      if (typeof content.executive_summary === 'string') {
+        update.business_context = { ...(typeof update.business_context === 'object' ? update.business_context as Record<string, unknown> : {}), last_geo_summary: content.executive_summary }
+      }
+    }
+
     // Nothing to update for this service type
     if (Object.keys(update).length <= 1) return
 

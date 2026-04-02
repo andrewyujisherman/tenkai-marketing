@@ -42,8 +42,13 @@ function sanitizeDeliverable(content: Record<string, unknown>): Record<string, u
   function sanitize(val: unknown): unknown {
     if (typeof val === 'string') {
       let s = val
-      // Strip bracket placeholders: [city], [state], [location], [company name, e.g., ...], etc.
+      // Strip bracket placeholders: [city], [state], [EDITOR_NAME], [BLOG_NAME], etc.
+      // Catches: [city name, e.g., New York], [EDITOR_NAME], [Client's primary service city], [specific takeaway]
       s = s.replace(/\[(?:city|state|location|region|client|your|company|business|client's)[^\]]*\]/gi, '')
+      // Catch ALL_CAPS template vars: [EDITOR_NAME], [BLOG_NAME], [RECENT_ARTICLE_TITLE]
+      s = s.replace(/\[[A-Z][A-Z_]{2,}\]/g, '')
+      // Catch [specific ...] and [insert ...] patterns
+      s = s.replace(/\[(?:specific|insert|add|include|relevant)[^\]]*\]/gi, '')
       // Replace literal "null" string values
       if (/^null$/i.test(s.trim())) return ''
       // Clean up double spaces from removals
@@ -209,7 +214,7 @@ interface ClientSeoContext {
   auditFindings: Array<{ finding: string; severity: string }>
   contentGaps: Array<{ topic: string; priority: string }>
   competitors: Array<{ domain: string }>
-  businessContext: { industry?: string; target_audience?: string; geography?: string; goals?: string }
+  businessContext: { industry?: string; target_audience?: string; geography?: string; goals?: string; description?: string; services?: string; service_area?: string; last_audit_summary?: string }
   cwvStatus: { overall?: string; lcp?: string; inp?: string; cls?: string }
   lastAuditScore: number | null
 }
@@ -242,8 +247,17 @@ async function fetchClientSeoContext(clientId: string): Promise<string | null> {
     const parts: string[] = []
     parts.push('--- CLIENT SEO CONTEXT (accumulated from prior analyses) ---')
 
+    if (ctx.business_context?.description) {
+      parts.push(`Business Description: ${ctx.business_context.description}`)
+    }
     if (ctx.business_context?.industry) {
       parts.push(`Industry: ${ctx.business_context.industry}`)
+    }
+    if (ctx.business_context?.services) {
+      parts.push(`Services: ${ctx.business_context.services}`)
+    }
+    if (ctx.business_context?.service_area) {
+      parts.push(`Service Area: ${ctx.business_context.service_area}`)
     }
     if (ctx.business_context?.target_audience) {
       parts.push(`Target Audience: ${ctx.business_context.target_audience}`)
@@ -253,6 +267,9 @@ async function fetchClientSeoContext(clientId: string): Promise<string | null> {
     }
     if (ctx.business_context?.goals) {
       parts.push(`Goals: ${ctx.business_context.goals}`)
+    }
+    if (ctx.business_context?.last_audit_summary) {
+      parts.push(`Business Summary (from audit): ${ctx.business_context.last_audit_summary}`)
     }
     if (ctx.last_audit_score != null) {
       parts.push(`Last Audit Score: ${ctx.last_audit_score}/100`)
@@ -631,6 +648,14 @@ export async function processServiceRequest(request: ProcessableRequest): Promis
       taskMessage += '\n' + blLines.join('\n')
     }
 
+    // Gate: reject requests with zero business context — prevents hallucinated business models
+    const hasScrapedData = scrapedSite && !scrapedSite.error && scrapedSite.bodyText.length > 50
+    const hasClientContext = !!clientContext
+    const hasBusinessParams = !!(request.parameters as Record<string, unknown>)?.businessDescription || !!(request.parameters as Record<string, unknown>)?.industry
+    if (!hasScrapedData && !hasClientContext && !hasBusinessParams) {
+      throw new Error(`Cannot process ${request.request_type}: no business context available (no scrapeable site, no client SEO context, no onboarding data). Client needs to complete onboarding or provide a valid website URL.`)
+    }
+
     // Load professional reference material for this request type
     const referenceContext = getReferenceContext(request.request_type)
     const referenceBlock = referenceContext
@@ -662,7 +687,7 @@ export async function processServiceRequest(request: ProcessableRequest): Promis
       throw new Error('No text content in Gemini response')
     }
 
-    // Parse JSON from response
+    // Parse JSON from response — retry once if parsing fails
     let parsedContent: Record<string, unknown>
     try {
       let jsonStr = responseText.trim()
@@ -671,7 +696,22 @@ export async function processServiceRequest(request: ProcessableRequest): Promis
       }
       parsedContent = JSON.parse(jsonStr)
     } catch {
-      parsedContent = { raw_response: responseText }
+      console.warn(`[process] JSON parse failed for ${request.request_type}, retrying Gemini call...`)
+      try {
+        const retryResult = await geminiModel.generateContent({
+          contents: [{ role: 'user', parts: [{ text: taskMessage + '\n\nCRITICAL: Your previous response was not valid JSON. Return ONLY a valid JSON object. No markdown backticks, no explanatory text before or after. Just the raw JSON object.' }] }],
+        })
+        const retryText = retryResult.response.text()
+        if (!retryText) throw new Error('Empty retry response')
+        let retryJson = retryText.trim()
+        if (retryJson.startsWith('```')) {
+          retryJson = retryJson.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '')
+        }
+        parsedContent = JSON.parse(retryJson)
+        console.log(`[process] Retry succeeded for ${request.request_type}`)
+      } catch {
+        throw new Error(`Gemini returned invalid JSON on both attempts for ${request.request_type}. Response starts with: ${responseText.slice(0, 200)}`)
+      }
     }
 
     // Post-process: enrich keyword research with real DataForSEO volume data
@@ -728,6 +768,13 @@ export async function processServiceRequest(request: ProcessableRequest): Promis
     // Post-process: sanitize placeholders and normalize volumes before saving
     parsedContent = sanitizeDeliverable(parsedContent)
     parsedContent = normalizeVolumes(parsedContent)
+
+    // Gate: reject deliverables with empty primary content (e.g. review_responses with 0 responses)
+    const contentArrays = Object.values(parsedContent).filter(v => Array.isArray(v))
+    const contentStrings = Object.values(parsedContent).filter(v => typeof v === 'string' && v.length > 100)
+    if (contentArrays.length > 0 && contentArrays.every(a => (a as unknown[]).length === 0) && contentStrings.length === 0) {
+      throw new Error(`Agent returned empty deliverable for ${request.request_type}: all content arrays are empty. This suggests the agent had insufficient data to produce output.`)
+    }
 
     const title = buildDeliverableTitle(request.request_type, request.parameters, request.target_url)
     const summary = generateSummary(request.request_type, parsedContent)

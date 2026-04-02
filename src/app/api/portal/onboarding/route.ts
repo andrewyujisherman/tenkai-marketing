@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { getAgentForRequest } from '@/lib/agents'
+import { tierAllowsRequestType } from '@/lib/tier-gates'
 
 export async function POST(request: Request) {
   const supabase = await createServerClient()
@@ -18,7 +19,7 @@ export async function POST(request: Request) {
   let client = null
   const { data: byId } = await supabaseAdmin
     .from('clients')
-    .select('id, status, website_url')
+    .select('id, status, website_url, tier')
     .eq('auth_user_id', user.id)
     .single()
 
@@ -27,7 +28,7 @@ export async function POST(request: Request) {
   } else {
     const { data: byEmail } = await supabaseAdmin
       .from('clients')
-      .select('id, status, website_url')
+      .select('id, status, website_url, tier')
       .eq('email', (user.email ?? '').toLowerCase())
       .single()
     client = byEmail
@@ -46,7 +47,7 @@ export async function POST(request: Request) {
         company_name,
         status: 'onboarding',
       })
-      .select('id, status, website_url')
+      .select('id, status, website_url, tier')
       .single()
 
     if (insertError || !newClient) {
@@ -110,11 +111,12 @@ export async function POST(request: Request) {
     client.website_url
 
   if (websiteUrl) {
+    const clientTier = client.tier ?? 'starter'
     const strategyChain = [
       { type: 'site_audit', priority: 9 },
       { type: 'keyword_research', priority: 8 },
       { type: 'competitor_analysis', priority: 7 },
-    ] as const
+    ].filter(s => tierAllowsRequestType(clientTier, s.type))
 
     const sharedParams = {
       source: 'onboarding',
