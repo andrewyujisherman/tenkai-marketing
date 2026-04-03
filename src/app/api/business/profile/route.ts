@@ -79,6 +79,9 @@ export async function GET() {
         not_services: profile.not_services ?? [],
         products: profile.products ?? [],
         specialties: profile.specialties ?? [],
+        top_revenue_services: profile.top_revenue_services ?? [],
+        customer_pain_points: profile.customer_pain_points ?? '',
+        customer_faqs: profile.customer_faqs ?? '',
       })
     }
 
@@ -142,6 +145,8 @@ export async function PUT(req: NextRequest) {
         url: 'website_url',
         category: 'category',
         area: 'service_area',
+        customer_pain_points: 'customer_pain_points',
+        customer_faqs: 'customer_faqs',
       }
       const dbField = fieldMap[body.field]
       if (!dbField) return NextResponse.json({ error: 'Invalid field' }, { status: 400 })
@@ -158,7 +163,7 @@ export async function PUT(req: NextRequest) {
 
     // Handle tag updates: { action: 'add'|'remove', category: string, value: string }
     if (body.action && body.category) {
-      const validCategories = ['services', 'not_services', 'products', 'specialties']
+      const validCategories = ['services', 'not_services', 'products', 'specialties', 'top_revenue_services']
       if (!validCategories.includes(body.category)) {
         return NextResponse.json({ error: 'Invalid category' }, { status: 400 })
       }

@@ -540,8 +540,15 @@ export async function processServiceRequest(request: ProcessableRequest): Promis
       gbpData = await fetchGBPData(request.client_id).catch(() => null)
     }
 
-    // Fetch accumulated client SEO context
+    // Fetch accumulated client SEO context + business profile
     const clientContext = await fetchClientSeoContext(request.client_id)
+
+    // Also fetch business_profile for structured service data (services offered, NOT offered, specialties)
+    const { data: bizProfile } = await supabaseAdmin
+      .from('business_profile')
+      .select('services, not_services, products, specialties, customer_pain_points, top_revenue_services, customer_faqs')
+      .eq('client_id', request.client_id)
+      .single()
 
     // Backfill service area from client_seo_context into request parameters for chained requests
     // This ensures the SERVICE AREA block in buildTaskMessage fires even when the original
@@ -552,6 +559,16 @@ export async function processServiceRequest(request: ProcessableRequest): Promis
       const geoMatch = clientContext.match(/Geography:\s*(.+)/i)
       if (areaMatch) params.serviceArea = areaMatch[1].trim()
       if (geoMatch && !params.targetGeography) params.targetGeography = geoMatch[1].trim()
+    }
+
+    // Inject business profile into parameters so buildTaskMessage's CLIENT CONTEXT block includes it
+    if (bizProfile) {
+      if (bizProfile.services?.length > 0) params._servicesOffered = bizProfile.services
+      if (bizProfile.not_services?.length > 0) params._servicesNotOffered = bizProfile.not_services
+      if (bizProfile.specialties?.length > 0) params._specialties = bizProfile.specialties
+      if (bizProfile.top_revenue_services?.length > 0) params._topRevenueServices = bizProfile.top_revenue_services
+      if (bizProfile.customer_pain_points) params._customerPainPoints = bizProfile.customer_pain_points
+      if (bizProfile.customer_faqs) params._customerFaqs = bizProfile.customer_faqs
     }
 
     let taskMessage = buildTaskMessage(

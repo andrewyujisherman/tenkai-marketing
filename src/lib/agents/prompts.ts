@@ -1460,7 +1460,20 @@ export function buildTaskMessage(
     if (serviceArea) parts.push(`Primary Service Area: ${serviceArea}`)
     if (geography) parts.push(`Geographic Scope: ${geography}`)
     if (idealCustomer) parts.push(`Ideal Customer: ${idealCustomer}`)
-    parts.push(`CRITICAL: All keywords, recommendations, competitor analysis, and content must be targeted to this specific service area and ideal customer. National-level data must be clearly labeled as national with a local estimate provided. Never present national search volumes as if they are local volumes. Content tone and keyword intent should match the ideal customer profile.`)
+    // Structured business profile data (from My Business page)
+    const servicesOffered = params._servicesOffered as string[] | undefined
+    const servicesNotOffered = params._servicesNotOffered as string[] | undefined
+    const specialties = params._specialties as string[] | undefined
+    const topRevenueServices = params._topRevenueServices as string[] | undefined
+    const customerPainPoints = params._customerPainPoints as string | undefined
+    const customerFaqs = params._customerFaqs as string | undefined
+    if (servicesOffered?.length) parts.push(`Services Offered: ${servicesOffered.join(', ')}`)
+    if (servicesNotOffered?.length) parts.push(`DO NOT OFFER (never target these): ${servicesNotOffered.join(', ')}`)
+    if (specialties?.length) parts.push(`Specialties/Differentiators: ${specialties.join(', ')}`)
+    if (topRevenueServices?.length) parts.push(`Highest Revenue Services (prioritize these): ${topRevenueServices.join(', ')}`)
+    if (customerPainPoints) parts.push(`Customer Pain Points: ${customerPainPoints}`)
+    if (customerFaqs) parts.push(`Common Customer Questions: ${customerFaqs}`)
+    parts.push(`CRITICAL: All keywords, recommendations, competitor analysis, and content must be targeted to this specific service area and ideal customer. National-level data must be clearly labeled as national with a local estimate provided. Never present national search volumes as if they are local volumes. Content tone and keyword intent should match the ideal customer profile. NEVER produce keywords or content for services listed in "DO NOT OFFER". Prioritize highest-revenue services in keyword strategy and content planning.`)
     parts.push(`=== END CLIENT CONTEXT ===\n`)
   }
 
