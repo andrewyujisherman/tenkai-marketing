@@ -124,6 +124,7 @@ export default function ContentClient({ initialPosts, tier, monthlyContentCount 
   const [approvalLoading, setApprovalLoading] = useState(false)
   const [generateOpen, setGenerateOpen] = useState(false)
   const [generateLoading, setGenerateLoading] = useState(false)
+  const [topic, setTopic] = useState('')
   const [chatMessage, setChatMessage] = useState('')
   const [chatSending, setChatSending] = useState(false)
 
@@ -255,7 +256,7 @@ export default function ContentClient({ initialPosts, tier, monthlyContentCount 
       const res = await fetch('/api/services/request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ request_type: requestType }),
+        body: JSON.stringify({ request_type: requestType, parameters: { topic } }),
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
@@ -263,6 +264,7 @@ export default function ContentClient({ initialPosts, tier, monthlyContentCount 
       }
       addToast('success', 'Content generation started. Your team is on it!')
       setGenerateOpen(false)
+      setTopic('')
     } catch (e) {
       addToast('error', e instanceof Error ? e.message : 'Failed to start content generation.')
     } finally {
@@ -409,7 +411,7 @@ h1 { font-family: Georgia, serif; font-size: 2rem; margin-bottom: 1rem; }
                     <span>{relativeDate(post.created_at)}</span>
                     {post.excerpt && (
                       <span className="hidden sm:inline text-warm-gray/70">
-                        ~{Math.max(1, Math.round(post.excerpt.length / 5))} words
+                        ~{Math.max(1, (post.excerpt || '').split(/\s+/).filter(Boolean).length)} words
                       </span>
                     )}
                     {post.keywords.length > 0 && (
@@ -487,7 +489,19 @@ h1 { font-family: Georgia, serif; font-size: 2rem; margin-bottom: 1rem; }
                         size="sm"
                         disabled
                         className="gap-1.5 rounded-tenkai opacity-50"
-                        title="Approve this content before downloading."
+                        title="Approve this content to enable download"
+                      >
+                        <Download className="size-3.5" />
+                        Download
+                      </Button>
+                    )}
+                    {!canDownload && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled
+                        className="gap-1.5 rounded-tenkai opacity-50"
+                        title="Upgrade to Growth plan to download content"
                       >
                         <Download className="size-3.5" />
                         Download
@@ -601,6 +615,14 @@ h1 { font-family: Georgia, serif; font-size: 2rem; margin-bottom: 1rem; }
                 style={{ width: `${Math.min((monthlyContentCount / quota) * 100, 100)}%` }}
               />
             </div>
+
+            <input
+              type="text"
+              placeholder="What should this be about? (e.g., 'iPhone screen replacement tips')"
+              className="w-full border rounded px-3 py-2 text-sm mb-3"
+              value={topic}
+              onChange={(e) => setTopic(e.target.value)}
+            />
 
             {contentTypes.map((ct) => (
               <button

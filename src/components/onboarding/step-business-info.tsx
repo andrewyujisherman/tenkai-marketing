@@ -159,7 +159,7 @@ export function StepBusinessInfo({ data, onChange }: StepBusinessInfoProps) {
           <label className="text-sm font-medium text-charcoal mb-1.5 block">
             Who Is Your Ideal Customer?
           </label>
-          <p className="text-xs text-warm-gray mb-1.5">Describe who you're trying to reach — this shapes your keyword strategy and content tone.</p>
+          <p className="text-xs text-warm-gray mb-1.5">Describe who you&apos;re trying to reach — this shapes your keyword strategy and content tone.</p>
           <textarea
             value={data.idealCustomer}
             onChange={(e) => update('idealCustomer', e.target.value)}

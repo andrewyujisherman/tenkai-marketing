@@ -120,6 +120,158 @@ function normalizeVolumes(content: Record<string, unknown>): Record<string, unkn
   return walk(content) as Record<string, unknown>
 }
 
+// --------------- Auto-Seed Approved Keywords ---------------
+
+/**
+ * When keyword_research completes, extract keywords and seed them into
+ * approved_keywords table with status='pending' for client review.
+ */
+async function seedApprovedKeywords(clientId: string, content: Record<string, unknown>): Promise<void> {
+  const rows: Array<Record<string, unknown>> = []
+  const seen = new Set<string>()
+
+  function add(keyword: string, opts: { cluster?: string; volume?: string; difficulty?: string; intent?: string } = {}) {
+    const kw = keyword.trim().toLowerCase()
+    if (!kw || seen.has(kw)) return
+    seen.add(kw)
+    rows.push({
+      client_id: clientId,
+      keyword: kw,
+      cluster: opts.cluster || null,
+      volume: opts.volume || null,
+      difficulty: opts.difficulty || null,
+      intent: opts.intent || null,
+      source: 'keyword_research',
+      status: 'pending',
+    })
+  }
+
+  // keyword_clusters
+  for (const c of Array.isArray(content.keyword_clusters) ? content.keyword_clusters : []) {
+    const obj = c as Record<string, unknown>
+    const clusterName = String(obj.cluster_name ?? obj.name ?? '')
+    if (obj.primary_keyword) add(String(obj.primary_keyword), { cluster: clusterName })
+    for (const sk of Array.isArray(obj.supporting_keywords) ? obj.supporting_keywords : []) {
+      add(String(sk), { cluster: clusterName })
+    }
+  }
+
+  // primary_keywords
+  for (const pk of Array.isArray(content.primary_keywords) ? content.primary_keywords : []) {
+    const obj = pk as Record<string, unknown>
+    add(String(obj.keyword ?? obj.term ?? ''), {
+      volume: obj.search_volume ? String(obj.search_volume) : undefined,
+      difficulty: obj.difficulty_score ? String(obj.difficulty_score) : (obj.difficulty ? String(obj.difficulty) : undefined),
+      intent: obj.intent ? String(obj.intent) : undefined,
+    })
+  }
+
+  // quick_wins
+  for (const qw of Array.isArray(content.quick_wins) ? content.quick_wins : []) {
+    const obj = qw as Record<string, unknown>
+    add(String(obj.keyword ?? obj.term ?? ''), {
+      cluster: 'Quick Wins',
+      volume: obj.volume ? String(obj.volume) : undefined,
+      difficulty: obj.difficulty_score ? String(obj.difficulty_score) : undefined,
+    })
+  }
+
+  if (rows.length === 0) return
+
+  await supabaseAdmin
+    .from('approved_keywords')
+    .upsert(rows, { onConflict: 'client_id,keyword', ignoreDuplicates: true })
+
+  console.log(`[process] Seeded ${rows.length} keywords into approved_keywords for client ${clientId}`)
+}
+
+// --------------- Phase Checkpoint Action Items ---------------
+
+/**
+ * After certain services complete, create action items prompting the customer
+ * to review and approve before the next phase begins. This is the auto-sequencing
+ * engine — customers never choose which audit to run.
+ *
+ * Phase flow:
+ *   Onboarding → site_audit + keyword_research + competitor_analysis (auto)
+ *   keyword_research complete → "Review Your Strategy" action item
+ *   Customer approves keywords → content_calendar + content_brief (auto)
+ *   content_article complete → "Review Your Content" action item
+ *   Customer approves article → outreach_emails (auto via chain)
+ *   site_audit complete → "Review Your Website Health" action item (informational)
+ */
+async function createCheckpointActionItem(
+  clientId: string,
+  serviceType: string,
+  content: Record<string, unknown>
+): Promise<void> {
+  const CHECKPOINTS: Record<string, {
+    type: string
+    title: string
+    description: string
+    link?: string
+  }> = {
+    keyword_research: {
+      type: 'strategy_review',
+      title: 'Review Your Keyword Strategy',
+      description: `Your team found ${
+        Array.isArray(content.keyword_clusters) ? content.keyword_clusters.length : '?'
+      } keyword groups for your business. Review and approve the ones you want to target — your team will build content around your choices.`,
+      link: '/strategy',
+    },
+    site_audit: {
+      type: 'report_review',
+      title: 'Your Website Health Report is Ready',
+      description: `Your website scored ${content.overall_score ?? '?'}/100. ${
+        typeof content.executive_summary === 'string' ? content.executive_summary.slice(0, 200) : 'Review the full report to see what your team recommends.'
+      }`,
+      link: '/health',
+    },
+    competitor_analysis: {
+      type: 'report_review',
+      title: 'Your Competitive Analysis is Ready',
+      description: typeof content.executive_summary === 'string'
+        ? content.executive_summary.slice(0, 200)
+        : 'See how your business compares to competitors in your area.',
+      link: '/reports',
+    },
+    content_calendar: {
+      type: 'report_review',
+      title: 'Your Content Plan is Ready',
+      description: 'Your team created a content calendar based on your approved keywords. Review the topics planned for the coming months.',
+      link: '/content',
+    },
+  }
+
+  const checkpoint = CHECKPOINTS[serviceType]
+  if (!checkpoint) return
+
+  // Don't create duplicate action items for the same service type within 7 days
+  const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+  const { count } = await supabaseAdmin
+    .from('approvals')
+    .select('*', { count: 'exact', head: true })
+    .eq('client_id', clientId)
+    .eq('type', checkpoint.type)
+    .gte('created_at', cutoff)
+
+  if ((count ?? 0) > 0) return
+
+  await supabaseAdmin
+    .from('approvals')
+    .insert({
+      client_id: clientId,
+      type: checkpoint.type,
+      title: checkpoint.title,
+      description: checkpoint.description,
+      status: 'pending',
+      agent_name: 'Tenkai Team',
+      link: checkpoint.link,
+    })
+
+  console.log(`[process] Created checkpoint action item "${checkpoint.title}" for ${clientId}`)
+}
+
 // --------------- Site Scraping ---------------
 
 const URL_BASED_REQUESTS = new Set([
@@ -223,7 +375,6 @@ interface ClientSeoContext {
  * Fetch accumulated SEO context for a client (~500 tokens max).
  * Returns null if no context exists yet (first-time client).
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function fetchClientSeoContext(clientId: string): Promise<string | null> {
   try {
     const { data, error } = await supabaseAdmin
@@ -546,7 +697,7 @@ export async function processServiceRequest(request: ProcessableRequest): Promis
     // Also fetch business_profile for structured service data (services offered, NOT offered, specialties)
     const { data: bizProfile } = await supabaseAdmin
       .from('business_profile')
-      .select('services, not_services, products, specialties, customer_pain_points, top_revenue_services, customer_faqs')
+      .select('services, not_services, products, specialties, customer_pain_points, top_revenue_services, customer_faqs, money_pages, local_connections')
       .eq('client_id', request.client_id)
       .single()
 
@@ -569,6 +720,25 @@ export async function processServiceRequest(request: ProcessableRequest): Promis
       if (bizProfile.top_revenue_services?.length > 0) params._topRevenueServices = bizProfile.top_revenue_services
       if (bizProfile.customer_pain_points) params._customerPainPoints = bizProfile.customer_pain_points
       if (bizProfile.customer_faqs) params._customerFaqs = bizProfile.customer_faqs
+      if (bizProfile.money_pages?.length > 0) params._moneyPages = bizProfile.money_pages
+      if (bizProfile.local_connections?.length > 0) params._localConnections = bizProfile.local_connections
+    }
+
+    // Fetch approved keywords for content-related services
+    const KEYWORD_AWARE_SERVICES = new Set([
+      'content_calendar', 'content_brief', 'content_article', 'content_rewrite',
+      'topic_cluster_map', 'outreach_emails', 'guest_post_draft',
+    ])
+    let approvedKeywords: Array<{ keyword: string; cluster: string | null; volume: string | null; intent: string | null }> | null = null
+    if (KEYWORD_AWARE_SERVICES.has(request.request_type)) {
+      const { data: kwRows } = await supabaseAdmin
+        .from('approved_keywords')
+        .select('keyword, cluster, volume, intent')
+        .eq('client_id', request.client_id)
+        .eq('status', 'approved')
+        .order('priority', { ascending: true })
+        .limit(50)
+      if (kwRows && kwRows.length > 0) approvedKeywords = kwRows
     }
 
     let taskMessage = buildTaskMessage(
@@ -580,6 +750,33 @@ export async function processServiceRequest(request: ProcessableRequest): Promis
       keywordSerpData,
       crawlData
     )
+
+    // Append approved keywords to task message — these are client-vetted targets
+    if (approvedKeywords && approvedKeywords.length > 0) {
+      const kwLines: string[] = [
+        '\n--- APPROVED KEYWORD STRATEGY (client-reviewed and approved) ---',
+        'CRITICAL: Use ONLY these approved keywords for content planning and targeting.',
+        'Do NOT invent new keywords — the client has explicitly chosen these.',
+        '',
+      ]
+      const clusters: Record<string, typeof approvedKeywords> = {}
+      for (const kw of approvedKeywords) {
+        const c = kw.cluster || 'General'
+        if (!clusters[c]) clusters[c] = []
+        clusters[c].push(kw)
+      }
+      for (const [cluster, kws] of Object.entries(clusters)) {
+        kwLines.push(`  ${cluster}:`)
+        for (const kw of kws) {
+          const parts = [kw.keyword]
+          if (kw.volume) parts.push(kw.volume)
+          if (kw.intent) parts.push(kw.intent)
+          kwLines.push(`    - ${parts.join(' | ')}`)
+        }
+      }
+      kwLines.push('--- END APPROVED KEYWORDS ---')
+      taskMessage += '\n' + kwLines.join('\n')
+    }
 
     // Append NAP consistency data to task message
     if (napReport) {
@@ -683,7 +880,8 @@ export async function processServiceRequest(request: ProcessableRequest): Promis
     const hasScrapedData = scrapedSite && !scrapedSite.error && scrapedSite.bodyText.length > 50
     const hasClientContext = !!clientContext
     const hasBusinessParams = !!(request.parameters as Record<string, unknown>)?.businessDescription || !!(request.parameters as Record<string, unknown>)?.industry
-    if (!hasScrapedData && !hasClientContext && !hasBusinessParams) {
+    const hasChainSource = !!(request.parameters as Record<string, unknown>)?.chain_source
+    if (!hasScrapedData && !hasClientContext && !hasBusinessParams && !hasChainSource) {
       throw new Error(`Cannot process ${request.request_type}: no business context available (no scrapeable site, no client SEO context, no onboarding data). Client needs to complete onboarding or provide a valid website URL.`)
     }
 
@@ -860,6 +1058,16 @@ export async function processServiceRequest(request: ProcessableRequest): Promis
     // Write back key findings to client_seo_context (fire-and-forget)
     writeBackClientContext(request.client_id, request.request_type, parsedContent)
       .catch((err) => console.warn(`[process] writeBackClientContext failed:`, err))
+
+    // Auto-seed approved_keywords when keyword_research completes (fire-and-forget)
+    if (request.request_type === 'keyword_research') {
+      seedApprovedKeywords(request.client_id, parsedContent)
+        .catch((err) => console.warn(`[process] seedApprovedKeywords failed:`, err))
+    }
+
+    // Create checkpoint action items for customer approval phases
+    createCheckpointActionItem(request.client_id, request.request_type, parsedContent)
+      .catch((err) => console.warn(`[process] checkpoint action item failed:`, err))
 
     // Auto-chain: queue next services if client tier allows
     if (shouldAutoChain(request.client_tier ?? null, request.request_type)) {

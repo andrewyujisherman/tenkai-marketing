@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { jsPDF } from 'jspdf'
+import { createServerClient } from '@/lib/supabase'
 import { supabaseAdmin } from '@/lib/supabase-admin'
+import { isDemoMode, DEMO_CLIENT_ID } from '@/lib/demo'
 import { renderForBusinessOwner } from '@/lib/plain-english'
 import { generateSummary, extractScore } from '@/lib/deliverables'
 
@@ -284,8 +286,43 @@ function buildPdf({
   return Buffer.from(doc.output('arraybuffer'))
 }
 
+// ─── Shared: get authenticated client id ────────────────────
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+async function getAuthClientId(): Promise<{ clientId: string | null; error: NextResponse | null }> {
+  const demo = await isDemoMode()
+  if (demo) return { clientId: DEMO_CLIENT_ID, error: null }
+
+  const supabase = await createServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    return { clientId: null, error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
+  }
+
+  const { data: client } = await supabaseAdmin
+    .from('clients')
+    .select('id')
+    .eq('auth_user_id', user.id)
+    .single()
+
+  let clientId = client?.id ?? null
+  if (!clientId && user.email) {
+    const { data: byEmail } = await supabaseAdmin
+      .from('clients')
+      .select('id')
+      .eq('email', user.email.toLowerCase())
+      .single()
+    clientId = byEmail?.id ?? null
+  }
+
+  if (!clientId) {
+    return { clientId: null, error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
+  }
+
+  return { clientId, error: null }
+}
+
 // ─── Shared: fetch deliverable + generate PDF response ──────
-async function generatePdfResponse(deliverableId: string): Promise<NextResponse> {
+async function generatePdfResponse(deliverableId: string, clientId: string): Promise<NextResponse> {
   const { data: deliverable, error: delError } = await supabaseAdmin
     .from('deliverables')
     .select('id, client_id, deliverable_type, title, content, summary, score, created_at, request_id')
@@ -294,6 +331,11 @@ async function generatePdfResponse(deliverableId: string): Promise<NextResponse>
 
   if (delError || !deliverable) {
     return NextResponse.json({ error: 'Deliverable not found' }, { status: 404 })
+  }
+
+  // Verify ownership
+  if (deliverable.client_id !== clientId) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
   let requestType = deliverable.deliverable_type
@@ -343,15 +385,21 @@ async function generatePdfResponse(deliverableId: string): Promise<NextResponse>
 
 // ─── GET /api/reports/pdf?id=<deliverableId> ────────────────
 export async function GET(request: NextRequest) {
+  const { clientId, error: authError } = await getAuthClientId()
+  if (authError) return authError
+
   const deliverableId = request.nextUrl.searchParams.get('id')
   if (!deliverableId) {
     return NextResponse.json({ error: 'Missing deliverable id' }, { status: 400 })
   }
-  return generatePdfResponse(deliverableId)
+  return generatePdfResponse(deliverableId, clientId!)
 }
 
 // ─── POST /api/reports/pdf { deliverableId } ────────────────
 export async function POST(request: NextRequest) {
+  const { clientId, error: authError } = await getAuthClientId()
+  if (authError) return authError
+
   let body: { deliverableId?: string }
   try {
     body = await request.json()
@@ -361,5 +409,5 @@ export async function POST(request: NextRequest) {
   if (!body.deliverableId) {
     return NextResponse.json({ error: 'Missing deliverableId' }, { status: 400 })
   }
-  return generatePdfResponse(body.deliverableId)
+  return generatePdfResponse(body.deliverableId, clientId!)
 }

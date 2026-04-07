@@ -6,7 +6,7 @@ import { isDemoMode, DEMO_CLIENT_ID } from '@/lib/demo'
 export interface ActionItemResponse {
   items: {
     id: string
-    type: 'content_approval' | 'agent_question' | 'setup_task' | 'report_review'
+    type: 'content_approval' | 'agent_question' | 'setup_task' | 'report_review' | 'strategy_review'
     title: string
     agent_name: string
     preview: string
@@ -71,16 +71,21 @@ export async function GET() {
       .order('created_at', { ascending: false })
       .limit(10)
 
-    // Build action items from approvals
-    const approvalItems = (pendingApprovals ?? []).map(a => ({
-      id: `approval-${a.id}`,
-      type: 'content_approval' as const,
-      title: a.title ?? 'Content needs your approval',
-      agent_name: a.agent_name ?? 'Tenkai Team',
-      preview: a.description ?? 'Review and approve this content.',
-      created_at: a.created_at,
-      content_id: a.content_post_id ?? undefined,
-    }))
+    // Build action items from approvals — map type correctly
+    const approvalItems = (pendingApprovals ?? []).map(a => {
+      const itemType = a.type === 'strategy_review' ? 'strategy_review' as const
+        : a.type === 'report_review' ? 'report_review' as const
+        : 'content_approval' as const
+      return {
+        id: `approval-${a.id}`,
+        type: itemType,
+        title: a.title ?? 'Content needs your approval',
+        agent_name: a.agent_name ?? 'Tenkai Team',
+        preview: a.description ?? 'Review and approve this content.',
+        created_at: a.created_at,
+        content_id: a.content_post_id ?? undefined,
+      }
+    })
 
     // Build action items from content posts (avoid duplicates with approvals)
     const approvedContentIds = new Set(approvalItems.map(a => a.content_id).filter(Boolean))

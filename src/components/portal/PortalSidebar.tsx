@@ -13,6 +13,7 @@ import {
   Settings,
   Menu,
   Shield,
+  Target,
 } from 'lucide-react'
 import {
   Sheet,
@@ -23,6 +24,7 @@ import {
 
 const navItems = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  { label: 'My Strategy', href: '/strategy', icon: Target },
   { label: 'My Rankings', href: '/rankings', icon: BarChart3 },
   { label: 'My Website Health', href: '/health', icon: ShieldCheck },
   { label: 'My Content', href: '/content', icon: FileText },

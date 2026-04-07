@@ -1455,24 +1455,35 @@ export function buildTaskMessage(
   const serviceArea = params.serviceArea ?? params.service_area ?? params.city ?? ''
   const geography = params.targetGeography ?? params.target_geography ?? params.geography ?? ''
   const idealCustomer = params.idealCustomer ?? params.ideal_customer ?? ''
-  if (serviceArea || geography || idealCustomer) {
+  // Structured business profile data (from My Business page)
+  const servicesOffered = params._servicesOffered as string[] | undefined
+  const servicesNotOffered = params._servicesNotOffered as string[] | undefined
+  const specialties = params._specialties as string[] | undefined
+  const topRevenueServices = params._topRevenueServices as string[] | undefined
+  const customerPainPoints = params._customerPainPoints as string | undefined
+  const customerFaqs = params._customerFaqs as string | undefined
+  const moneyPages = params._moneyPages as Array<{ url: string; label: string; cta: string }> | undefined
+  const localConnections = params._localConnections as Array<{ name: string; relationship: string; status: string }> | undefined
+  const hasBusinessData = servicesOffered?.length || servicesNotOffered?.length || specialties?.length || topRevenueServices?.length || customerPainPoints || customerFaqs || moneyPages?.length || localConnections?.length
+  if (serviceArea || geography || idealCustomer || hasBusinessData) {
     parts.push(`\n=== CLIENT CONTEXT (ALL output must be tailored to this) ===`)
     if (serviceArea) parts.push(`Primary Service Area: ${serviceArea}`)
     if (geography) parts.push(`Geographic Scope: ${geography}`)
     if (idealCustomer) parts.push(`Ideal Customer: ${idealCustomer}`)
-    // Structured business profile data (from My Business page)
-    const servicesOffered = params._servicesOffered as string[] | undefined
-    const servicesNotOffered = params._servicesNotOffered as string[] | undefined
-    const specialties = params._specialties as string[] | undefined
-    const topRevenueServices = params._topRevenueServices as string[] | undefined
-    const customerPainPoints = params._customerPainPoints as string | undefined
-    const customerFaqs = params._customerFaqs as string | undefined
     if (servicesOffered?.length) parts.push(`Services Offered: ${servicesOffered.join(', ')}`)
     if (servicesNotOffered?.length) parts.push(`DO NOT OFFER (never target these): ${servicesNotOffered.join(', ')}`)
     if (specialties?.length) parts.push(`Specialties/Differentiators: ${specialties.join(', ')}`)
     if (topRevenueServices?.length) parts.push(`Highest Revenue Services (prioritize these): ${topRevenueServices.join(', ')}`)
     if (customerPainPoints) parts.push(`Customer Pain Points: ${customerPainPoints}`)
     if (customerFaqs) parts.push(`Common Customer Questions: ${customerFaqs}`)
+    if (moneyPages?.length) {
+      parts.push(`Key Money Pages (prioritize internal links to these):`)
+      for (const mp of moneyPages) parts.push(`  - ${mp.label || mp.url} → ${mp.url} [CTA: ${mp.cta}]`)
+    }
+    if (localConnections?.length) {
+      parts.push(`Local Connections (DO NOT cold-outreach these):`)
+      for (const lc of localConnections) parts.push(`  - ${lc.name} (${lc.status})${lc.relationship ? ` — ${lc.relationship}` : ''}`)
+    }
     parts.push(`CRITICAL: All keywords, recommendations, competitor analysis, and content must be targeted to this specific service area and ideal customer. National-level data must be clearly labeled as national with a local estimate provided. Never present national search volumes as if they are local volumes. Content tone and keyword intent should match the ideal customer profile. NEVER produce keywords or content for services listed in "DO NOT OFFER". Prioritize highest-revenue services in keyword strategy and content planning.`)
     parts.push(`=== END CLIENT CONTEXT ===\n`)
   }

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { X, CheckCircle, FileText, BarChart3, Shield, TrendingUp, FileBarChart, Link2, Loader2, Sparkles } from 'lucide-react'
 import { OutputViewer } from '@/components/ui/output-viewer'
@@ -121,6 +122,12 @@ function businessLanguageLabel(item: ActionItem): string {
   if (item.type === 'setup_task') {
     return 'Connect a tool to give your team more data'
   }
+  if (item.type === 'strategy_review') {
+    return 'Your keyword strategy is ready — review and choose the right keywords for your business'
+  }
+  if (item.type === 'report_review') {
+    return `${agent} finished your monthly report — see how your SEO is progressing`
+  }
   return item.title
 }
 
@@ -140,6 +147,7 @@ interface DashboardClientProps {
 }
 
 export default function DashboardClient({ data }: DashboardClientProps) {
+  const router = useRouter()
   const {
     briefing: initialBriefing,
     agents: initialAgents,
@@ -205,53 +213,6 @@ export default function DashboardClient({ data }: DashboardClientProps) {
     return () => clearInterval(interval)
   }, [])
 
-  // Action handlers
-  const handleApproval = useCallback(async (id: string, action: 'approve' | 'edit' | 'deny', feedback?: string) => {
-    const item = actionItems.find(i => i.id === id)
-    const contentId = item?.content_id
-    if (!contentId) return
-
-    setResolvedItems(prev => new Set(prev).add(id))
-
-    try {
-      let endpoint = `/api/content/${contentId}/approve`
-      let body: string | undefined
-
-      if (action === 'edit') {
-        endpoint = `/api/content/${contentId}/feedback`
-        body = JSON.stringify({ feedback: feedback ?? '' })
-      } else if (action === 'deny') {
-        endpoint = `/api/content/${contentId}/reject`
-        body = JSON.stringify({ reason: feedback ?? '' })
-      }
-
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: body ? { 'Content-Type': 'application/json' } : undefined,
-        body,
-      })
-
-      if (res.ok) {
-        // Remove from action items after animation
-        setTimeout(() => {
-          setActionItems(prev => prev.filter(i => i.id !== id))
-          setActionItemCount(prev => Math.max(0, prev - 1))
-        }, 700)
-      } else {
-        setResolvedItems(prev => {
-          const next = new Set(prev)
-          next.delete(id)
-          return next
-        })
-      }
-    } catch {
-      setResolvedItems(prev => {
-        const next = new Set(prev)
-        next.delete(id)
-        return next
-      })
-    }
-  }, [actionItems])
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleAnswer = useCallback(async (id: string, _answer: string) => {
@@ -516,9 +477,9 @@ export default function DashboardClient({ data }: DashboardClientProps) {
                       <div key={item.id} className="action-item">
                         <div className={cn(
                           'action-type',
-                          item.type === 'content_approval' ? 'approval' : item.type === 'agent_question' ? 'question' : 'setup'
+                          item.type === 'content_approval' || item.type === 'strategy_review' ? 'approval' : item.type === 'agent_question' ? 'question' : item.type === 'report_review' ? 'approval' : 'setup'
                         )}>
-                          {item.type === 'content_approval' ? 'Approval Needed' : item.type === 'agent_question' ? 'Agent Question' : 'Setup Task'}
+                          {item.type === 'content_approval' ? 'Approval Needed' : item.type === 'agent_question' ? 'Agent Question' : item.type === 'strategy_review' ? 'Strategy Review' : item.type === 'report_review' ? 'Report Ready' : 'Setup Task'}
                         </div>
                         <div className="action-desc">{businessLanguageLabel(item)}</div>
                         {item.preview && (
@@ -527,34 +488,63 @@ export default function DashboardClient({ data }: DashboardClientProps) {
                         <div className="flex items-center gap-2 mt-2">
                           {item.type === 'content_approval' && (
                             <button
-                              onClick={() => handleApproval(item.id, 'approve')}
+                              onClick={() => router.push(item.content_id ? `/content?id=${item.content_id}` : '/content')}
                               className="btn btn-primary btn-sm"
                             >
-                              Review
+                              Review Content
                             </button>
                           )}
                           {item.type === 'agent_question' && (
-                            <button
-                              onClick={() => handleAnswer(item.id, '')}
-                              className="btn btn-secondary btn-sm"
-                            >
-                              Answer
-                            </button>
+                            <div className="flex gap-2 w-full">
+                              <input
+                                type="text"
+                                placeholder="Type your answer..."
+                                className="flex-1 text-sm border rounded px-2 py-1"
+                                id={`answer-${item.id}`}
+                              />
+                              <button
+                                onClick={() => {
+                                  const input = document.getElementById(`answer-${item.id}`) as HTMLInputElement
+                                  if (input?.value.trim()) {
+                                    handleAnswer(item.id, input.value.trim())
+                                  }
+                                }}
+                                className="btn btn-secondary btn-sm"
+                              >
+                                Send
+                              </button>
+                            </div>
                           )}
                           {item.type === 'setup_task' && (
-                            <button
-                              onClick={() => handleSkip(item.id)}
-                              className="btn btn-secondary btn-sm"
-                            >
-                              Connect
-                            </button>
+                            <>
+                              <button
+                                onClick={() => router.push('/settings?tab=integrations')}
+                                className="btn btn-secondary btn-sm"
+                              >
+                                Connect
+                              </button>
+                              <button
+                                onClick={() => handleSkip(item.id)}
+                                className="text-xs text-gray-400 ml-2"
+                              >
+                                Skip
+                              </button>
+                            </>
                           )}
                           {item.type === 'report_review' && (
                             <button
-                              onClick={() => handleApproval(item.id, 'approve')}
+                              onClick={() => router.push('/reports')}
                               className="btn btn-primary btn-sm"
                             >
-                              Review
+                              View Report
+                            </button>
+                          )}
+                          {item.type === 'strategy_review' && (
+                            <button
+                              onClick={() => router.push('/strategy')}
+                              className="btn btn-primary btn-sm"
+                            >
+                              Review Strategy
                             </button>
                           )}
                         </div>
@@ -604,8 +594,8 @@ export default function DashboardClient({ data }: DashboardClientProps) {
               <FileBarChart className="size-4 text-torii" />
             </div>
             <div className="min-w-0">
-              <p className="text-[13px] font-semibold text-charcoal group-hover:text-torii transition-colors duration-fast">Generate Report</p>
-              <p className="text-[12px] text-warm-gray mt-0.5">View SEO performance insights</p>
+              <p className="text-[13px] font-semibold text-charcoal group-hover:text-torii transition-colors duration-fast">View Reports</p>
+              <p className="text-[12px] text-warm-gray mt-0.5">See your SEO performance insights</p>
             </div>
           </a>
           <a href="/settings?tab=integrations" className="portal-card hover-lift flex items-start gap-3 no-underline group cursor-pointer" style={{ marginBottom: 0 }}>

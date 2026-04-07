@@ -16,6 +16,18 @@ const DEMO_PROFILE = {
   not_services: ['HVAC', 'Electrical Work', 'Roofing'],
   products: ['Tankless Water Heaters', 'Water Filtration Systems', 'Smart Leak Detectors'],
   specialties: ['24/7 Emergency Service', 'Licensed Master Plumbers', 'Same-Day Appointments', 'Upfront Pricing Guarantee'],
+  top_revenue_services: ['Emergency Plumbing', 'Water Heater Installation'],
+  customer_pain_points: 'Burst pipes at 2am, slow drains that keep coming back, water heater died with no hot water',
+  customer_faqs: 'How fast can you get here? Do you charge extra for weekends? What brands of water heaters do you install?',
+  money_pages: [
+    { url: 'https://premierplumbing.com/emergency', label: 'Emergency Service', cta: 'Call' },
+    { url: 'https://premierplumbing.com/water-heaters', label: 'Water Heater Installation', cta: 'Schedule' },
+  ],
+  local_connections: [
+    { name: 'Austin Chamber of Commerce', relationship: 'Member since 2019', status: 'Active Partner' },
+    { name: 'Hill Country Home Inspectors', relationship: 'Mutual referrals', status: 'Referral Partner' },
+  ],
+  primary_cta: 'Call Now',
 }
 
 async function findClientId(demo: boolean, userId?: string, email?: string): Promise<string | undefined> {
@@ -82,6 +94,9 @@ export async function GET() {
         top_revenue_services: profile.top_revenue_services ?? [],
         customer_pain_points: profile.customer_pain_points ?? '',
         customer_faqs: profile.customer_faqs ?? '',
+        money_pages: profile.money_pages ?? [],
+        local_connections: profile.local_connections ?? [],
+        primary_cta: profile.primary_cta ?? '',
       })
     }
 
@@ -147,6 +162,7 @@ export async function PUT(req: NextRequest) {
         area: 'service_area',
         customer_pain_points: 'customer_pain_points',
         customer_faqs: 'customer_faqs',
+        primary_cta: 'primary_cta',
       }
       const dbField = fieldMap[body.field]
       if (!dbField) return NextResponse.json({ error: 'Invalid field' }, { status: 400 })
@@ -190,6 +206,44 @@ export async function PUT(req: NextRequest) {
       await supabaseAdmin
         .from('business_profile')
         .upsert({ client_id: clientId, [body.category]: updatedTags }, { onConflict: 'client_id' })
+
+      return NextResponse.json({ success: true })
+    }
+
+    // Handle JSONB array updates for money_pages and local_connections
+    // { jsonb_field: 'money_pages'|'local_connections', action: 'add'|'remove', item: {...} }
+    if (body.jsonb_field && body.item !== undefined) {
+      const validFields = ['money_pages', 'local_connections']
+      if (!validFields.includes(body.jsonb_field)) {
+        return NextResponse.json({ error: 'Invalid jsonb field' }, { status: 400 })
+      }
+
+      const { data: existing } = await supabaseAdmin
+        .from('business_profile')
+        .select(body.jsonb_field)
+        .eq('client_id', clientId)
+        .single()
+
+      const raw = existing?.[body.jsonb_field]
+      const current: unknown[] = Array.isArray(raw) ? raw as unknown[] : []
+
+      let updated: unknown[]
+      if (body.action === 'add') {
+        updated = [...current, body.item]
+      } else if (body.action === 'remove') {
+        // Remove by matching url (money_pages) or name (local_connections)
+        const matchKey = body.jsonb_field === 'money_pages' ? 'url' : 'name'
+        updated = current.filter((item: unknown) => {
+          const obj = item as Record<string, unknown>
+          return obj[matchKey] !== (body.item as Record<string, unknown>)[matchKey]
+        })
+      } else {
+        updated = current
+      }
+
+      await supabaseAdmin
+        .from('business_profile')
+        .upsert({ client_id: clientId, [body.jsonb_field]: updated }, { onConflict: 'client_id' })
 
       return NextResponse.json({ success: true })
     }

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { cn } from '@/lib/utils'
-import { ChevronDown, ChevronUp, RefreshCw } from 'lucide-react'
+import { ChevronDown, ChevronUp, RefreshCw, Plus, Trash2, Link2, Users } from 'lucide-react'
 import { useToast } from '@/components/ui/toast-notification'
 
 // ---------- Types ----------
@@ -14,12 +14,30 @@ interface BusinessOverview {
   area: string
 }
 
+interface MoneyPage {
+  url: string
+  label: string
+  cta: string
+}
+
+interface LocalConnection {
+  name: string
+  relationship: string
+  status: string
+}
+
 interface BusinessProfile {
   overview: BusinessOverview
   services: string[]
   not_services: string[]
   products: string[]
   specialties: string[]
+  top_revenue_services: string[]
+  customer_pain_points: string
+  customer_faqs: string
+  money_pages: MoneyPage[]
+  local_connections: LocalConnection[]
+  primary_cta: string
 }
 
 interface QAItem {
@@ -224,6 +242,245 @@ function QAHistory({ questions }: { questions: QAItem[] }) {
   )
 }
 
+// ---------- Text Area Field ----------
+
+function TextAreaField({
+  value,
+  fieldKey,
+  onSave,
+  placeholder,
+}: {
+  value: string
+  fieldKey: string
+  onSave: (key: string, val: string) => void
+  placeholder?: string
+}) {
+  const [editing, setEditing] = useState(false)
+  const [editVal, setEditVal] = useState(value)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    if (editing && textareaRef.current) {
+      textareaRef.current.focus()
+    }
+  }, [editing])
+
+  function handleSave() {
+    onSave(fieldKey, editVal.trim())
+    setEditing(false)
+  }
+
+  if (!editing) {
+    return (
+      <div
+        onClick={() => { setEditVal(value); setEditing(true) }}
+        className="min-h-[60px] text-sm text-charcoal bg-parchment/20 rounded-md px-3 py-2 cursor-pointer hover:bg-parchment/40 transition-colors"
+      >
+        {value ? (
+          <span className="whitespace-pre-wrap">{value}</span>
+        ) : (
+          <span className="text-muted-gray italic">{placeholder || 'Click to add...'}</span>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-2">
+      <textarea
+        ref={textareaRef}
+        value={editVal}
+        onChange={(e) => setEditVal(e.target.value)}
+        rows={4}
+        placeholder={placeholder}
+        className="w-full text-sm border border-tenkai-border rounded-md px-3 py-2 bg-white focus:outline-none focus:border-torii resize-y"
+      />
+      <div className="flex gap-2">
+        <button onClick={handleSave} className="text-xs px-3 py-1.5 rounded-md bg-torii text-white hover:bg-torii/90">Save</button>
+        <button onClick={() => { setEditVal(value); setEditing(false) }} className="text-xs px-3 py-1.5 rounded-md text-warm-gray hover:bg-parchment/30">Cancel</button>
+      </div>
+    </div>
+  )
+}
+
+// ---------- Money Page List ----------
+
+function MoneyPageList({
+  pages,
+  onAdd,
+  onRemove,
+}: {
+  pages: MoneyPage[]
+  onAdd: (page: MoneyPage) => void
+  onRemove: (page: MoneyPage) => void
+}) {
+  const [adding, setAdding] = useState(false)
+  const [url, setUrl] = useState('')
+  const [label, setLabel] = useState('')
+  const [cta, setCta] = useState('Call')
+
+  function handleAdd() {
+    const trimUrl = url.trim()
+    if (trimUrl.length < 4) return
+    onAdd({ url: trimUrl, label: label.trim() || trimUrl, cta })
+    setUrl('')
+    setLabel('')
+    setCta('Call')
+    setAdding(false)
+  }
+
+  return (
+    <div className="space-y-2">
+      {pages.map((page) => (
+        <div key={page.url} className="flex items-center gap-3 px-4 py-2.5 rounded-lg border border-tenkai-border bg-parchment/10">
+          <div className="flex-1 min-w-0">
+            <span className="text-sm font-medium text-charcoal">{page.label || page.url}</span>
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className="text-xs text-muted-gray truncate">{page.url}</span>
+              <span className="text-xs px-1.5 py-0.5 rounded bg-torii-subtle text-torii">{page.cta}</span>
+            </div>
+          </div>
+          <button onClick={() => onRemove(page)} className="p-1 text-warm-gray hover:text-red-500 transition-colors">
+            <Trash2 className="size-3.5" />
+          </button>
+        </div>
+      ))}
+      {adding ? (
+        <div className="border border-tenkai-border rounded-lg p-3 space-y-2">
+          <div className="grid grid-cols-3 gap-2">
+            <input
+              autoFocus
+              value={url}
+              onChange={e => setUrl(e.target.value)}
+              placeholder="https://..."
+              className="col-span-2 text-sm border border-tenkai-border rounded-md px-2 py-1.5 bg-white focus:outline-none focus:border-torii"
+            />
+            <input
+              value={label}
+              onChange={e => setLabel(e.target.value)}
+              placeholder="Page name"
+              className="text-sm border border-tenkai-border rounded-md px-2 py-1.5 bg-white focus:outline-none focus:border-torii"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-warm-gray">CTA:</span>
+            {['Call', 'Form', 'Schedule', 'Buy', 'Learn More'].map(c => (
+              <button
+                key={c}
+                onClick={() => setCta(c)}
+                className={cn(
+                  'text-xs px-2 py-1 rounded-md border transition-colors',
+                  cta === c ? 'bg-torii text-white border-torii' : 'border-tenkai-border text-warm-gray hover:border-torii'
+                )}
+              >
+                {c}
+              </button>
+            ))}
+            <div className="flex-1" />
+            <button onClick={handleAdd} className="text-xs px-3 py-1.5 rounded-md bg-torii text-white hover:bg-torii/90">Add</button>
+            <button onClick={() => setAdding(false)} className="text-xs px-3 py-1.5 text-warm-gray">Cancel</button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={() => setAdding(true)} className="flex items-center gap-1.5 text-sm text-torii hover:text-torii/80 transition-colors">
+          <Plus className="size-3.5" /> Add a key page
+        </button>
+      )}
+    </div>
+  )
+}
+
+// ---------- Connection List ----------
+
+function ConnectionList({
+  connections,
+  onAdd,
+  onRemove,
+}: {
+  connections: LocalConnection[]
+  onAdd: (conn: LocalConnection) => void
+  onRemove: (conn: LocalConnection) => void
+}) {
+  const [adding, setAdding] = useState(false)
+  const [name, setName] = useState('')
+  const [relationship, setRelationship] = useState('')
+  const [status, setStatus] = useState('Active Partner')
+
+  function handleAdd() {
+    if (name.trim().length < 2) return
+    onAdd({ name: name.trim(), relationship: relationship.trim(), status })
+    setName('')
+    setRelationship('')
+    setStatus('Active Partner')
+    setAdding(false)
+  }
+
+  return (
+    <div className="space-y-2">
+      {connections.map((conn) => (
+        <div key={conn.name} className="flex items-center gap-3 px-4 py-2.5 rounded-lg border border-tenkai-border bg-parchment/10">
+          <div className="flex-1 min-w-0">
+            <span className="text-sm font-medium text-charcoal">{conn.name}</span>
+            <div className="flex items-center gap-2 mt-0.5">
+              {conn.relationship && <span className="text-xs text-muted-gray">{conn.relationship}</span>}
+              <span className={cn(
+                'text-xs px-1.5 py-0.5 rounded',
+                conn.status === 'Active Partner' ? 'bg-emerald-50 text-emerald-700' :
+                conn.status === 'Referral Partner' ? 'bg-blue-50 text-blue-700' :
+                'bg-amber-50 text-amber-700'
+              )}>{conn.status}</span>
+            </div>
+          </div>
+          <button onClick={() => onRemove(conn)} className="p-1 text-warm-gray hover:text-red-500 transition-colors">
+            <Trash2 className="size-3.5" />
+          </button>
+        </div>
+      ))}
+      {adding ? (
+        <div className="border border-tenkai-border rounded-lg p-3 space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              autoFocus
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder="Business name"
+              className="text-sm border border-tenkai-border rounded-md px-2 py-1.5 bg-white focus:outline-none focus:border-torii"
+            />
+            <input
+              value={relationship}
+              onChange={e => setRelationship(e.target.value)}
+              placeholder="How you know them"
+              className="text-sm border border-tenkai-border rounded-md px-2 py-1.5 bg-white focus:outline-none focus:border-torii"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-warm-gray">Status:</span>
+            {['Active Partner', 'Referral Partner', 'Vendor', 'Competitor'].map(s => (
+              <button
+                key={s}
+                onClick={() => setStatus(s)}
+                className={cn(
+                  'text-xs px-2 py-1 rounded-md border transition-colors',
+                  status === s ? 'bg-torii text-white border-torii' : 'border-tenkai-border text-warm-gray hover:border-torii'
+                )}
+              >
+                {s}
+              </button>
+            ))}
+            <div className="flex-1" />
+            <button onClick={handleAdd} className="text-xs px-3 py-1.5 rounded-md bg-torii text-white hover:bg-torii/90">Add</button>
+            <button onClick={() => setAdding(false)} className="text-xs px-3 py-1.5 text-warm-gray">Cancel</button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={() => setAdding(true)} className="flex items-center gap-1.5 text-sm text-torii hover:text-torii/80 transition-colors">
+          <Plus className="size-3.5" /> Add a connection
+        </button>
+      )}
+    </div>
+  )
+}
+
 // ---------- Skeleton ----------
 
 function BusinessSkeleton() {
@@ -418,6 +675,128 @@ export default function BusinessClient() {
           variant="gold"
           onAdd={handleTagAdd}
           onRemove={handleTagRemove}
+        />
+      </div>
+
+      {/* Revenue Priorities */}
+      <div className="portal-card space-y-8">
+        <TagCloud
+          title="Top Revenue Services"
+          subtitle="Which services make you the most money? Your team will prioritize these."
+          tags={profile.top_revenue_services ?? []}
+          category="top_revenue_services"
+          variant="gold"
+          onAdd={handleTagAdd}
+          onRemove={handleTagRemove}
+        />
+      </div>
+
+      {/* Customer Pain Points & FAQs */}
+      <div className="portal-card space-y-6">
+        <div>
+          <h4 className="section-label">Customer Pain Points</h4>
+          <p className="text-xs text-muted-gray mt-0.5 mb-2">What problems do your customers come to you with?</p>
+          <TextAreaField
+            value={profile.customer_pain_points ?? ''}
+            fieldKey="customer_pain_points"
+            onSave={handleFieldSave}
+            placeholder="e.g. My phone screen is cracked and I need it fixed today. My gaming console overheats and shuts down."
+          />
+        </div>
+        <div className="border-t border-tenkai-border" />
+        <div>
+          <h4 className="section-label">Common Customer Questions</h4>
+          <p className="text-xs text-muted-gray mt-0.5 mb-2">What do customers ask before buying? Your team uses these for content.</p>
+          <TextAreaField
+            value={profile.customer_faqs ?? ''}
+            fieldKey="customer_faqs"
+            onSave={handleFieldSave}
+            placeholder="e.g. How long does a screen replacement take? Do you offer warranties on repairs?"
+          />
+        </div>
+      </div>
+
+      {/* Money Pages */}
+      <div className="portal-card space-y-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <Link2 className="size-4 text-torii" />
+            <h4 className="section-label">Key Pages</h4>
+          </div>
+          <p className="text-xs text-muted-gray mt-0.5">Your most important pages — your team will link to these in content.</p>
+        </div>
+        <MoneyPageList
+          pages={profile.money_pages ?? []}
+          onAdd={async (page) => {
+            setProfile(prev => prev ? { ...prev, money_pages: [...(prev.money_pages ?? []), page] } : prev)
+            try {
+              const res = await fetch('/api/business/profile', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ jsonb_field: 'money_pages', action: 'add', item: page }),
+              })
+              if (!res.ok) throw new Error()
+              addToast('success', 'Page added')
+            } catch {
+              setProfile(prev => prev ? { ...prev, money_pages: (prev.money_pages ?? []).filter(p => p.url !== page.url) } : prev)
+              addToast('error', 'Failed to save')
+            }
+          }}
+          onRemove={async (page) => {
+            setProfile(prev => prev ? { ...prev, money_pages: (prev.money_pages ?? []).filter(p => p.url !== page.url) } : prev)
+            try {
+              await fetch('/api/business/profile', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ jsonb_field: 'money_pages', action: 'remove', item: page }),
+              })
+            } catch {
+              setProfile(prev => prev ? { ...prev, money_pages: [...(prev.money_pages ?? []), page] } : prev)
+              addToast('error', 'Failed to remove')
+            }
+          }}
+        />
+      </div>
+
+      {/* Local Connections */}
+      <div className="portal-card space-y-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <Users className="size-4 text-torii" />
+            <h4 className="section-label">Local Connections</h4>
+          </div>
+          <p className="text-xs text-muted-gray mt-0.5">Businesses you already work with — your team won&apos;t cold-outreach these.</p>
+        </div>
+        <ConnectionList
+          connections={profile.local_connections ?? []}
+          onAdd={async (conn) => {
+            setProfile(prev => prev ? { ...prev, local_connections: [...(prev.local_connections ?? []), conn] } : prev)
+            try {
+              const res = await fetch('/api/business/profile', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ jsonb_field: 'local_connections', action: 'add', item: conn }),
+              })
+              if (!res.ok) throw new Error()
+              addToast('success', 'Connection added')
+            } catch {
+              setProfile(prev => prev ? { ...prev, local_connections: (prev.local_connections ?? []).filter(c => c.name !== conn.name) } : prev)
+              addToast('error', 'Failed to save')
+            }
+          }}
+          onRemove={async (conn) => {
+            setProfile(prev => prev ? { ...prev, local_connections: (prev.local_connections ?? []).filter(c => c.name !== conn.name) } : prev)
+            try {
+              await fetch('/api/business/profile', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ jsonb_field: 'local_connections', action: 'remove', item: conn }),
+              })
+            } catch {
+              setProfile(prev => prev ? { ...prev, local_connections: [...(prev.local_connections ?? []), conn] } : prev)
+              addToast('error', 'Failed to remove')
+            }
+          }}
         />
       </div>
 

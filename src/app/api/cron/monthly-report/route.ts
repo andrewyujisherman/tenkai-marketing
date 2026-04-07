@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { captureMonthlySnapshot } from '@/lib/metrics-snapshot'
+import { tierAllowsRequestType } from '@/lib/tier-gates'
 
 // ─── GET /api/cron/monthly-report ────────────────────────
 // Vercel cron: runs 09:00 on the 1st of each month
@@ -25,8 +26,9 @@ export async function GET(request: NextRequest) {
   // Fetch all active clients with email
   const { data: clients, error } = await supabaseAdmin
     .from('clients')
-    .select('id, name, company_name, email, created_at')
+    .select('id, name, company_name, email, tier, created_at')
     .not('email', 'is', null)
+    .eq('status', 'active')
     .neq('id', '00000000-0000-0000-0000-000000000001') // exclude demo
 
   if (error || !clients) {
@@ -100,18 +102,19 @@ export async function GET(request: NextRequest) {
       // ── Trigger monthly service cadence for this client ──────
       // Queue worker processes these over the month; chains handle the rest.
       if (!dryRun) {
-        const cadenceServices = [
+        const cadenceTypes = [
           'keyword_research',
           'competitor_analysis',
           'content_decay_audit',
           'on_page_audit',
           'site_audit',
         ]
-        const cadenceRows = cadenceServices.map(svcType => ({
+        const allowedTypes = cadenceTypes.filter(t => tierAllowsRequestType(client.tier, t))
+        const cadenceRows = allowedTypes.map(svcType => ({
           client_id: client.id,
           request_type: svcType,
-          status: 'pending' as const,
-          input_data: { auto_triggered: true, trigger: 'monthly_orchestrator', month: monthLabel },
+          status: 'queued' as const,
+          parameters: { auto_triggered: true, trigger: 'monthly_orchestrator', month: monthLabel },
           priority: 2,
         }))
         const { error: cadenceErr } = await supabaseAdmin
@@ -131,9 +134,9 @@ export async function GET(request: NextRequest) {
           .maybeSingle(),
         supabaseAdmin
           .from('client_metrics_history')
-          .select('metrics, snapshot_month')
+          .select('metrics, snapshot_date')
           .eq('client_id', client.id)
-          .order('snapshot_month', { ascending: false })
+          .order('snapshot_date', { ascending: false })
           .limit(1)
           .maybeSingle(),
       ])
@@ -225,7 +228,7 @@ Return ONLY valid JSON with this structure (no markdown fences):
           client_id: client.id,
           request_type: 'monthly_report',
           status: 'completed',
-          input_data: { month: monthLabel, auto_generated: true },
+          parameters: { month: monthLabel, auto_generated: true },
         })
         .select('id')
         .single()

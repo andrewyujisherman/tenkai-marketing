@@ -1,3 +1,4 @@
+// NOTE: This page is not linked from the sidebar navigation. Add to PortalSidebar.tsx when ready.
 'use client'
 
 import { SearchX } from 'lucide-react'

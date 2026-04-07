@@ -79,6 +79,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: updateError.message }, { status: 500 })
   }
 
+  // Seed business_profile from onboarding data
+  const bizData = onboarding_data?.business ?? {}
+  await supabaseAdmin
+    .from('business_profile')
+    .upsert({
+      client_id: client.id,
+      business_name: bizData.name ?? bizData.business_name ?? '',
+      website_url: bizData.url ?? bizData.website_url ?? '',
+      category: bizData.industry ?? bizData.business_industry ?? '',
+      service_area: bizData.location ?? bizData.service_area ?? bizData.city ?? '',
+      services: bizData.services ? (Array.isArray(bizData.services) ? bizData.services : bizData.services.split('\n').filter(Boolean)) : [],
+      specialties: bizData.differentiators ? (Array.isArray(bizData.differentiators) ? bizData.differentiators : bizData.differentiators.split('\n').filter(Boolean)) : [],
+    }, { onConflict: 'client_id' })
+
   // Seed client_seo_context with onboarding business info so first agent requests have context
   const businessDesc = onboarding_data?.businessDescription ?? onboarding_data?.business_description ?? ''
   const businessType = onboarding_data?.businessType ?? onboarding_data?.industry ?? ''
@@ -138,6 +152,7 @@ export async function POST(request: Request) {
       parameters: sharedParams,
       assigned_agent: getAgentForRequest(type),
       priority,
+      triggered_by: null, // onboarding root — no parent trigger
     }))
 
     supabaseAdmin

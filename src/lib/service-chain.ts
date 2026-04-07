@@ -23,6 +23,9 @@ export const CHAIN_MAP: Record<string, string[]> = {
   topic_cluster_map: ['content_brief'],
   analytics_audit: ['monthly_report'],
   geo_audit: ['entity_optimization'],
+  // Content pipeline: calendar topics → briefs → articles (completes the flywheel)
+  content_calendar: ['content_brief'],
+  content_brief: ['content_article'],
 }
 
 // ─── Helpers ──────────────────────────────────────────────────
@@ -187,6 +190,102 @@ export function extractChainData(
         ai_visibility_gaps: gaps.slice(0, 10),
         citation_issues: citations.slice(0, 10),
         from_geo_audit: true,
+      }
+    }
+
+    case 'content_calendar': {
+      // Extract the first few calendar topics to seed content_brief
+      const items = toArr(content.calendar ?? content.topics ?? content.content_plan ?? content.items ?? content.months)
+      const topics: Array<{ topic: string; target_keyword?: string; content_format?: string; priority?: string }> = []
+      for (const item of items.slice(0, 5)) {
+        if (typeof item === 'string') {
+          topics.push({ topic: item })
+        } else {
+          const obj = item as Record<string, unknown>
+          // Calendar items may be month objects with nested topics
+          const monthTopics = toArr(obj.topics ?? obj.content ?? obj.articles ?? obj.items)
+          if (monthTopics.length > 0) {
+            for (const t of monthTopics.slice(0, 3)) {
+              if (typeof t === 'string') topics.push({ topic: t })
+              else {
+                const tObj = t as Record<string, unknown>
+                topics.push({
+                  topic: toStr(tObj.title ?? tObj.topic ?? tObj.headline, ''),
+                  target_keyword: toStr(tObj.target_keyword ?? tObj.keyword, ''),
+                  content_format: toStr(tObj.content_format ?? tObj.format ?? tObj.type, ''),
+                  priority: toStr(tObj.priority ?? tObj.execution_priority, ''),
+                })
+              }
+            }
+          } else {
+            topics.push({
+              topic: toStr(obj.title ?? obj.topic ?? obj.headline, ''),
+              target_keyword: toStr(obj.target_keyword ?? obj.keyword, ''),
+              content_format: toStr(obj.content_format ?? obj.format ?? obj.type, ''),
+              priority: toStr(obj.priority ?? obj.execution_priority, ''),
+            })
+          }
+        }
+      }
+      const validTopics = topics.filter(t => t.topic).slice(0, 5)
+      // Pick the highest-priority topic as the brief target
+      const firstTopic = validTopics[0]
+      return {
+        ...base,
+        topic: firstTopic?.topic ?? '',
+        target_keyword: firstTopic?.target_keyword ?? '',
+        content_format: firstTopic?.content_format ?? '',
+        from_content_calendar: true,
+        calendar_topics: validTopics,
+      }
+    }
+
+    case 'content_brief': {
+      // Extract brief details to seed content_article
+      const brief = content.brief as Record<string, unknown> | undefined
+      return {
+        ...base,
+        topic: toStr(brief?.target_keyword ?? content.target_keyword ?? content.topic, ''),
+        target_keyword: toStr(brief?.target_keyword ?? content.target_keyword, ''),
+        secondary_keywords: toArr(brief?.secondary_keywords ?? content.secondary_keywords).slice(0, 5).map(k => toStr(k, '')).filter(Boolean),
+        content_angle: toStr(brief?.content_angle ?? content.content_angle, ''),
+        recommended_word_count: brief?.recommended_word_count ?? content.recommended_word_count ?? 2000,
+        search_intent: toStr(brief?.search_intent ?? content.search_intent, ''),
+        outline: content.outline ?? null,
+        from_content_brief: true,
+      }
+    }
+
+    case 'content_article': {
+      const article = content.article as Record<string, unknown> | undefined
+      const meta = content.meta as Record<string, unknown> | undefined
+      return {
+        ...base,
+        article_title: toStr(article?.title ?? content.title ?? meta?.meta_title, ''),
+        target_keyword: toStr(meta?.target_keyword ?? content.target_keyword, ''),
+        article_url: toStr(content.url ?? content.published_url, ''),
+        from_content_article: true,
+      }
+    }
+
+    case 'technical_audit': {
+      // Reuse site_audit logic — same output structure
+      const issues = toArr(content.issues ?? content.critical_issues ?? content.findings)
+      const cats = content.categories
+      const allIssues: unknown[] = []
+      if (cats && typeof cats === 'object' && !Array.isArray(cats)) {
+        for (const cat of Object.values(cats as Record<string, unknown>)) {
+          const catObj = cat as Record<string, unknown>
+          allIssues.push(...toArr(catObj.issues))
+        }
+      }
+      const finalIssues = allIssues.length > 0 ? allIssues : issues
+      const score = content.technical_score ?? content.score ?? content.overall_score
+      return {
+        ...base,
+        site_health_score: score,
+        from_technical_audit: finalIssues.slice(0, 10),
+        cwv_status: content.core_web_vitals ?? content.cwv ?? null,
       }
     }
 

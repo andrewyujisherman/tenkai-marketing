@@ -27,7 +27,7 @@ export interface CompletedTask {
 
 export interface ActionItem {
   id: string
-  type: 'content_approval' | 'agent_question' | 'setup_task' | 'report_review'
+  type: 'content_approval' | 'agent_question' | 'setup_task' | 'report_review' | 'strategy_review'
   title: string
   agent_name: string
   agent_kanji?: string
