@@ -272,6 +272,90 @@ async function createCheckpointActionItem(
   console.log(`[process] Created checkpoint action item "${checkpoint.title}" for ${clientId}`)
 }
 
+// --------------- Profile Review (after all 3 onboarding services complete) ---------------
+
+const ONBOARDING_SERVICES = ['site_audit', 'keyword_research', 'competitor_analysis']
+
+async function maybeCreateProfileReview(clientId: string): Promise<void> {
+  try {
+    // Check all 3 onboarding services are completed
+    const { data: completed } = await supabaseAdmin
+      .from('service_requests')
+      .select('request_type')
+      .eq('client_id', clientId)
+      .in('request_type', ONBOARDING_SERVICES)
+      .eq('status', 'completed')
+
+    const completedTypes = new Set((completed ?? []).map(r => r.request_type))
+    if (!ONBOARDING_SERVICES.every(t => completedTypes.has(t))) return
+
+    // Don't create duplicate profile reviews
+    const { count } = await supabaseAdmin
+      .from('approvals')
+      .select('*', { count: 'exact', head: true })
+      .eq('client_id', clientId)
+      .eq('type', 'profile_review')
+    if ((count ?? 0) > 0) return
+
+    // Gather context to build the summary
+    const [seoCtx, bizProfile, topKeywords] = await Promise.all([
+      supabaseAdmin.from('client_seo_context').select('*').eq('client_id', clientId).single(),
+      supabaseAdmin.from('business_profile').select('*').eq('client_id', clientId).single(),
+      supabaseAdmin.from('approved_keywords').select('keyword, cluster').eq('client_id', clientId).eq('status', 'pending').order('priority', { ascending: true }).limit(8),
+    ])
+
+    const biz = bizProfile.data as Record<string, unknown> | null
+    const ctx = (seoCtx.data as Record<string, unknown> | null)?.business_context as Record<string, unknown> | null
+    const kws = (topKeywords.data ?? []) as Array<{ keyword: string; cluster: string | null }>
+
+    // Build plain-English summary
+    const name = (biz?.business_name || ctx?.description || 'your business') as string
+    const parts: string[] = []
+    parts.push(`Based on our analysis of your website and industry, here's what we understand about ${name}:\n`)
+
+    const services = biz?.services as string[] | undefined
+    const desc = ctx?.description as string | undefined
+    if (desc) parts.push(`**What you do:** ${desc}`)
+    else if (services?.length) parts.push(`**What you do:** You offer ${services.slice(0, 5).join(', ')}`)
+
+    const area = (biz?.service_area || ctx?.service_area) as string | undefined
+    const customer = ctx?.ideal_customer as string | undefined
+    if (customer && area) parts.push(`**Who you serve:** ${customer} in ${area}`)
+    else if (area) parts.push(`**Where you operate:** ${area}`)
+
+    const focusAreas = biz?.focus_areas as Array<{ area: string }> | undefined
+    if (focusAreas?.length) parts.push(`**Your top priority:** ${focusAreas[0].area}`)
+
+    const topService = ctx?.top_service as string | undefined
+    if (topService) parts.push(`**Most-requested service:** ${topService}`)
+
+    const diff = ctx?.differentiator as string | undefined
+    if (diff) parts.push(`**What makes you different:** ${diff}`)
+
+    if (kws.length > 0) {
+      parts.push(`**Keywords we found for you:** ${kws.map(k => k.keyword).join(', ')}`)
+    }
+
+    parts.push(`\nIf anything looks off, update your profile — it directly shapes every keyword, article, and recommendation your team produces.`)
+
+    const summary = parts.join('\n')
+
+    await supabaseAdmin.from('approvals').insert({
+      client_id: clientId,
+      type: 'profile_review',
+      title: 'Does this sound like your business?',
+      description: summary,
+      status: 'pending',
+      agent_name: 'Tenkai Team',
+      link: '/business',
+    })
+
+    console.log(`[process] Created profile review action item for ${clientId}`)
+  } catch (err) {
+    console.warn('[process] maybeCreateProfileReview failed:', err)
+  }
+}
+
 // --------------- Site Scraping ---------------
 
 const URL_BASED_REQUESTS = new Set([
@@ -1200,6 +1284,12 @@ export async function processWithData(request: ProcessableRequest): Promise<void
     // Create checkpoint action items for customer approval phases
     createCheckpointActionItem(request.client_id, request.request_type, parsedContent)
       .catch((err) => console.warn(`[process] checkpoint action item failed:`, err))
+
+    // Check if all onboarding services are complete → create profile review
+    if (ONBOARDING_SERVICES.includes(request.request_type)) {
+      maybeCreateProfileReview(request.client_id)
+        .catch((err) => console.warn('[process] maybeCreateProfileReview failed:', err))
+    }
 
     // Auto-chain: queue next services if client tier allows
     if (shouldAutoChain(request.client_tier ?? null, request.request_type)) {

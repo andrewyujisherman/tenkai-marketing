@@ -128,6 +128,9 @@ function businessLanguageLabel(item: ActionItem): string {
   if (item.type === 'report_review') {
     return `${agent} finished your monthly report — see how your SEO is progressing`
   }
+  if (item.type === 'profile_review') {
+    return 'We analyzed your business — does this look right?'
+  }
   return item.title
 }
 
@@ -477,9 +480,9 @@ export default function DashboardClient({ data }: DashboardClientProps) {
                       <div key={item.id} className="action-item">
                         <div className={cn(
                           'action-type',
-                          item.type === 'content_approval' || item.type === 'strategy_review' ? 'approval' : item.type === 'agent_question' ? 'question' : item.type === 'report_review' ? 'approval' : 'setup'
+                          item.type === 'content_approval' || item.type === 'strategy_review' || item.type === 'profile_review' ? 'approval' : item.type === 'agent_question' ? 'question' : item.type === 'report_review' ? 'approval' : 'setup'
                         )}>
-                          {item.type === 'content_approval' ? 'Approval Needed' : item.type === 'agent_question' ? 'Agent Question' : item.type === 'strategy_review' ? 'Strategy Review' : item.type === 'report_review' ? 'Report Ready' : 'Setup Task'}
+                          {item.type === 'content_approval' ? 'Approval Needed' : item.type === 'agent_question' ? 'Agent Question' : item.type === 'strategy_review' ? 'Strategy Review' : item.type === 'report_review' ? 'Report Ready' : item.type === 'profile_review' ? 'Profile Check' : 'Setup Task'}
                         </div>
                         <div className="action-desc">{businessLanguageLabel(item)}</div>
                         {item.preview && (
@@ -546,6 +549,29 @@ export default function DashboardClient({ data }: DashboardClientProps) {
                             >
                               Review Strategy
                             </button>
+                          )}
+                          {item.type === 'profile_review' && (
+                            <div className="flex gap-2">
+                              <button
+                                onClick={async () => {
+                                  await fetch(`/api/approvals/${item.id}/resolve`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ status: 'approved' }),
+                                  })
+                                  setResolvedItems(prev => new Set([...prev, item.id]))
+                                }}
+                                className="btn btn-primary btn-sm"
+                              >
+                                Yes, looks right
+                              </button>
+                              <button
+                                onClick={() => router.push('/business')}
+                                className="btn btn-secondary btn-sm"
+                              >
+                                Let me fix it
+                              </button>
+                            </div>
                           )}
                         </div>
                       </div>
