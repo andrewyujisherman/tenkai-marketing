@@ -366,7 +366,7 @@ interface ClientSeoContext {
   auditFindings: Array<{ finding: string; severity: string }>
   contentGaps: Array<{ topic: string; priority: string }>
   competitors: Array<{ domain: string }>
-  businessContext: { industry?: string; target_audience?: string; geography?: string; goals?: string; description?: string; services?: string; service_area?: string; ideal_customer?: string; last_audit_summary?: string }
+  businessContext: { industry?: string; target_audience?: string; geography?: string; goals?: string; description?: string; services?: string; service_area?: string; ideal_customer?: string; last_audit_summary?: string; top_service?: string; customer_language?: string; differentiator?: string }
   cwvStatus: { overall?: string; lcp?: string; inp?: string; cls?: string }
   lastAuditScore: number | null
 }
@@ -418,6 +418,15 @@ async function fetchClientSeoContext(clientId: string): Promise<string | null> {
     }
     if (ctx.business_context?.geography) {
       parts.push(`Geography: ${ctx.business_context.geography}`)
+    }
+    if (ctx.business_context?.top_service) {
+      parts.push(`#1 Most-Requested Service: ${ctx.business_context.top_service}`)
+    }
+    if (ctx.business_context?.customer_language) {
+      parts.push(`How Customers Describe Their Problem: ${ctx.business_context.customer_language}`)
+    }
+    if (ctx.business_context?.differentiator) {
+      parts.push(`What Makes Them Different: ${ctx.business_context.differentiator}`)
     }
     if (ctx.business_context?.goals) {
       parts.push(`Goals: ${ctx.business_context.goals}`)
@@ -504,31 +513,63 @@ interface ProcessableRequest {
   parameters: Record<string, unknown>
   assigned_agent: string | null
   client_tier?: string | null
+  gathered_data?: Record<string, unknown> | null
+  phase?: string | null
 }
 
+// Shape of data saved between phases
+interface GatheredData {
+  scrapedSite: ScrapedSite | null
+  siteData: Awaited<ReturnType<typeof fetchAllSiteData>> | null
+  keywordSerpData: KeywordSerpEnrichment[] | null
+  crawlData: CrawlResult | null
+  napReport: NAPConsistencyReport | null
+  gbpData: GBPData | null
+  keywordVolumeData: KeywordVolumeResult[] | null
+  backlinkSummary: BacklinkSummary | null
+  backlinkList: Backlink[] | null
+  referringDomains: ReferringDomain[] | null
+  backlinkCompetitors: CompetitorDomain[] | null
+  clientContext: string | null
+  bizProfile: Record<string, unknown> | null
+  competitorIntel: Record<string, unknown>[] | null
+  clientLearnings: Record<string, unknown>[] | null
+  approvedKeywords: Array<{ keyword: string; cluster: string | null; volume: string | null; intent: string | null }> | null
+}
+
+// Request types that get a full site crawl
+const CRAWL_REQUESTS = new Set(['site_audit', 'technical_audit', 'link_analysis', 'on_page_audit', 'redirect_map', 'schema_generation'])
+
+// Keyword-based requests that benefit from real SERP data
+const KEYWORD_ENRICHED_REQUESTS = new Set([
+  'keyword_research', 'content_brief', 'content_article', 'content_calendar',
+  'topic_cluster_map', 'content_rewrite', 'content_decay_audit',
+  'competitor_analysis', 'geo_audit',
+])
+
+// Request types that benefit from NAP directory consistency data
+const NAP_CHECK_REQUESTS = new Set(['local_seo_audit', 'directory_submissions'])
+
+// Request types that benefit from GBP performance data
+const GBP_REQUESTS = new Set(['local_seo_audit', 'gbp_optimization', 'review_responses', 'review_campaign'])
+
+// Fetch approved keywords for content-related services
+const KEYWORD_AWARE_SERVICES = new Set([
+  'content_calendar', 'content_brief', 'content_article', 'content_rewrite',
+  'topic_cluster_map', 'outreach_emails', 'guest_post_draft',
+])
+
+// Backlink request sets
+const BACKLINK_SUMMARY_REQUESTS = new Set(['link_analysis', 'competitor_analysis', 'outreach_emails', 'site_audit'])
+const BACKLINK_FULL_REQUESTS = new Set(['link_analysis'])
+
 /**
- * Process a service request by calling Gemini, creating a deliverable,
- * and updating the request status. Works in both serverless (API route)
- * and standalone (queue worker) contexts.
+ * Phase 1 (~15s): Gather all external data, save to gathered_data, push phase 2.
  */
-export async function processServiceRequest(request: ProcessableRequest): Promise<void> {
-  const geminiApiKey = process.env.GEMINI_API_KEY
-  if (!geminiApiKey) {
-    throw new Error('GEMINI_API_KEY is not configured')
-  }
-
-  const genAI = new GoogleGenerativeAI(geminiApiKey)
+export async function gatherData(request: ProcessableRequest): Promise<void> {
   const agentId = (request.assigned_agent ?? getAgentForRequest(request.request_type)) as AgentId
-  const agent = TENKAI_AGENTS[agentId]
-  const systemPrompt = AGENT_PROMPTS[agentId]
 
-  if (!systemPrompt) {
-    throw new Error(`No prompt defined for agent: ${agentId}`)
-  }
-
-  const model = MODEL_MAP[request.request_type] ?? 'gemini-2.5-pro'
-
-  // Mark as processing
+  // Mark as processing (gather phase)
   await supabaseAdmin
     .from('service_requests')
     .update({
@@ -539,7 +580,6 @@ export async function processServiceRequest(request: ProcessableRequest): Promis
     .eq('id', request.id)
 
   try {
-    // Fetch site data if URL-based
     let scrapedSite: ScrapedSite | null = null
     let siteData: Awaited<ReturnType<typeof fetchAllSiteData>> | null = null
     let keywordSerpData: KeywordSerpEnrichment[] | null = null
@@ -552,24 +592,6 @@ export async function processServiceRequest(request: ProcessableRequest): Promis
     let backlinkCompetitors: CompetitorDomain[] | null = null
     const isUrlBased = request.target_url && URL_BASED_REQUESTS.has(request.request_type)
 
-    // Request types that get a full site crawl
-    const CRAWL_REQUESTS = new Set(['site_audit', 'technical_audit', 'link_analysis', 'on_page_audit', 'redirect_map', 'schema_generation'])
-
-    // Keyword-based requests that benefit from real SERP data
-    const KEYWORD_ENRICHED_REQUESTS = new Set([
-      'keyword_research', 'content_brief', 'content_article', 'content_calendar',
-      'topic_cluster_map', 'content_rewrite', 'content_decay_audit',
-      'competitor_analysis', 'geo_audit',
-    ])
-
-    // Request types that benefit from NAP directory consistency data
-    const NAP_CHECK_REQUESTS = new Set(['local_seo_audit', 'directory_submissions'])
-
-    // Request types that benefit from GBP performance data
-    const GBP_REQUESTS = new Set(['local_seo_audit', 'gbp_optimization', 'review_responses', 'review_campaign'])
-
-    // Always scrape the site if we have a URL — agents need to know the actual business.
-    // This prevents hallucinated business models (e.g. "metal detectors" for a PCB company).
     if (request.target_url && !isUrlBased) {
       scrapedSite = await scrapeUrl(request.target_url).catch(() => null) as ScrapedSite | null
     }
@@ -590,12 +612,10 @@ export async function processServiceRequest(request: ProcessableRequest): Promis
       crawlData = crawled
     }
 
-    // Fetch real SERP data for keyword-based requests
     if (KEYWORD_ENRICHED_REQUESTS.has(request.request_type)) {
       const params = request.parameters as Record<string, string>
       const seedKeywords: string[] = []
 
-      // Extract keywords from various parameter formats
       if (params.target_keyword) seedKeywords.push(params.target_keyword)
       if (params.seed_keywords) {
         const parsed = typeof params.seed_keywords === 'string'
@@ -619,10 +639,6 @@ export async function processServiceRequest(request: ProcessableRequest): Promis
         if (vol && vol.length > 0) keywordVolumeData = vol
       }
     }
-
-    // Fetch backlink data for relevant request types
-    const BACKLINK_SUMMARY_REQUESTS = new Set(['link_analysis', 'competitor_analysis', 'outreach_emails', 'site_audit'])
-    const BACKLINK_FULL_REQUESTS = new Set(['link_analysis'])
 
     if (isUrlBased && BACKLINK_SUMMARY_REQUESTS.has(request.request_type)) {
       const domain = new URL(request.target_url!).hostname.replace(/^www\./, '')
@@ -694,41 +710,29 @@ export async function processServiceRequest(request: ProcessableRequest): Promis
     // Fetch accumulated client SEO context + business profile
     const clientContext = await fetchClientSeoContext(request.client_id)
 
-    // Also fetch business_profile for structured service data (services offered, NOT offered, specialties)
+    // Also fetch business_profile for structured service data
     const { data: bizProfile } = await supabaseAdmin
       .from('business_profile')
-      .select('services, not_services, products, specialties, customer_pain_points, top_revenue_services, customer_faqs, money_pages, local_connections')
+      .select('services, not_services, products, focus_areas, customer_pain_points, customer_faqs, money_pages, local_connections, business_type, service_areas, competitor_websites')
       .eq('client_id', request.client_id)
       .single()
 
-    // Backfill service area from client_seo_context into request parameters for chained requests
-    // This ensures the SERVICE AREA block in buildTaskMessage fires even when the original
-    // onboarding parameters weren't passed through the chain
-    const params = request.parameters as Record<string, unknown>
-    if (!params.serviceArea && !params.service_area && clientContext) {
-      const areaMatch = clientContext.match(/Service Area:\s*(.+)/i)
-      const geoMatch = clientContext.match(/Geography:\s*(.+)/i)
-      if (areaMatch) params.serviceArea = areaMatch[1].trim()
-      if (geoMatch && !params.targetGeography) params.targetGeography = geoMatch[1].trim()
-    }
+    // Fetch approved competitor intel for this client
+    const { data: competitorIntel } = await supabaseAdmin
+      .from('competitor_intel')
+      .select('competitor_name, competitor_url, service_category, sitemap_pages')
+      .eq('client_id', request.client_id)
+      .eq('status', 'approved')
 
-    // Inject business profile into parameters so buildTaskMessage's CLIENT CONTEXT block includes it
-    if (bizProfile) {
-      if (bizProfile.services?.length > 0) params._servicesOffered = bizProfile.services
-      if (bizProfile.not_services?.length > 0) params._servicesNotOffered = bizProfile.not_services
-      if (bizProfile.specialties?.length > 0) params._specialties = bizProfile.specialties
-      if (bizProfile.top_revenue_services?.length > 0) params._topRevenueServices = bizProfile.top_revenue_services
-      if (bizProfile.customer_pain_points) params._customerPainPoints = bizProfile.customer_pain_points
-      if (bizProfile.customer_faqs) params._customerFaqs = bizProfile.customer_faqs
-      if (bizProfile.money_pages?.length > 0) params._moneyPages = bizProfile.money_pages
-      if (bizProfile.local_connections?.length > 0) params._localConnections = bizProfile.local_connections
-    }
+    // Fetch client learnings (denied competitors, rejected keywords, feedback)
+    const { data: clientLearnings } = await supabaseAdmin
+      .from('client_learnings')
+      .select('category, action, subject, reason, service_category')
+      .eq('client_id', request.client_id)
+      .order('created_at', { ascending: false })
+      .limit(50)
 
     // Fetch approved keywords for content-related services
-    const KEYWORD_AWARE_SERVICES = new Set([
-      'content_calendar', 'content_brief', 'content_article', 'content_rewrite',
-      'topic_cluster_map', 'outreach_emails', 'guest_post_draft',
-    ])
     let approvedKeywords: Array<{ keyword: string; cluster: string | null; volume: string | null; intent: string | null }> | null = null
     if (KEYWORD_AWARE_SERVICES.has(request.request_type)) {
       const { data: kwRows } = await supabaseAdmin
@@ -739,6 +743,120 @@ export async function processServiceRequest(request: ProcessableRequest): Promis
         .order('priority', { ascending: true })
         .limit(50)
       if (kwRows && kwRows.length > 0) approvedKeywords = kwRows
+    }
+
+    // Save gathered data and transition to phase 2
+    const gathered: GatheredData = {
+      scrapedSite, siteData, keywordSerpData, crawlData, napReport, gbpData,
+      keywordVolumeData, backlinkSummary, backlinkList, referringDomains,
+      backlinkCompetitors, clientContext,
+      bizProfile: bizProfile as Record<string, unknown> | null,
+      competitorIntel: competitorIntel as Record<string, unknown>[] | null,
+      clientLearnings: clientLearnings as Record<string, unknown>[] | null,
+      approvedKeywords,
+    }
+
+    await supabaseAdmin
+      .from('service_requests')
+      .update({
+        gathered_data: gathered as unknown as Record<string, unknown>,
+        status: 'gathered',
+        phase: 'process',
+      })
+      .eq('id', request.id)
+
+    console.log(`[process] Phase 1 complete for ${request.id} (${request.request_type}), pushing phase 2`)
+
+    // Push-trigger phase 2 — fire-and-forget
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://tenkaiseo.com'
+    fetch(`${baseUrl}/api/services/process-queue`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ request_id: request.id }),
+    }).catch(err => console.warn('[process] Push trigger failed, will be picked up by next poll:', err))
+
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    await supabaseAdmin
+      .from('service_requests')
+      .update({
+        status: 'failed',
+        error_message: errorMessage,
+        completed_at: new Date().toISOString(),
+      })
+      .eq('id', request.id)
+    throw error
+  }
+}
+
+/**
+ * Phase 2 (~50s): Read gathered_data, call Gemini, save deliverable, chain next.
+ * The request passed in must have gathered_data populated.
+ */
+export async function processWithData(request: ProcessableRequest): Promise<void> {
+  const geminiApiKey = process.env.GEMINI_API_KEY
+  if (!geminiApiKey) throw new Error('GEMINI_API_KEY is not configured')
+
+  const genAI = new GoogleGenerativeAI(geminiApiKey)
+  const agentId = (request.assigned_agent ?? getAgentForRequest(request.request_type)) as AgentId
+  const agent = TENKAI_AGENTS[agentId]
+  const systemPrompt = AGENT_PROMPTS[agentId]
+
+  if (!systemPrompt) throw new Error(`No prompt defined for agent: ${agentId}`)
+
+  const model = MODEL_MAP[request.request_type] ?? 'gemini-2.5-pro'
+
+  // Mark as processing (AI phase)
+  await supabaseAdmin
+    .from('service_requests')
+    .update({ status: 'processing' })
+    .eq('id', request.id)
+
+  try {
+    const gathered = (request.gathered_data ?? {}) as unknown as GatheredData
+    const {
+      scrapedSite, siteData, keywordSerpData, crawlData, napReport, gbpData,
+      keywordVolumeData, backlinkSummary, backlinkList, referringDomains,
+      backlinkCompetitors, clientContext, bizProfile, competitorIntel,
+      clientLearnings, approvedKeywords,
+    } = gathered
+
+    const isUrlBased = request.target_url && URL_BASED_REQUESTS.has(request.request_type)
+
+    // Backfill service area into parameters from client context
+    const params = request.parameters as Record<string, unknown>
+    if (!params.serviceArea && !params.service_area && clientContext) {
+      const areaMatch = clientContext.match(/Service Area:\s*(.+)/i)
+      const geoMatch = clientContext.match(/Geography:\s*(.+)/i)
+      if (areaMatch) params.serviceArea = areaMatch[1].trim()
+      if (geoMatch && !params.targetGeography) params.targetGeography = geoMatch[1].trim()
+    }
+
+    // Inject business profile into parameters
+    if (bizProfile) {
+      const bp = bizProfile as Record<string, unknown>
+      if (Array.isArray(bp.services) && bp.services.length > 0) params._servicesOffered = bp.services
+      if (Array.isArray(bp.not_services) && bp.not_services.length > 0) params._servicesNotOffered = bp.not_services
+      if (Array.isArray(bp.focus_areas) && bp.focus_areas.length > 0) params._focusAreas = bp.focus_areas
+      if (bp.customer_pain_points) params._customerPainPoints = bp.customer_pain_points
+      if (bp.customer_faqs) params._customerFaqs = bp.customer_faqs
+      if (Array.isArray(bp.money_pages) && bp.money_pages.length > 0) params._moneyPages = bp.money_pages
+      if (Array.isArray(bp.local_connections) && bp.local_connections.length > 0) params._localConnections = bp.local_connections
+      if (bp.business_type) params._businessType = bp.business_type
+      if (bp.service_areas) params._serviceAreas = bp.service_areas
+      if (Array.isArray(bp.competitor_websites) && bp.competitor_websites.length > 0) params._competitorWebsites = bp.competitor_websites
+    }
+
+    if (competitorIntel?.length) params._competitorIntel = competitorIntel
+    if (clientLearnings?.length) params._clientLearnings = clientLearnings
+
+    // Gate: reject requests with zero business context
+    const hasScrapedData = scrapedSite && !scrapedSite.error && scrapedSite.bodyText.length > 50
+    const hasClientContext = !!clientContext
+    const hasBusinessParams = !!(params as Record<string, unknown>)?.businessDescription || !!(params as Record<string, unknown>)?.industry
+    const hasChainSource = !!(params as Record<string, unknown>)?.chain_source
+    if (!hasScrapedData && !hasClientContext && !hasBusinessParams && !hasChainSource) {
+      throw new Error(`Cannot process ${request.request_type}: no business context available (no scrapeable site, no client SEO context, no onboarding data). Client needs to complete onboarding or provide a valid website URL.`)
     }
 
     let taskMessage = buildTaskMessage(
@@ -874,15 +992,6 @@ export async function processServiceRequest(request: ProcessableRequest): Promis
       }
       blLines.push('--- END BACKLINK DATA ---')
       taskMessage += '\n' + blLines.join('\n')
-    }
-
-    // Gate: reject requests with zero business context — prevents hallucinated business models
-    const hasScrapedData = scrapedSite && !scrapedSite.error && scrapedSite.bodyText.length > 50
-    const hasClientContext = !!clientContext
-    const hasBusinessParams = !!(request.parameters as Record<string, unknown>)?.businessDescription || !!(request.parameters as Record<string, unknown>)?.industry
-    const hasChainSource = !!(request.parameters as Record<string, unknown>)?.chain_source
-    if (!hasScrapedData && !hasClientContext && !hasBusinessParams && !hasChainSource) {
-      throw new Error(`Cannot process ${request.request_type}: no business context available (no scrapeable site, no client SEO context, no onboarding data). Client needs to complete onboarding or provide a valid website URL.`)
     }
 
     // Load professional reference material for this request type
@@ -1055,6 +1164,29 @@ export async function processServiceRequest(request: ProcessableRequest): Promis
         })
     }
 
+    // Run page gap analysis after site_audit completes (if crawl data available)
+    if (request.request_type === 'site_audit' && crawlData && bizProfile) {
+      try {
+        const { classifySiteStructure, identifyPageGaps } = await import('@/lib/page-classifier')
+        const pages = crawlData.pages.map((p: { url: string; title?: string; h1?: string; wordCount?: number }) => ({
+          url: p.url, title: p.title, h1: p.h1, wordCount: p.wordCount
+        }))
+        const siteStructure = classifySiteStructure(pages)
+        const bp = bizProfile as Record<string, unknown>
+        const pageGaps = identifyPageGaps(siteStructure, {
+          services: (Array.isArray(bp.services) ? bp.services : []) as string[],
+          serviceAreas: (Array.isArray(bp.service_areas) ? bp.service_areas : []) as Array<{ name: string; type: string }>,
+          businessType: (bp.business_type as string | undefined) ?? 'local_service',
+        })
+        // Store in parsedContent so writeBackClientContext picks it up
+        parsedContent._site_structure = siteStructure
+        parsedContent._page_gaps = pageGaps
+        console.log(`[process] Page gap analysis: ${siteStructure.totalPages} pages crawled, ${pageGaps.length} gaps found`)
+      } catch (err) {
+        console.warn('[process] Page gap analysis failed:', err)
+      }
+    }
+
     // Write back key findings to client_seo_context (fire-and-forget)
     writeBackClientContext(request.client_id, request.request_type, parsedContent)
       .catch((err) => console.warn(`[process] writeBackClientContext failed:`, err))
@@ -1121,7 +1253,6 @@ export async function processServiceRequest(request: ProcessableRequest): Promis
       .eq('id', request.id)
 
   } catch (error) {
-    // Mark failed
     const errorMessage = error instanceof Error ? error.message : String(error)
     await supabaseAdmin
       .from('service_requests')
@@ -1131,7 +1262,30 @@ export async function processServiceRequest(request: ProcessableRequest): Promis
         completed_at: new Date().toISOString(),
       })
       .eq('id', request.id)
-
     throw error
   }
+}
+
+/**
+ * Backwards-compatible wrapper: calls gatherData then processWithData sequentially.
+ * Used by the standalone worker. If gathered_data already exists, skips to phase 2.
+ */
+export async function processServiceRequest(request: ProcessableRequest): Promise<void> {
+  if (!request.gathered_data) {
+    await gatherData(request)
+    // Re-fetch to get gathered_data populated
+    const { data: refreshed } = await supabaseAdmin
+      .from('service_requests')
+      .select('gathered_data, phase, parameters, assigned_agent')
+      .eq('id', request.id)
+      .single()
+    if (refreshed) {
+      request = {
+        ...request,
+        gathered_data: refreshed.gathered_data as Record<string, unknown> | null,
+        phase: refreshed.phase,
+      }
+    }
+  }
+  await processWithData(request)
 }

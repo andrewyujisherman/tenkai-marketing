@@ -1458,13 +1458,12 @@ export function buildTaskMessage(
   // Structured business profile data (from My Business page)
   const servicesOffered = params._servicesOffered as string[] | undefined
   const servicesNotOffered = params._servicesNotOffered as string[] | undefined
-  const specialties = params._specialties as string[] | undefined
-  const topRevenueServices = params._topRevenueServices as string[] | undefined
+  const focusAreas = params._focusAreas as Array<{ area: string; services?: string; why: string }> | undefined
   const customerPainPoints = params._customerPainPoints as string | undefined
   const customerFaqs = params._customerFaqs as string | undefined
   const moneyPages = params._moneyPages as Array<{ url: string; label: string; cta: string }> | undefined
   const localConnections = params._localConnections as Array<{ name: string; relationship: string; status: string }> | undefined
-  const hasBusinessData = servicesOffered?.length || servicesNotOffered?.length || specialties?.length || topRevenueServices?.length || customerPainPoints || customerFaqs || moneyPages?.length || localConnections?.length
+  const hasBusinessData = servicesOffered?.length || servicesNotOffered?.length || focusAreas?.length || customerPainPoints || customerFaqs || moneyPages?.length || localConnections?.length
   if (serviceArea || geography || idealCustomer || hasBusinessData) {
     parts.push(`\n=== CLIENT CONTEXT (ALL output must be tailored to this) ===`)
     if (serviceArea) parts.push(`Primary Service Area: ${serviceArea}`)
@@ -1472,8 +1471,22 @@ export function buildTaskMessage(
     if (idealCustomer) parts.push(`Ideal Customer: ${idealCustomer}`)
     if (servicesOffered?.length) parts.push(`Services Offered: ${servicesOffered.join(', ')}`)
     if (servicesNotOffered?.length) parts.push(`DO NOT OFFER (never target these): ${servicesNotOffered.join(', ')}`)
-    if (specialties?.length) parts.push(`Specialties/Differentiators: ${specialties.join(', ')}`)
-    if (topRevenueServices?.length) parts.push(`Highest Revenue Services (prioritize these): ${topRevenueServices.join(', ')}`)
+    if (focusAreas?.length) {
+      parts.push(`FOCUS AREAS (prioritize these in all work):`)
+      for (const fa of focusAreas) {
+        let line = `  - ${fa.area}`
+        if (fa.services) line += ` [covers: ${fa.services}]`
+        if (fa.why) line += ` — ${fa.why}`
+        parts.push(line)
+      }
+    }
+    // New enrichment fields from onboarding
+    const topService = params.topService as string | undefined
+    const customerLanguage = params.customerLanguage as string | undefined
+    const differentiator = params.differentiator as string | undefined
+    if (topService) parts.push(`#1 MOST-REQUESTED SERVICE (prioritize above all others): ${topService}`)
+    if (customerLanguage) parts.push(`HOW CUSTOMERS DESCRIBE THEIR PROBLEM (use this language in keywords/content): ${customerLanguage}`)
+    if (differentiator) parts.push(`COMPETITIVE ADVANTAGE (weave into recommendations and content): ${differentiator}`)
     if (customerPainPoints) parts.push(`Customer Pain Points: ${customerPainPoints}`)
     if (customerFaqs) parts.push(`Common Customer Questions: ${customerFaqs}`)
     if (moneyPages?.length) {
@@ -1483,6 +1496,39 @@ export function buildTaskMessage(
     if (localConnections?.length) {
       parts.push(`Local Connections (DO NOT cold-outreach these):`)
       for (const lc of localConnections) parts.push(`  - ${lc.name} (${lc.status})${lc.relationship ? ` — ${lc.relationship}` : ''}`)
+    }
+    // Business type and service areas
+    const businessType = params._businessType as string | undefined
+    const serviceAreas = params._serviceAreas as Array<{ name: string; type: string }> | undefined
+    if (businessType) parts.push(`Business Type: ${businessType}`)
+    if (serviceAreas?.length) {
+      parts.push(`Service Areas:`)
+      for (const sa of serviceAreas) parts.push(`  - ${sa.name} (${sa.type})`)
+    }
+    // Competitor intel (approved competitors with their page structures)
+    const competitorIntel = params._competitorIntel as Array<{ competitor_name: string; competitor_url?: string; service_category: string; sitemap_pages?: unknown }> | undefined
+    if (competitorIntel?.length) {
+      parts.push(`APPROVED COMPETITORS:`)
+      for (const ci of competitorIntel) {
+        let line = `  - ${ci.competitor_name}`
+        if (ci.competitor_url) line += ` (${ci.competitor_url})`
+        line += ` [competes on: ${ci.service_category}]`
+        parts.push(line)
+      }
+    }
+    // Client learnings (past approval/denial decisions — respect these)
+    const clientLearnings = params._clientLearnings as Array<{ category: string; action: string; subject: string; reason?: string; service_category?: string }> | undefined
+    if (clientLearnings?.length) {
+      const denials = clientLearnings.filter(l => l.action === 'denied')
+      if (denials.length > 0) {
+        parts.push(`CLIENT DECISIONS (MUST respect — the customer has explicitly decided these):`)
+        for (const d of denials.slice(0, 15)) {
+          let line = `  - DENIED ${d.category}: "${d.subject}"`
+          if (d.reason) line += ` — Reason: ${d.reason}`
+          if (d.service_category) line += ` [for: ${d.service_category}]`
+          parts.push(line)
+        }
+      }
     }
     parts.push(`CRITICAL: All keywords, recommendations, competitor analysis, and content must be targeted to this specific service area and ideal customer. National-level data must be clearly labeled as national with a local estimate provided. Never present national search volumes as if they are local volumes. Content tone and keyword intent should match the ideal customer profile. NEVER produce keywords or content for services listed in "DO NOT OFFER". Prioritize highest-revenue services in keyword strategy and content planning.`)
     parts.push(`=== END CLIENT CONTEXT ===\n`)
@@ -1793,6 +1839,70 @@ REQUIREMENTS: Write a unique, personalized response for each review. Negative re
 Business info: ${JSON.stringify((parameters as Record<string, unknown>).business_info ?? parameters)}
 Customer segments: ${(parameters as Record<string, string>).customer_segments ?? 'loyal customers, first-time customers, post-service customers'}
 REQUIREMENTS: Generate email AND SMS templates for each segment. Include follow-up sequence. Templates must feel personal and natural — not corporate. Provide automation recommendations. Return in the review_campaign JSON format.`,
+
+    service_page: `\nCREATE A SERVICE PAGE for a local business.
+Service: ${(parameters as Record<string, string>).service ?? 'See parameters above'}
+Location: ${(parameters as Record<string, string>).location ?? 'See parameters above'}
+Target URL: ${targetUrl ?? 'See parameters above'}
+STRUCTURE: Problem → Solution → Process → Pricing signals → FAQ → CTA
+REQUIREMENTS:
+- Location must appear in the title tag, H1, and naturally throughout the body
+- Minimum 1200 words of unique, useful content
+- Include LocalBusiness JSON-LD schema markup with NAP, service area, and opening hours placeholders
+- Include internal links to at least 2 related service pages (use placeholder slugs if needed)
+- FAQ section targeting People Also Ask queries for this service + location
+- Meta title (≤60 chars) and meta description (≤160 chars)
+DUAL OUTPUT — return a JSON object with exactly two top-level keys:
+1. "client_summary": Plain English explanation for the business owner — what this page is, why it ranks, what it will achieve, and what they need to fill in (e.g., actual pricing, photos).
+2. "implementation": Complete HTML document including <!DOCTYPE html>, <head> with meta tags and JSON-LD schema in a <script type="application/ld+json"> block, and <body> with proper H1/H2/H3 hierarchy, all body copy, and CTA — ready to paste into a CMS.`,
+
+    location_page: `\nCREATE A LOCATION PAGE for a local business targeting a specific city or area.
+Business type: ${(parameters as Record<string, string>).business_type ?? (parameters as Record<string, string>).service ?? 'See parameters above'}
+Location: ${(parameters as Record<string, string>).location ?? 'See parameters above'}
+Target URL: ${targetUrl ?? 'See parameters above'}
+STRUCTURE: City intro → Services available here → Local proof → Directions/map embed → CTA
+REQUIREMENTS:
+- MUST contain unique local content — a city name swap on a generic template = doorway page (Google penalty risk). Include area-specific references: neighborhoods, landmarks, local context.
+- Minimum 800 words of genuinely localized content
+- At least 2 local testimonials or review excerpts (use realistic placeholders if real data not provided)
+- Directions section with a Google Maps embed placeholder
+- LocalBusiness JSON-LD schema with service area set to this location
+- Meta title (≤60 chars) and meta description (≤160 chars)
+DUAL OUTPUT — return a JSON object with exactly two top-level keys:
+1. "client_summary": Plain English explanation for the business owner — what makes this page local enough to rank vs. a doorway page, what placeholder content they must replace with real data (testimonials, photos, specific local references).
+2. "implementation": Complete HTML document including <!DOCTYPE html>, <head> with meta tags and JSON-LD schema in a <script type="application/ld+json"> block, and <body> with proper H1/H2/H3 hierarchy, all body copy, map embed placeholder, and CTA — ready to paste into a CMS.`,
+
+    faq_page: `\nCREATE A FAQ PAGE grouped by topic.
+Business/service context: ${(parameters as Record<string, string>).service ?? (parameters as Record<string, string>).topic ?? 'See parameters above'}
+Target URL: ${targetUrl ?? 'See parameters above'}
+Source data: PAA queries and customer pain points from research above
+STRUCTURE: Grouped Q&A sections, each group under a topical H2, individual questions as H3
+REQUIREMENTS:
+- Minimum 1000 words across all answers
+- Answers must be substantive (2-4 sentences minimum each) — not one-liners
+- FAQPage JSON-LD schema with Question/Answer pairs for every Q&A included
+- Internal links within answers to relevant service or location pages (use placeholder slugs if needed)
+- At least 3 topic groups with at least 3 questions each
+- Meta title (≤60 chars) and meta description (≤160 chars)
+DUAL OUTPUT — return a JSON object with exactly two top-level keys:
+1. "client_summary": Plain English explanation for the business owner — what FAQ topics are covered, why these questions were chosen, and how the page drives organic traffic from PAA boxes and long-tail queries.
+2. "implementation": Complete HTML document including <!DOCTYPE html>, <head> with meta tags and FAQPage JSON-LD schema in a <script type="application/ld+json"> block, and <body> with proper H1/H2/H3 hierarchy, all Q&A content with internal links, and a CTA — ready to paste into a CMS.`,
+
+    comparison_page: `\nCREATE A COMPARISON PAGE ("X vs Y" or "Best X for Y" format).
+Comparison subject: ${(parameters as Record<string, string>).comparison_subject ?? (parameters as Record<string, string>).topic ?? 'See parameters above'}
+Options being compared: ${(parameters as Record<string, string>).options ?? 'See parameters above'}
+Client service URL: ${targetUrl ?? (parameters as Record<string, string>).service_page_url ?? 'See parameters above'}
+STRUCTURE: Comparison intro → Feature-by-feature comparison table → Detailed analysis → Verdict → CTA to client service
+REQUIREMENTS:
+- 1200-1600 words
+- Must cite real, verifiable data points — no made-up statistics. If real data is unavailable, state ranges or cite sources by category (e.g., "According to industry benchmarks...").
+- Feature comparison table with clear winner/loser per row
+- Verdict section with a clear recommendation and reasoning
+- Internal link to the client's own service page in the CTA section
+- Meta title (≤60 chars) and meta description (≤160 chars)
+DUAL OUTPUT — return a JSON object with exactly two top-level keys:
+1. "client_summary": Plain English explanation for the business owner — what is being compared, why this page captures high-intent searchers, how it funnels readers to their service, and any data placeholders they should verify or update.
+2. "implementation": Complete HTML document including <!DOCTYPE html>, <head> with meta tags, and <body> with proper H1/H2/H3 hierarchy, comparison table as an HTML <table>, all body copy, verdict section, and CTA with a link to the client service page — ready to paste into a CMS.`,
   }
 
   if (executionInstructions[requestType]) {

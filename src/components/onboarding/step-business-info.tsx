@@ -50,6 +50,9 @@ export interface BusinessInfoData {
   competitors: string[]
   businessGoals: string[]
   targetGeography: string
+  topService: string
+  customerLanguage: string
+  differentiator: string
 }
 
 interface StepBusinessInfoProps {
@@ -191,6 +194,47 @@ export function StepBusinessInfo({ data, onChange }: StepBusinessInfoProps) {
             onChange={(e) => update('serviceArea', (e.target as HTMLInputElement).value)}
             placeholder="e.g., Austin, TX"
             className="h-11 border-tenkai-border rounded-tenkai focus-visible:border-torii focus-visible:ring-torii/20"
+          />
+        </div>
+
+        <div>
+          <label className="text-sm font-medium text-charcoal mb-1.5 block">
+            What&apos;s your #1 most-requested service?
+          </label>
+          <p className="text-xs text-warm-gray mb-1.5">The one thing customers call or search for most. We&apos;ll prioritize keywords and content around this.</p>
+          <Input
+            value={data.topService}
+            onChange={(e) => update('topService', (e.target as HTMLInputElement).value)}
+            placeholder="e.g., Emergency drain cleaning, Kitchen remodels, Personal injury cases"
+            className="h-11 border-tenkai-border rounded-tenkai focus-visible:border-torii focus-visible:ring-torii/20"
+          />
+        </div>
+
+        <div>
+          <label className="text-sm font-medium text-charcoal mb-1.5 block">
+            What do customers say when they reach out?
+          </label>
+          <p className="text-xs text-warm-gray mb-1.5">How do they describe their problem? This helps us target the exact words people search for.</p>
+          <textarea
+            value={data.customerLanguage}
+            onChange={(e) => update('customerLanguage', e.target.value)}
+            placeholder={`e.g., "My basement is flooding" or "I need someone to fix my AC before summer" or "I got a ticket and don't know what to do"`}
+            rows={2}
+            className="w-full px-3 py-2.5 text-sm border border-tenkai-border rounded-tenkai bg-transparent outline-none resize-none focus:border-torii focus:ring-2 focus:ring-torii/20 placeholder:text-muted-gray"
+          />
+        </div>
+
+        <div>
+          <label className="text-sm font-medium text-charcoal mb-1.5 block">
+            What makes you different from competitors?
+          </label>
+          <p className="text-xs text-warm-gray mb-1.5">Why do customers choose you? This shapes how we position you in content and recommendations.</p>
+          <textarea
+            value={data.differentiator}
+            onChange={(e) => update('differentiator', e.target.value)}
+            placeholder="e.g., Same-day service, 20 years experience, bilingual staff, no upcharge for weekends"
+            rows={2}
+            className="w-full px-3 py-2.5 text-sm border border-tenkai-border rounded-tenkai bg-transparent outline-none resize-none focus:border-torii focus:ring-2 focus:ring-torii/20 placeholder:text-muted-gray"
           />
         </div>
 

@@ -86,6 +86,12 @@ export async function POST(request: Request) {
   const parsedServices = rawServices
     ? (Array.isArray(rawServices) ? rawServices : String(rawServices).split(/[\n,]+/).map((s: string) => s.trim()).filter(Boolean))
     : []
+  // Build focus_areas from topService if provided
+  const topService = onboarding_data?.topService ?? ''
+  const focusAreas = topService
+    ? [{ area: topService, why: 'Most-requested service (from onboarding)', services: '' }]
+    : []
+
   await supabaseAdmin
     .from('business_profile')
     .upsert({
@@ -95,7 +101,8 @@ export async function POST(request: Request) {
       category: onboarding_data?.industry ?? onboarding_data?.businessType ?? '',
       service_area: onboarding_data?.serviceArea ?? onboarding_data?.location ?? '',
       services: parsedServices,
-      customer_pain_points: onboarding_data?.idealCustomer ?? '',
+      focus_areas: focusAreas,
+      customer_pain_points: onboarding_data?.customerLanguage ?? '',
     }, { onConflict: 'client_id' })
 
   // Seed client_seo_context with onboarding business info so first agent requests have context
@@ -118,6 +125,9 @@ export async function POST(request: Request) {
           service_area: serviceArea,
           services,
           ideal_customer: idealCustomer,
+          top_service: onboarding_data?.topService ?? '',
+          customer_language: onboarding_data?.customerLanguage ?? '',
+          differentiator: onboarding_data?.differentiator ?? '',
           goals: Array.isArray(onboarding_data?.businessGoals) ? onboarding_data.businessGoals.join(', ') : '',
         },
       }, { onConflict: 'client_id' })
@@ -148,6 +158,9 @@ export async function POST(request: Request) {
       idealCustomer: onboarding_data?.idealCustomer ?? null,
       services: onboarding_data?.services ?? onboarding_data?.products ?? null,
       serviceArea: onboarding_data?.serviceArea ?? onboarding_data?.location ?? null,
+      topService: onboarding_data?.topService ?? null,
+      customerLanguage: onboarding_data?.customerLanguage ?? null,
+      differentiator: onboarding_data?.differentiator ?? null,
       competitors: onboarding_data?.competitors ?? null,
       businessGoals: onboarding_data?.businessGoals ?? null,
       targetGeography: onboarding_data?.targetGeography ?? null,

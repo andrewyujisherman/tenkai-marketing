@@ -37,6 +37,9 @@ const defaultBusinessInfo: BusinessInfoData = {
   competitors: ['', '', ''],
   businessGoals: [],
   targetGeography: '',
+  topService: '',
+  customerLanguage: '',
+  differentiator: '',
 }
 
 const defaultDraft: OnboardingDraft = {
@@ -229,6 +232,9 @@ export default function OnboardingPage() {
             idealCustomer: draft.businessInfo.idealCustomer,
             services: draft.businessInfo.services,
             serviceArea: draft.businessInfo.serviceArea,
+            topService: draft.businessInfo.topService,
+            customerLanguage: draft.businessInfo.customerLanguage,
+            differentiator: draft.businessInfo.differentiator,
             competitors: draft.businessInfo.competitors.filter(c => c.trim()),
             businessGoals: draft.businessInfo.businessGoals,
             targetGeography: draft.businessInfo.targetGeography,
