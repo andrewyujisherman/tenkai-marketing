@@ -225,8 +225,10 @@ export default function OnboardingPage() {
           answers: {
             business: { name: draft.businessInfo.businessName, url: draft.businessInfo.websiteUrl },
             industry: draft.businessInfo.businessType,
-            products: draft.businessInfo.services,
-            location: draft.businessInfo.serviceArea,
+            businessDescription: draft.businessInfo.businessDescription,
+            idealCustomer: draft.businessInfo.idealCustomer,
+            services: draft.businessInfo.services,
+            serviceArea: draft.businessInfo.serviceArea,
             competitors: draft.businessInfo.competitors.filter(c => c.trim()),
             businessGoals: draft.businessInfo.businessGoals,
             targetGeography: draft.businessInfo.targetGeography,

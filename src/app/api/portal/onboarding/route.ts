@@ -80,26 +80,33 @@ export async function POST(request: Request) {
   }
 
   // Seed business_profile from onboarding data
+  // Fields live at top level of onboarding_data, NOT inside .business
   const bizData = onboarding_data?.business ?? {}
+  const rawServices = onboarding_data?.services ?? onboarding_data?.products ?? ''
+  const parsedServices = rawServices
+    ? (Array.isArray(rawServices) ? rawServices : String(rawServices).split(/[\n,]+/).map((s: string) => s.trim()).filter(Boolean))
+    : []
   await supabaseAdmin
     .from('business_profile')
     .upsert({
       client_id: client.id,
       business_name: bizData.name ?? bizData.business_name ?? '',
       website_url: bizData.url ?? bizData.website_url ?? '',
-      category: bizData.industry ?? bizData.business_industry ?? '',
-      service_area: bizData.location ?? bizData.service_area ?? bizData.city ?? '',
-      services: bizData.services ? (Array.isArray(bizData.services) ? bizData.services : bizData.services.split('\n').filter(Boolean)) : [],
-      specialties: bizData.differentiators ? (Array.isArray(bizData.differentiators) ? bizData.differentiators : bizData.differentiators.split('\n').filter(Boolean)) : [],
+      category: onboarding_data?.industry ?? onboarding_data?.businessType ?? '',
+      service_area: onboarding_data?.serviceArea ?? onboarding_data?.location ?? '',
+      services: parsedServices,
+      customer_pain_points: onboarding_data?.idealCustomer ?? '',
     }, { onConflict: 'client_id' })
 
   // Seed client_seo_context with onboarding business info so first agent requests have context
-  const businessDesc = onboarding_data?.businessDescription ?? onboarding_data?.business_description ?? ''
-  const businessType = onboarding_data?.businessType ?? onboarding_data?.industry ?? ''
-  const serviceArea = onboarding_data?.serviceArea ?? ''
-  const services = onboarding_data?.services ?? ''
+  // Keys match what the frontend now sends directly (businessDescription, idealCustomer, services, serviceArea)
+  const businessDesc = onboarding_data?.businessDescription ?? ''
+  const businessType = onboarding_data?.industry ?? ''
+  const serviceArea = onboarding_data?.serviceArea ?? onboarding_data?.location ?? ''
+  const services = onboarding_data?.services ?? onboarding_data?.products ?? ''
   const targetGeo = onboarding_data?.targetGeography ?? ''
-  if (businessDesc || businessType || serviceArea) {
+  const idealCustomer = onboarding_data?.idealCustomer ?? ''
+  if (businessDesc || businessType || serviceArea || services) {
     supabaseAdmin
       .from('client_seo_context')
       .upsert({
@@ -110,7 +117,8 @@ export async function POST(request: Request) {
           geography: targetGeo,
           service_area: serviceArea,
           services,
-          ideal_customer: onboarding_data?.idealCustomer ?? '',
+          ideal_customer: idealCustomer,
+          goals: Array.isArray(onboarding_data?.businessGoals) ? onboarding_data.businessGoals.join(', ') : '',
         },
       }, { onConflict: 'client_id' })
       .then(({ error }) => {
@@ -135,11 +143,11 @@ export async function POST(request: Request) {
 
     const sharedParams = {
       source: 'onboarding',
-      industry: onboarding_data?.industry ?? onboarding_data?.businessType ?? null,
+      industry: onboarding_data?.industry ?? null,
       businessDescription: onboarding_data?.businessDescription ?? null,
       idealCustomer: onboarding_data?.idealCustomer ?? null,
-      services: onboarding_data?.services ?? null,
-      serviceArea: onboarding_data?.serviceArea ?? null,
+      services: onboarding_data?.services ?? onboarding_data?.products ?? null,
+      serviceArea: onboarding_data?.serviceArea ?? onboarding_data?.location ?? null,
       competitors: onboarding_data?.competitors ?? null,
       businessGoals: onboarding_data?.businessGoals ?? null,
       targetGeography: onboarding_data?.targetGeography ?? null,
